@@ -52,6 +52,7 @@ export class TaskWorker {
       const reclaimed = await reclaimExpiredLocks();
       if (reclaimed > 0) this.log.info({ reclaimed }, 'reclaimed expired locks');
 
+      let claimedThisTick = 0;
       while (this.inflight < env.WORKER_MAX_CONCURRENCY) {
         const task = await claimNextTask({
           workerId: this.workerId,
@@ -60,6 +61,7 @@ export class TaskWorker {
         if (!task) break;
 
         this.inflight += 1;
+        claimedThisTick += 1;
         this.log.info({ taskId: task.id }, 'claimed task');
 
         // Fire and forget; the runner handles its own errors and final status updates.
@@ -69,6 +71,14 @@ export class TaskWorker {
             this.inflight -= 1;
           });
       }
+
+      // Heartbeat at debug level — visible only when LOG_LEVEL=debug. Confirms
+      // the worker is alive when the queue is empty (otherwise idle ticks are
+      // silent and it's hard to tell whether the loop has stalled).
+      this.log.debug(
+        { claimed: claimedThisTick, inflight: this.inflight, reclaimed },
+        'tick',
+      );
     } finally {
       this.scheduleNext();
     }

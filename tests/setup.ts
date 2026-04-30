@@ -11,6 +11,5 @@ process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test_db';
 process.env.SUPABASE_URL ??= 'https://example.supabase.co';
 process.env.SUPABASE_ANON_KEY ??= 'test-anon-key';
 process.env.SUPABASE_JWT_SECRET ??= 'test-jwt-secret-do-not-use-in-prod';
-process.env.DEFAULT_LLM_PROVIDER ??= 'anthropic';
-process.env.DEFAULT_LLM_MODEL ??= 'claude-opus-4-7';
+process.env.OPENROUTER_API_KEY ??= 'test-openrouter-key';
 process.env.WORKER_POLL_INTERVAL_MS ??= '60000';

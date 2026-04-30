@@ -15,7 +15,7 @@ function manifest(overrides: Partial<AgentManifest> = {}): AgentManifest {
     name: 'Test Agent',
     description: 'unit test agent',
     availableInPlans: ['basic'],
-    defaultModel: { provider: 'anthropic', model: 'fake' },
+    defaultModel: { model: 'anthropic/fake' },
     defaultPrompt: 'fake',
     ...overrides,
   };

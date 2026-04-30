@@ -20,16 +20,8 @@ import { requireTenant } from '../middleware/tenant.js';
  * required credentials are already bound.
  */
 
-const ModelOverrideSchema = z.object({
-  provider: z.enum(['anthropic', 'openai']),
-  model: z.string(),
-  temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().positive().optional(),
-});
-
 const ActivateBody = z.object({
   config: z.unknown().default({}),
-  modelOverride: ModelOverrideSchema.nullable().optional(),
   promptOverride: z.string().nullable().optional(),
   toolWhitelist: z.array(z.string()).nullable().optional(),
 });
@@ -95,7 +87,6 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
         planAllowed: status.planAllowed,
         credentials: status.credentials,
         config: status.config,
-        modelOverride: status.modelOverride,
         promptOverride: status.promptOverride,
         toolWhitelist: status.toolWhitelist,
       };
@@ -119,7 +110,6 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
         tenantId: req.tenantId,
         agentId,
         config: body.config ?? {},
-        modelOverride: body.modelOverride ?? null,
         promptOverride: body.promptOverride ?? null,
         toolWhitelist: body.toolWhitelist ?? null,
       });

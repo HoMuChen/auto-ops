@@ -3,7 +3,6 @@ CREATE TABLE "agent_configs" (
 	"tenant_id" uuid NOT NULL,
 	"agent_key" text NOT NULL,
 	"enabled" boolean DEFAULT true NOT NULL,
-	"model_config" jsonb,
 	"prompt_override" text,
 	"tool_whitelist" jsonb,
 	"config" jsonb DEFAULT '{}'::jsonb NOT NULL,

@@ -10,7 +10,7 @@ function fakeAgent(id: string, plans: ('basic' | 'pro' | 'flagship')[] = ['basic
       name: id,
       description: `fake agent ${id}`,
       availableInPlans: plans,
-      defaultModel: { provider: 'anthropic', model: 'fake-model' },
+      defaultModel: { model: 'anthropic/fake-model' },
       defaultPrompt: 'fake prompt',
     },
     build() {

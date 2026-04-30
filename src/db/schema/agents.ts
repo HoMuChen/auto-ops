@@ -14,12 +14,14 @@ import { tenants } from './tenants.js';
  * Per-tenant agent configuration ("the user has hired this AI employee").
  *
  * `agentKey` references a registered agent in the AgentRegistry (e.g. "seo-expert").
- * `modelConfig` lets each tenant pick a different LLM per agent (provider + model + temperature).
  * `promptOverride` is an optional override of the agent's default system prompt.
  * `toolWhitelist` is an optional whitelist of tool ids the agent is allowed to call.
  * `config` is the user-supplied activation config, validated against
  *   `AgentManifest.configSchema` at activation time. Available at runtime as
  *   `AgentBuildContext.agentConfig`.
+ *
+ * Note: there is no per-tenant model override. Each agent picks its own model
+ * in code (manifest.defaultModel) — every request goes through OpenRouter.
  *
  * If no row exists for a (tenant, agent) pair, the agent is implicitly enabled
  * and `config` defaults to {}. Subscription plans gate which agentKeys are allowed.
@@ -33,12 +35,6 @@ export const agentConfigs = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     agentKey: text('agent_key').notNull(),
     enabled: boolean('enabled').notNull().default(true),
-    modelConfig: jsonb('model_config').$type<{
-      provider: 'anthropic' | 'openai';
-      model: string;
-      temperature?: number;
-      maxTokens?: number;
-    }>(),
     promptOverride: text('prompt_override'),
     toolWhitelist: jsonb('tool_whitelist').$type<string[]>(),
     config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),

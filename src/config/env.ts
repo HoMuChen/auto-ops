@@ -13,11 +13,12 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   SUPABASE_JWT_SECRET: z.string().min(1),
 
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  OPENAI_API_KEY: z.string().min(1).optional(),
-
-  DEFAULT_LLM_PROVIDER: z.enum(['anthropic', 'openai']).default('anthropic'),
-  DEFAULT_LLM_MODEL: z.string().default('claude-opus-4-7'),
+  /**
+   * OpenRouter is the only LLM gateway. Each agent's manifest selects its own
+   * OpenRouter model slug; the user does not pick.
+   */
+  OPENROUTER_API_KEY: z.string().min(1),
+  OPENROUTER_REFERER: z.string().default('https://auto-ops.local'),
 
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
   WORKER_MAX_CONCURRENCY: z.coerce.number().int().positive().default(4),

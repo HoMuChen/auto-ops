@@ -1,5 +1,5 @@
 {
-  "id": "1d0a5793-1e61-4222-b916-b73ae8155c18",
+  "id": "1b4ffe4a-bcd4-448c-92df-484face3b6fd",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -33,12 +33,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
-        },
-        "model_config": {
-          "name": "model_config",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         },
         "prompt_override": {
           "name": "prompt_override",

@@ -42,7 +42,9 @@ export const seoExpertAgent: IAgent = {
     name: 'AI SEO Expert',
     description: 'Researches keywords and writes multilingual SEO content.',
     availableInPlans: ['basic', 'pro', 'flagship'],
-    defaultModel: { provider: 'anthropic', model: 'claude-opus-4-7', temperature: 0.4 },
+    // Opus for higher-quality long-form content; SEO articles are worth the
+    // extra spend. Bump temperature for richer prose.
+    defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.4 },
     defaultPrompt: DEFAULT_PROMPT,
 
     // No external tools yet — keyword research integrations come later.

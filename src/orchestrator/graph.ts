@@ -2,7 +2,6 @@ import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import { END, START, StateGraph } from '@langchain/langgraph';
 import { agentRegistry } from '../agents/registry.js';
 import type { AgentBuildContext } from '../agents/types.js';
-import { resolveModelConfig } from '../llm/model-registry.js';
 import { getCheckpointer } from './checkpointer.js';
 import { type GraphState, GraphStateAnnotation } from './state.js';
 import { runSupervisor } from './supervisor.js';
@@ -35,14 +34,12 @@ export async function buildGraph(opts: BuildGraphOptions) {
   for (const agent of agents) {
     const manifest = agent.manifest;
     graph.addNode(manifest.id, async (state: GraphState) => {
-      const [modelConfig, override] = await Promise.all([
-        resolveModelConfig(opts.tenantId, manifest.id, manifest.defaultModel),
-        agentRegistry.loadConfig(opts.tenantId, manifest.id),
-      ]);
+      const override = await agentRegistry.loadConfig(opts.tenantId, manifest.id);
       const ctx: AgentBuildContext = {
         tenantId: opts.tenantId,
         taskId: opts.taskId,
-        modelConfig,
+        // Model is fixed in the manifest — no per-tenant override.
+        modelConfig: manifest.defaultModel,
         systemPrompt: override.promptOverride ?? manifest.defaultPrompt,
         ...(override.toolWhitelist ? { toolWhitelist: override.toolWhitelist } : {}),
         agentConfig: override.config,

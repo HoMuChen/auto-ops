@@ -21,7 +21,6 @@ export interface ActivationStatus {
   enabled: boolean;
   planAllowed: boolean;
   config: Record<string, unknown>;
-  modelOverride: NonNullable<typeof agentConfigs.$inferSelect.modelConfig> | null;
   promptOverride: string | null;
   toolWhitelist: string[] | null;
   credentials: CredentialChecklistItem[];
@@ -33,12 +32,6 @@ export interface ActivateInput {
   tenantId: string;
   agentId: string;
   config: unknown;
-  modelOverride?: {
-    provider: 'anthropic' | 'openai';
-    model: string;
-    temperature?: number;
-    maxTokens?: number;
-  } | null;
   promptOverride?: string | null;
   toolWhitelist?: string[] | null;
 }
@@ -143,7 +136,6 @@ export class AgentRegistry {
       enabled: override?.enabled ?? false,
       planAllowed,
       config: (override?.config as Record<string, unknown>) ?? {},
-      modelOverride: override?.modelConfig ?? null,
       promptOverride: override?.promptOverride ?? null,
       toolWhitelist: override?.toolWhitelist ?? null,
       credentials,
@@ -195,7 +187,6 @@ export class AgentRegistry {
         agentKey: input.agentId,
         enabled: true,
         config: validatedConfig,
-        modelConfig: input.modelOverride ?? null,
         promptOverride: input.promptOverride ?? null,
         toolWhitelist: input.toolWhitelist ?? null,
       })
@@ -204,7 +195,6 @@ export class AgentRegistry {
         set: {
           enabled: true,
           config: validatedConfig,
-          modelConfig: input.modelOverride ?? null,
           promptOverride: input.promptOverride ?? null,
           toolWhitelist: input.toolWhitelist ?? null,
           updatedAt: sql`now()`,

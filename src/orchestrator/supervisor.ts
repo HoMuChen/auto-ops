@@ -23,9 +23,10 @@ const RouteSchema = z.object({
 });
 export type SupervisorRoute = z.infer<typeof RouteSchema>;
 
+// Routing decisions are short and high-stakes: use a smart model with low
+// temperature so the structured output is deterministic.
 const SUPERVISOR_MODEL: ModelConfig = {
-  provider: 'anthropic',
-  model: 'claude-opus-4-7',
+  model: 'anthropic/claude-opus-4.7',
   temperature: 0.1,
 };
 
