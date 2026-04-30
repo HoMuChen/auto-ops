@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';

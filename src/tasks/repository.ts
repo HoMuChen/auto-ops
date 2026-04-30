@@ -95,13 +95,15 @@ export async function claimNextTask(opts: {
   workerId: string;
   leaseMs: number;
 }): Promise<Task | null> {
-  const leaseUntil = new Date(Date.now() + opts.leaseMs);
+  // postgres-js doesn't always coerce Date inside drizzle's sql tag — pass an
+  // ISO string and let Postgres parse it as timestamptz.
+  const leaseUntil = new Date(Date.now() + opts.leaseMs).toISOString();
 
   const result = await db.execute<Task>(sql`
     UPDATE tasks
     SET status = 'in_progress',
         locked_by = ${opts.workerId},
-        locked_until = ${leaseUntil},
+        locked_until = ${leaseUntil}::timestamptz,
         updated_at = now()
     WHERE id = (
       SELECT id FROM tasks
