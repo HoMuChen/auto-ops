@@ -1,5 +1,6 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
+import { z } from 'zod';
+import { SHOPIFY_TOOL_IDS, buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
 import type {
   AgentBuildContext,
@@ -16,6 +17,35 @@ Shopify Admin API to create or update them. Always:
 - Never invent SKUs, prices, or stock counts; use what the user provides.
 - After approval, call shopify.create_product or shopify.update_product as needed.`;
 
+/**
+ * User-facing activation config. The frontend renders this as a form (via
+ * zod-to-json-schema → JSON Schema) when the tenant "hires" this agent.
+ */
+const configSchema = z.object({
+  shopify: z
+    .object({
+      credentialLabel: z
+        .string()
+        .optional()
+        .describe('Which Shopify connection to use when multiple are bound'),
+      defaultVendor: z
+        .string()
+        .optional()
+        .describe('Vendor name applied when the AI does not infer one'),
+      autoPublish: z
+        .boolean()
+        .default(false)
+        .describe('If true, products are created as Active; otherwise Draft'),
+    })
+    .default({}),
+  defaultLanguage: z
+    .enum(['zh-TW', 'en', 'ja'])
+    .default('zh-TW')
+    .describe('Primary language used in product listings'),
+});
+
+type OpsConfig = z.infer<typeof configSchema>;
+
 export const opsAssistantAgent: IAgent = {
   manifest: {
     id: 'ops-assistant',
@@ -24,18 +54,38 @@ export const opsAssistantAgent: IAgent = {
     availableInPlans: ['basic', 'pro', 'flagship'],
     defaultModel: { provider: 'anthropic', model: 'claude-opus-4-7', temperature: 0.2 },
     defaultPrompt: DEFAULT_PROMPT,
+
+    toolIds: SHOPIFY_TOOL_IDS,
+
+    requiredCredentials: [
+      {
+        provider: 'shopify',
+        description: 'Shopify Admin API token + store URL — needed to create products',
+        setupUrl: 'https://help.shopify.com/en/manual/apps/app-types/custom-apps',
+      },
+    ],
+
+    configSchema,
   },
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
+    const cfg = configSchema.parse(ctx.agentConfig ?? {}) as OpsConfig;
     const model = buildModel(ctx.modelConfig);
-    const tools = await buildShopifyTools(ctx.tenantId);
+    const tools = await buildShopifyTools(ctx.tenantId, {
+      ...(cfg.shopify.credentialLabel ? { credentialLabel: cfg.shopify.credentialLabel } : {}),
+      ...(cfg.shopify.defaultVendor ? { defaultVendor: cfg.shopify.defaultVendor } : {}),
+      autoPublish: cfg.shopify.autoPublish,
+    });
 
     const filteredTools = ctx.toolWhitelist
       ? tools.filter((t) => ctx.toolWhitelist?.includes(t.id))
       : tools;
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog('agent.started', `Ops Assistant starting on task ${ctx.taskId}`);
+      await ctx.emitLog('agent.started', `Ops Assistant starting on task ${ctx.taskId}`, {
+        language: cfg.defaultLanguage,
+        autoPublish: cfg.shopify.autoPublish,
+      });
 
       const messages = [
         new SystemMessage(ctx.systemPrompt),
@@ -57,7 +107,7 @@ export const opsAssistantAgent: IAgent = {
       return {
         message: text,
         awaitingApproval: true,
-        payload: { listing: text },
+        payload: { listing: text, language: cfg.defaultLanguage },
       };
     };
 

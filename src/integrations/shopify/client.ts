@@ -11,14 +11,26 @@ export interface ShopifyCredentials {
 /**
  * Resolve Shopify credentials for a tenant from the credential vault.
  *
+ * `label` selects between multiple bound stores when the tenant has more than
+ * one Shopify connection. Falls back to any row when label is omitted.
+ *
  * MVP: secrets are stored as opaque strings in the DB. Production should encrypt
  * `secret` at the application layer (libsodium / KMS) before persisting.
  */
-export async function getShopifyCredentials(tenantId: string): Promise<ShopifyCredentials> {
+export async function getShopifyCredentials(
+  tenantId: string,
+  label?: string,
+): Promise<ShopifyCredentials> {
+  const conditions = [
+    eq(tenantCredentials.tenantId, tenantId),
+    eq(tenantCredentials.provider, 'shopify'),
+  ];
+  if (label) conditions.push(eq(tenantCredentials.label, label));
+
   const [row] = await db
     .select()
     .from(tenantCredentials)
-    .where(and(eq(tenantCredentials.tenantId, tenantId), eq(tenantCredentials.provider, 'shopify')))
+    .where(and(...conditions))
     .limit(1);
 
   if (!row) throw new NotFoundError(`Shopify credentials for tenant ${tenantId}`);
@@ -33,8 +45,8 @@ export async function getShopifyCredentials(tenantId: string): Promise<ShopifyCr
 export class ShopifyAdminClient {
   constructor(private readonly creds: ShopifyCredentials) {}
 
-  static async forTenant(tenantId: string): Promise<ShopifyAdminClient> {
-    const creds = await getShopifyCredentials(tenantId);
+  static async forTenant(tenantId: string, label?: string): Promise<ShopifyAdminClient> {
+    const creds = await getShopifyCredentials(tenantId, label);
     return new ShopifyAdminClient(creds);
   }
 
@@ -61,6 +73,7 @@ export class ShopifyAdminClient {
     vendor?: string;
     tags?: string[];
     product_type?: string;
+    status?: 'active' | 'draft' | 'archived';
   }): Promise<{ product: { id: number; handle: string } }> {
     return this.request('products.json', {
       method: 'POST',

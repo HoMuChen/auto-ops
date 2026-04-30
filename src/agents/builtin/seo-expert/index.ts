@@ -1,4 +1,5 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { z } from 'zod';
 import { buildModel } from '../../../llm/model-registry.js';
 import type {
   AgentBuildContext,
@@ -16,6 +17,25 @@ that align with the tenant's brand voice. Always:
 - Honor any tone/keyword/forbidden constraints in the brief.
 When you finish a draft, return it and request approval — never auto-publish.`;
 
+const configSchema = z.object({
+  targetLanguages: z
+    .array(z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']))
+    .min(1)
+    .default(['zh-TW'])
+    .describe('Languages to produce content in (multiple → multilingual output)'),
+  brandTone: z
+    .string()
+    .optional()
+    .describe('Free-form tone description, e.g. "warm, professional, slightly playful"'),
+  bannedPhrases: z.array(z.string()).default([]).describe('Phrases the agent must never use'),
+  preferredKeywords: z
+    .array(z.string())
+    .default([])
+    .describe('Keywords the agent should weave in when natural'),
+});
+
+type SeoConfig = z.infer<typeof configSchema>;
+
 export const seoExpertAgent: IAgent = {
   manifest: {
     id: 'seo-expert',
@@ -24,16 +44,42 @@ export const seoExpertAgent: IAgent = {
     availableInPlans: ['basic', 'pro', 'flagship'],
     defaultModel: { provider: 'anthropic', model: 'claude-opus-4-7', temperature: 0.4 },
     defaultPrompt: DEFAULT_PROMPT,
+
+    // No external tools yet — keyword research integrations come later.
+    toolIds: [],
+
+    // No required credentials — pure text generation against the LLM.
+    requiredCredentials: [],
+
+    configSchema,
   },
 
   build(ctx: AgentBuildContext): AgentRunnable {
+    const cfg = configSchema.parse(ctx.agentConfig ?? {}) as SeoConfig;
     const model = buildModel(ctx.modelConfig);
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog('agent.started', `SEO Expert starting on task ${ctx.taskId}`);
+      await ctx.emitLog('agent.started', `SEO Expert starting on task ${ctx.taskId}`, {
+        languages: cfg.targetLanguages,
+      });
+
+      const constraints: string[] = [];
+      if (cfg.brandTone) constraints.push(`Tone: ${cfg.brandTone}`);
+      if (cfg.preferredKeywords.length > 0) {
+        constraints.push(`Preferred keywords: ${cfg.preferredKeywords.join(', ')}`);
+      }
+      if (cfg.bannedPhrases.length > 0) {
+        constraints.push(`Avoid phrases: ${cfg.bannedPhrases.join(', ')}`);
+      }
+      constraints.push(`Target languages: ${cfg.targetLanguages.join(', ')}`);
+
+      const systemMessage =
+        constraints.length > 0
+          ? `${ctx.systemPrompt}\n\nTenant constraints:\n- ${constraints.join('\n- ')}`
+          : ctx.systemPrompt;
 
       const messages = [
-        new SystemMessage(ctx.systemPrompt),
+        new SystemMessage(systemMessage),
         ...input.messages.map((m) =>
           m.role === 'user' ? new HumanMessage(m.content) : new HumanMessage(m.content),
         ),
@@ -50,7 +96,7 @@ export const seoExpertAgent: IAgent = {
       return {
         message: text,
         awaitingApproval: true,
-        payload: { draft: text },
+        payload: { draft: text, languages: cfg.targetLanguages },
       };
     };
 

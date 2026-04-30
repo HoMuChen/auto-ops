@@ -3,21 +3,44 @@ import { z } from 'zod';
 import type { AgentTool } from '../../agents/types.js';
 import { ShopifyAdminClient } from './client.js';
 
+export interface ShopifyToolOptions {
+  /** `tenant_credentials.label` selector when the tenant has multiple stores. */
+  credentialLabel?: string;
+  /** Default vendor applied when the AI does not supply one. */
+  defaultVendor?: string;
+  /**
+   * If true, products are created in `active` status (visible immediately);
+   * otherwise `draft`. Most users want `false` (draft + manual review) until
+   * they trust the agent.
+   */
+  autoPublish?: boolean;
+}
+
 /**
  * Shopify tools exposed to the Ops Assistant agent.
  *
  * Tools that mutate Shopify state are tagged `requiresApproval: true` so the
  * orchestrator routes the task to a Waiting (HITL) gate before invocation.
+ *
+ * Tool *definitions* are static (id, schema, description). Tool *instances* are
+ * built per (tenant, agent activation) so credentials and config are bound at
+ * the right scope — see src/agents/builtin/ops-assistant/index.ts.
  */
-export async function buildShopifyTools(tenantId: string): Promise<AgentTool[]> {
+export async function buildShopifyTools(
+  tenantId: string,
+  options: ShopifyToolOptions = {},
+): Promise<AgentTool[]> {
+  const { credentialLabel, defaultVendor, autoPublish } = options;
+
   const createProduct = tool(
     async (input: { title: string; bodyHtml?: string; tags?: string[]; vendor?: string }) => {
-      const client = await ShopifyAdminClient.forTenant(tenantId);
+      const client = await ShopifyAdminClient.forTenant(tenantId, credentialLabel);
       const result = await client.createProduct({
         title: input.title,
         body_html: input.bodyHtml,
         tags: input.tags,
-        vendor: input.vendor,
+        vendor: input.vendor ?? defaultVendor,
+        status: autoPublish ? 'active' : 'draft',
       });
       return JSON.stringify(result);
     },
@@ -35,7 +58,7 @@ export async function buildShopifyTools(tenantId: string): Promise<AgentTool[]> 
 
   const updateProduct = tool(
     async (input: { productId: number; patch: Record<string, unknown> }) => {
-      const client = await ShopifyAdminClient.forTenant(tenantId);
+      const client = await ShopifyAdminClient.forTenant(tenantId, credentialLabel);
       const result = await client.updateProduct(input.productId, input.patch);
       return JSON.stringify(result);
     },
@@ -54,3 +77,6 @@ export async function buildShopifyTools(tenantId: string): Promise<AgentTool[]> 
     { id: 'shopify.update_product', tool: updateProduct, requiresApproval: true },
   ];
 }
+
+/** Static tool ids exposed by this integration — for manifest declarations. */
+export const SHOPIFY_TOOL_IDS = ['shopify.create_product', 'shopify.update_product'] as const;

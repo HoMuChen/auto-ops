@@ -35,16 +35,17 @@ export async function buildGraph(opts: BuildGraphOptions) {
   for (const agent of agents) {
     const manifest = agent.manifest;
     graph.addNode(manifest.id, async (state: GraphState) => {
-      const modelConfig = await resolveModelConfig(
-        opts.tenantId,
-        manifest.id,
-        manifest.defaultModel,
-      );
+      const [modelConfig, override] = await Promise.all([
+        resolveModelConfig(opts.tenantId, manifest.id, manifest.defaultModel),
+        agentRegistry.loadConfig(opts.tenantId, manifest.id),
+      ]);
       const ctx: AgentBuildContext = {
         tenantId: opts.tenantId,
         taskId: opts.taskId,
         modelConfig,
-        systemPrompt: manifest.defaultPrompt,
+        systemPrompt: override.promptOverride ?? manifest.defaultPrompt,
+        ...(override.toolWhitelist ? { toolWhitelist: override.toolWhitelist } : {}),
+        agentConfig: override.config,
         emitLog: opts.emitLog,
       };
       const runnable = await agent.build(ctx);

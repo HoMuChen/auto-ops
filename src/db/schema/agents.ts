@@ -11,15 +11,18 @@ import {
 import { tenants } from './tenants.js';
 
 /**
- * Per-tenant agent configuration.
+ * Per-tenant agent configuration ("the user has hired this AI employee").
  *
  * `agentKey` references a registered agent in the AgentRegistry (e.g. "seo-expert").
  * `modelConfig` lets each tenant pick a different LLM per agent (provider + model + temperature).
- * `prompt` is an optional override of the agent's default system prompt.
- * `tools` is an optional override/whitelist of tool ids.
+ * `promptOverride` is an optional override of the agent's default system prompt.
+ * `toolWhitelist` is an optional whitelist of tool ids the agent is allowed to call.
+ * `config` is the user-supplied activation config, validated against
+ *   `AgentManifest.configSchema` at activation time. Available at runtime as
+ *   `AgentBuildContext.agentConfig`.
  *
- * If no row exists for a (tenant, agent) pair, defaults from the registry apply.
- * Subscription plans can gate which agentKeys are allowed for which plan.
+ * If no row exists for a (tenant, agent) pair, the agent is implicitly enabled
+ * and `config` defaults to {}. Subscription plans gate which agentKeys are allowed.
  */
 export const agentConfigs = pgTable(
   'agent_configs',
@@ -38,7 +41,7 @@ export const agentConfigs = pgTable(
     }>(),
     promptOverride: text('prompt_override'),
     toolWhitelist: jsonb('tool_whitelist').$type<string[]>(),
-    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

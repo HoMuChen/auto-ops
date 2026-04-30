@@ -6,7 +6,7 @@ CREATE TABLE "agent_configs" (
 	"model_config" jsonb,
 	"prompt_override" text,
 	"tool_whitelist" jsonb,
-	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"config" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
