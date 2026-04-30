@@ -1,0 +1,14 @@
+node_modules
+dist
+/vitest.config.js
+/vitest.config.d.ts
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vscode
+.idea
+coverage
+.vitest-cache
+.turbo

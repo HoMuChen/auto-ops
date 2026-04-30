@@ -1,0 +1,39 @@
+import { EventEmitter } from 'node:events';
+
+export interface TaskLogEvent {
+  event: string;
+  message: string;
+  data?: Record<string, unknown>;
+  at: string;
+}
+
+/**
+ * In-process EventBus for SSE fan-out.
+ *
+ * The runner publishes per-task; SSE handlers subscribe per-task and forward
+ * events to the connected client. Backed by EventEmitter — single-process for MVP.
+ *
+ * Multi-process scale-out: replace with Postgres LISTEN/NOTIFY (cheap, already
+ * have Postgres) or Redis pub/sub. The publish/subscribe interface stays the same.
+ */
+class EventBus {
+  private emitter = new EventEmitter();
+
+  constructor() {
+    this.emitter.setMaxListeners(0);
+  }
+
+  publish(taskId: string, event: TaskLogEvent): void {
+    this.emitter.emit(`task:${taskId}`, event);
+  }
+
+  subscribe(taskId: string, listener: (event: TaskLogEvent) => void): () => void {
+    const channel = `task:${taskId}`;
+    this.emitter.on(channel, listener);
+    return () => {
+      this.emitter.off(channel, listener);
+    };
+  }
+}
+
+export const eventBus = new EventBus();
