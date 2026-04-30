@@ -24,7 +24,7 @@ export interface ShopifyToolOptions {
  *
  * Tool *definitions* are static (id, schema, description). Tool *instances* are
  * built per (tenant, agent activation) so credentials and config are bound at
- * the right scope — see src/agents/builtin/ops-assistant/index.ts.
+ * the right scope — see src/agents/builtin/shopify-ops/index.ts.
  */
 export async function buildShopifyTools(
   tenantId: string,

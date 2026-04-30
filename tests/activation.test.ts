@@ -164,9 +164,9 @@ describe('validateAgentConfig', () => {
 });
 
 describe('builtin agent manifests', () => {
-  it('Ops Assistant configSchema accepts default empty object', async () => {
-    const { opsAssistantAgent } = await import('../src/agents/builtin/ops-assistant/index.js');
-    const result = validateAgentConfig(opsAssistantAgent.manifest, {});
+  it('Shopify Ops configSchema accepts default empty object', async () => {
+    const { shopifyOpsAgent } = await import('../src/agents/builtin/shopify-ops/index.js');
+    const result = validateAgentConfig(shopifyOpsAgent.manifest, {});
     expect(result).toMatchObject({
       shopify: { autoPublish: false },
       defaultLanguage: 'zh-TW',

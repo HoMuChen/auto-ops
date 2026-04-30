@@ -44,13 +44,13 @@ const configSchema = z.object({
     .describe('Primary language used in product listings'),
 });
 
-type OpsConfig = z.infer<typeof configSchema>;
+type ShopifyOpsConfig = z.infer<typeof configSchema>;
 
-export const opsAssistantAgent: IAgent = {
+export const shopifyOpsAgent: IAgent = {
   manifest: {
-    id: 'ops-assistant',
-    name: 'AI Ops Assistant',
-    description: 'Prepares product listings and pushes them to Shopify.',
+    id: 'shopify-ops',
+    name: 'AI Shopify Ops Assistant',
+    description: 'Prepares Shopify product listings and pushes them to the store.',
     availableInPlans: ['basic', 'pro', 'flagship'],
     // Sonnet is fast + cheap + strong at structured output — well-suited to
     // turning a brief into a tidy product listing.
@@ -71,7 +71,7 @@ export const opsAssistantAgent: IAgent = {
   },
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
-    const cfg = configSchema.parse(ctx.agentConfig ?? {}) as OpsConfig;
+    const cfg = configSchema.parse(ctx.agentConfig ?? {}) as ShopifyOpsConfig;
     const model = buildModel(ctx.modelConfig);
     const tools = await buildShopifyTools(ctx.tenantId, {
       ...(cfg.shopify.credentialLabel ? { credentialLabel: cfg.shopify.credentialLabel } : {}),
@@ -84,7 +84,7 @@ export const opsAssistantAgent: IAgent = {
       : tools;
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog('agent.started', `Ops Assistant starting on task ${ctx.taskId}`, {
+      await ctx.emitLog('agent.started', `Shopify Ops starting on task ${ctx.taskId}`, {
         language: cfg.defaultLanguage,
         autoPublish: cfg.shopify.autoPublish,
       });

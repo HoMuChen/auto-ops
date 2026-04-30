@@ -75,10 +75,7 @@ export class TaskWorker {
       // Heartbeat at debug level — visible only when LOG_LEVEL=debug. Confirms
       // the worker is alive when the queue is empty (otherwise idle ticks are
       // silent and it's hard to tell whether the loop has stalled).
-      this.log.debug(
-        { claimed: claimedThisTick, inflight: this.inflight, reclaimed },
-        'tick',
-      );
+      this.log.debug({ claimed: claimedThisTick, inflight: this.inflight, reclaimed }, 'tick');
     } finally {
       this.scheduleNext();
     }
