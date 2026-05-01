@@ -15,11 +15,13 @@ Everything is multi-tenant, audited via task logs, and resumable — the task qu
 
 ### Built-in agents
 
-| ID | What it does | Plans | External writes |
-|---|---|---|---|
-| `seo-strategist` | Turns a brief into N focused article topics, spawns a child task per topic | pro, flagship | none (planning only) |
-| `shopify-blog-writer` | Writes one multilingual SEO article from a focused brief | basic, pro, flagship | `shopify.publish_article` (after HITL approve) |
-| `shopify-ops` | Drafts a Shopify product listing from a brief | basic, pro, flagship | `shopify.create_product` (after HITL approve) |
+| ID | What it does | External writes |
+|---|---|---|
+| `seo-strategist` | Turns a brief into N focused article topics, spawns a child task per topic | none (planning only) |
+| `shopify-blog-writer` | Writes one multilingual SEO article from a focused brief | `shopify.publish_article` (after HITL approve) |
+| `shopify-ops` | Drafts a Shopify product listing from a brief | `shopify.create_product` (after HITL approve) |
+
+Every tenant sees every registered agent — there is no per-plan gating. The `tenants.plan` column is kept for future quota / billing hooks but no longer affects agent visibility.
 
 Adding a new agent = implement `IAgent` (manifest + `build(ctx)`) and register it in `src/agents/index.ts:bootstrapAgents()`. Models are fixed per agent in code (via OpenRouter); no per-tenant model picker.
 
@@ -191,6 +193,7 @@ pnpm lint             # biome check .
 pnpm lint:fix         # biome check --write .
 pnpm test             # unit tests only (no DB)
 pnpm test:integration # integration tests (requires `supabase start` first)
+pnpm test:smoke       # opt-in OpenRouter live smoke (gated by OPENROUTER_LIVE=1)
 pnpm test:all         # unit + integration
 pnpm db:generate      # drizzle-kit generate (after schema changes)
 pnpm db:migrate       # apply handwritten + generated SQL (idempotent)
@@ -200,7 +203,7 @@ pnpm db:studio        # drizzle-kit studio
 Single test:
 ```bash
 pnpm test -- tests/seo-strategist.test.ts
-pnpm test:integration -- tests/integration/lifecycle.test.ts -t "approves a strategy task"
+pnpm test:integration -- tests/integration/spawning.test.ts -t "strategist plans"
 ```
 
 ---
@@ -208,7 +211,8 @@ pnpm test:integration -- tests/integration/lifecycle.test.ts -t "approves a stra
 ## Testing strategy
 
 - **Unit tests** (`tests/*.test.ts`) — pure logic, no DB, no network. LLM is replaced with `FakeChatModel` where needed.
-- **Integration tests** (`tests/integration/*.test.ts`) — boot the real Fastify app against a local Supabase Postgres. LLM is scripted via `tests/integration/helpers/llm-mock.ts` (`scriptStructured` / `scriptText` queues). External APIs (Shopify) are stubbed at `fetch`. **No test should hit OpenRouter.**
+- **Integration tests** (`tests/integration/*.test.ts`) — boot the real Fastify app against a local Supabase Postgres. LLM is scripted via `tests/integration/helpers/llm-mock.ts` (`scriptStructured` / `scriptText` queues). External APIs (Shopify) are stubbed at `fetch`. **`pnpm test` and `pnpm test:integration` never hit OpenRouter.**
+- **Smoke tests** (`tests/smoke/*.test.ts`) — opt-in only. Gated by `OPENROUTER_LIVE=1` + a real `OPENROUTER_API_KEY`; otherwise the entire suite is skipped. Verifies that production model slugs in agent manifests still resolve and that `withStructuredOutput` returns parseable JSON on the real LLM. Costs real money — never run in default CI.
 - The integration suite refuses to run against a non-local `DATABASE_URL` to prevent accidents.
 
 ---
@@ -238,7 +242,6 @@ Full list: [`.env.example`](.env.example) and [`src/config/env.ts`](src/config/e
 - pgvector / RAG knowledge base (Domain Experts)
 - Subscription quota enforcement (per-tenant monthly task caps)
 - Pagination on list endpoints
-- Real OpenRouter smoke test (all current tests use mocks)
 - Webhook receivers for Shopify events
 - Rate limiting
 - Postgres RLS re-enable (see [`drizzle/0001_rls_policies.sql.disabled`](drizzle/))
