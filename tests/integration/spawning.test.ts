@@ -79,7 +79,7 @@ describe('Strategy → Spawn → Execution flow', () => {
 
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'Plan the summer SEO campaign for our store' },
     });

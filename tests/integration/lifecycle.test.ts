@@ -61,7 +61,7 @@ async function bindShopifyCredential(tenantId: string): Promise<void> {
 }
 
 describe('Task lifecycle — happy path through HITL gate', () => {
-  it('POST /conversations → worker runs → waiting → /approve(finalize) → publishes → done', async () => {
+  it('POST /tasks → worker runs → waiting → /approve(finalize) → publishes → done', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
     await bindShopifyCredential(tenantId);
@@ -75,7 +75,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     // 1. Dispatch the brief.
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'Write an SEO article about summer dresses' },
     });
@@ -172,7 +172,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
 
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'something' },
     });
@@ -207,7 +207,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
 
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'first brief' },
     });

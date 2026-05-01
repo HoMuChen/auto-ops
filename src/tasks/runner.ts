@@ -94,7 +94,7 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
 
     // Auto-promote to strategy kind whenever the agent emitted children. This
     // keeps `task.kind` consistent with the actual behaviour at finalize time
-    // even if the conversation route created the task as the default 'execution'.
+    // even if POST /v1/tasks created the row as the default 'execution'.
     const hasSpawn = (finalState.lastOutput?.spawnTasks?.length ?? 0) > 0;
     const kindPatch: { kind?: 'strategy' } = hasSpawn ? { kind: 'strategy' } : {};
 

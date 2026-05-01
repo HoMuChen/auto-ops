@@ -74,7 +74,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
 
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: '幫我寫一篇 2026 夏季女裝穿搭文' },
     });
@@ -206,7 +206,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
 
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'draft only please' },
     });
@@ -269,7 +269,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
 
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'try to publish' },
     });

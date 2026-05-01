@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ApproveBody,
-  CreateConversationBody,
+  CreateTaskBody,
   ErrorEnvelope,
   FeedbackBody,
   PaginationQuery,
@@ -18,23 +18,23 @@ describe('TaskStatusSchema', () => {
   });
 });
 
-describe('CreateConversationBody', () => {
+describe('CreateTaskBody', () => {
   it('requires brief', () => {
-    expect(() => CreateConversationBody.parse({})).toThrow();
+    expect(() => CreateTaskBody.parse({})).toThrow();
   });
 
   it('rejects empty brief', () => {
-    expect(() => CreateConversationBody.parse({ brief: '' })).toThrow();
+    expect(() => CreateTaskBody.parse({ brief: '' })).toThrow();
   });
 
   it('accepts brief alone', () => {
-    expect(CreateConversationBody.parse({ brief: 'plan summer SEO' })).toMatchObject({
+    expect(CreateTaskBody.parse({ brief: 'plan summer SEO' })).toMatchObject({
       brief: 'plan summer SEO',
     });
   });
 
   it('accepts optional preferredAgent / params / scheduledAt', () => {
-    const result = CreateConversationBody.parse({
+    const result = CreateTaskBody.parse({
       brief: 'do thing',
       preferredAgent: 'seo-expert',
       params: { language: 'zh-TW' },
@@ -46,7 +46,7 @@ describe('CreateConversationBody', () => {
   });
 
   it('rejects malformed scheduledAt', () => {
-    expect(() => CreateConversationBody.parse({ brief: 'x', scheduledAt: 'tomorrow' })).toThrow();
+    expect(() => CreateTaskBody.parse({ brief: 'x', scheduledAt: 'tomorrow' })).toThrow();
   });
 });
 

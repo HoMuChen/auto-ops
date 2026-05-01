@@ -34,14 +34,14 @@ export const TaskSchema = z.object({
   completedAt: NullableIsoDate,
 });
 
-export const CreateConversationBody = z.object({
+export const CreateTaskBody = z.object({
   brief: z.string().min(1, 'brief is required'),
   /** Optional explicit agent id; otherwise the Supervisor decides. */
   preferredAgent: z.string().optional(),
   params: z.record(z.unknown()).optional(),
   scheduledAt: z.string().datetime().optional(),
 });
-export type CreateConversationBody = z.infer<typeof CreateConversationBody>;
+export type CreateTaskBody = z.infer<typeof CreateTaskBody>;
 
 export const FeedbackBody = z.object({
   feedback: z.string().min(1),

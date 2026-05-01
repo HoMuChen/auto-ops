@@ -159,7 +159,7 @@ x-tenant-id: <UUID>
   (targetLanguages, brandTone…)    activate
                                                     ↓
 
-[首頁有「對話框」可派任務]      POST /v1/conversations  回 task (status:'todo')
+[首頁有「對話框」可派任務]      POST /v1/tasks          回 task (status:'todo')
   user 輸入：「幫我寫一篇        {brief, params?}        ↓ 拿 task.id
    夏季女裝的 SEO 文章」
 
@@ -346,10 +346,10 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 
 ---
 
-### Conversations（派任務的入口）
+### Tasks — 建立（派任務的入口）
 
-#### `POST /v1/conversations`
-這是 user 在「對話框」打字按 send 時呼叫的端點。
+#### `POST /v1/tasks`
+這是 user 在「對話框」打字按 send 時呼叫的端點。直接寫一筆 `tasks` row（status='todo'）+ 一筆 user message，worker 會非同步 poll 走。supervisor 需要釐清時，澄清會走 HITL gate（task 進 `waiting`）— 沒有 pre-task 對話實體，「對話」一律發生在 task 殼裡。
 ```json
 // Request
 {
@@ -622,10 +622,10 @@ Shopify 回 4xx/5xx → executor 捕捉 → 寫 `task.error.message`、status=`f
 
 | kind | 誰建的 | 例子 | 結束時 |
 |---|---|---|---|
-| `strategy` | user 透過 `/conversations` 派一個「規劃型」brief，supervisor 路由到 strategist agent | 「規劃夏季女裝 SEO」「規劃這 20 個 SKU 的上架排程」 | `finalize=true` 的 approve **會原子地建出 N 個子任務** |
+| `strategy` | user 透過 `POST /v1/tasks` 派一個「規劃型」brief，supervisor 路由到 strategist agent | 「規劃夏季女裝 SEO」「規劃這 20 個 SKU 的上架排程」 | `finalize=true` 的 approve **會原子地建出 N 個子任務** |
 | `execution` | strategy 父任務 finalize 時自動建出，或 user 直接派一個明確 brief | 「寫這一篇 SEO 文章」「上架這個商品」 | 一般 done |
 
-> **kind 是動態的**：`/conversations` 預設建 `kind: 'execution'`。當 worker 跑完發現
+> **kind 是動態的**：`POST /v1/tasks` 預設建 `kind: 'execution'`。當 worker 跑完發現
 > agent 回傳了 `spawnTasks`，runner 會把任務升級為 `kind: 'strategy'`。所以 UI 不能
 > 在 task 剛建立時就決定渲染樣式，要在 status 變 `waiting` 後再讀 `kind`。
 
@@ -823,7 +823,7 @@ interface AgentStatus {
 | 沒分頁 | tasks list 暫時就回所有 |
 | 沒 webhook | 後端任務狀態變化沒法主動通知 UI；只能 SSE / polling |
 | credentials 明文存 DB | 顯示 secret 預覽（明碼）的 UI 別做，未來會改加密 |
-| 沒 rate limit | 任意 client 短時間內可灌 N 次 /conversations；UI 自己擋 |
+| 沒 rate limit | 任意 client 短時間內可灌 N 次 POST /v1/tasks；UI 自己擋 |
 | 沒 RLS 兜底 | 不影響 UI；純粹是後端安全防線 |
 | `parentTaskId=null` query 還沒解析 | 列「頂層任務」目前要 client-side filter `parentTaskId === null` |
 | 沒 Cloudflare Images / 圖片產出 | strategy/writer 目前只產文字 + 部落格發文，文章內沒附圖；圖片整合在 roadmap |

@@ -80,7 +80,7 @@ describe('Shopify Ops end-to-end (text only, no images)', () => {
     // Dispatch the brief.
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'List a summer linen shirt on Shopify' },
     });
@@ -192,7 +192,7 @@ describe('Shopify Ops end-to-end (text only, no images)', () => {
 
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'list a thing' },
     });

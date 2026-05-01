@@ -44,7 +44,7 @@ describe('Multi-tenant isolation', () => {
 
     const create = await app.inject({
       method: 'POST',
-      url: '/v1/conversations',
+      url: '/v1/tasks',
       headers: authHeaders(jwtA, a.tenantId),
       payload: { brief: 'A confidential brief' },
     });
@@ -115,7 +115,7 @@ describe('Multi-tenant isolation', () => {
     for (let i = 0; i < 2; i += 1) {
       await app.inject({
         method: 'POST',
-        url: '/v1/conversations',
+        url: '/v1/tasks',
         headers: authHeaders(jwtA, a.tenantId),
         payload: { brief: `A brief ${i}` },
       });

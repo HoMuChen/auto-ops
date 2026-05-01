@@ -5,6 +5,7 @@ import { ForbiddenError, IllegalStateError } from '../../lib/errors.js';
 import { executeApprovedToolCall } from '../../orchestrator/tool-executor.js';
 import { appendMessage, listMessages } from '../../tasks/messages.js';
 import {
+  createTask,
   finalizeStrategyTask,
   getTask,
   listTaskLogs,
@@ -15,6 +16,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireTenant } from '../middleware/tenant.js';
 import {
   ApproveBody,
+  CreateTaskBody,
   ErrorEnvelope,
   FeedbackBody,
   PaginationQuery,
@@ -38,6 +40,56 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       if (!req.tenantId) throw new ForbiddenError();
       const q = req.query as z.infer<typeof PaginationQuery>;
       return listTasks(req.tenantId, q);
+    },
+  );
+
+  /**
+   * Natural-language task dispatch. Inserts a `tasks` row in 'todo' status and
+   * seeds the first user message; the polling worker picks it up and runs it
+   * through the LangGraph supervisor. The supervisor may pause via HITL gate
+   * and ask for clarification — that conversation happens *inside* the task,
+   * not before it (use /feedback to reply, /discard to abandon).
+   */
+  app.post(
+    '/tasks',
+    {
+      schema: {
+        tags: ['tasks'],
+        body: CreateTaskBody,
+        response: {
+          201: TaskSchema,
+          400: ErrorEnvelope,
+          401: ErrorEnvelope,
+          403: ErrorEnvelope,
+        },
+      },
+    },
+    async (req, reply) => {
+      if (!req.tenantId || !req.user) throw new ForbiddenError();
+      const body = req.body as z.infer<typeof CreateTaskBody>;
+
+      const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : undefined;
+
+      const task = await createTask({
+        tenantId: req.tenantId,
+        title: body.brief.slice(0, 120),
+        description: body.brief,
+        assignedAgent: body.preferredAgent,
+        input: { brief: body.brief, ...(body.params ?? {}) },
+        scheduledAt,
+        createdBy: req.user.id,
+      });
+
+      await appendMessage({
+        tenantId: req.tenantId,
+        taskId: task.id,
+        role: 'user',
+        content: body.brief,
+        createdBy: req.user.id,
+      });
+
+      reply.code(201);
+      return task;
     },
   );
 
