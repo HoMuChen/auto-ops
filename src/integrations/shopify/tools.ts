@@ -6,7 +6,7 @@ import { ShopifyAdminClient } from './client.js';
 export interface ShopifyToolOptions {
   /** `tenant_credentials.label` selector when the tenant has multiple stores. */
   credentialLabel?: string;
-  /** Default vendor applied when the AI does not supply one. */
+  /** Default vendor applied when the AI does not supply one for a product. */
   defaultVendor?: string;
   /**
    * If true, products are created in `active` status (visible immediately);
@@ -14,6 +14,21 @@ export interface ShopifyToolOptions {
    * they trust the agent.
    */
   autoPublish?: boolean;
+  /**
+   * Blog selector for `shopify.publish_article`. If `blogHandle` is given the
+   * tool finds the blog by handle (e.g. "news"); otherwise it falls back to
+   * the first blog returned by the store. Most Shopify stores have a single
+   * "news" blog created at install time.
+   */
+  blogHandle?: string;
+  /** Default author byline applied when the AI does not supply one. */
+  defaultAuthor?: string;
+  /**
+   * If true, articles are published immediately (visible on the storefront).
+   * Default false — create as draft so the user can review on Shopify before
+   * exposing.
+   */
+  publishArticleImmediately?: boolean;
 }
 
 /**
@@ -30,7 +45,14 @@ export async function buildShopifyTools(
   tenantId: string,
   options: ShopifyToolOptions = {},
 ): Promise<AgentTool[]> {
-  const { credentialLabel, defaultVendor, autoPublish } = options;
+  const {
+    credentialLabel,
+    defaultVendor,
+    autoPublish,
+    blogHandle,
+    defaultAuthor,
+    publishArticleImmediately,
+  } = options;
 
   const createProduct = tool(
     async (input: { title: string; bodyHtml?: string; tags?: string[]; vendor?: string }) => {
@@ -86,11 +108,76 @@ export async function buildShopifyTools(
     },
   );
 
+  const publishArticle = tool(
+    async (input: {
+      title: string;
+      bodyHtml: string;
+      summaryHtml?: string;
+      tags?: string[];
+      author?: string;
+    }) => {
+      const client = await ShopifyAdminClient.forTenant(tenantId, credentialLabel);
+
+      // Resolve which blog to publish to. Most stores have one "news" blog;
+      // multi-blog stores can pin a specific one via agent config.
+      const { blogs } = await client.listBlogs();
+      if (blogs.length === 0) {
+        throw new Error(
+          'Shopify store has no blogs — create one in Online Store → Blog Posts before publishing.',
+        );
+      }
+      const targetBlog = blogHandle ? blogs.find((b) => b.handle === blogHandle) : blogs[0];
+      if (!targetBlog) {
+        throw new Error(
+          `No Shopify blog with handle "${blogHandle}". Available: ${blogs
+            .map((b) => b.handle)
+            .join(', ')}`,
+        );
+      }
+
+      const { article } = await client.createArticle(targetBlog.id, {
+        title: input.title,
+        body_html: input.bodyHtml,
+        ...(input.summaryHtml ? { summary_html: input.summaryHtml } : {}),
+        ...(input.tags ? { tags: input.tags } : {}),
+        author: input.author ?? defaultAuthor ?? 'Auto-Ops',
+        published: publishArticleImmediately ?? false,
+      });
+
+      return {
+        articleId: article.id,
+        blogId: targetBlog.id,
+        blogHandle: targetBlog.handle,
+        handle: article.handle,
+        articleUrl: `https://${client.storeDomain}/admin/articles/${article.id}`,
+        publishedAt: article.published_at,
+        status: publishArticleImmediately ? 'published' : 'draft',
+      };
+    },
+    {
+      name: 'shopify.publish_article',
+      description:
+        'Publish a blog article to a Shopify blog. Requires HITL approval before execution.',
+      schema: z.object({
+        title: z.string(),
+        bodyHtml: z.string(),
+        summaryHtml: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        author: z.string().optional(),
+      }),
+    },
+  );
+
   return [
     { id: 'shopify.create_product', tool: createProduct, requiresApproval: true },
     { id: 'shopify.update_product', tool: updateProduct, requiresApproval: true },
+    { id: 'shopify.publish_article', tool: publishArticle, requiresApproval: true },
   ];
 }
 
 /** Static tool ids exposed by this integration — for manifest declarations. */
-export const SHOPIFY_TOOL_IDS = ['shopify.create_product', 'shopify.update_product'] as const;
+export const SHOPIFY_TOOL_IDS = [
+  'shopify.create_product',
+  'shopify.update_product',
+  'shopify.publish_article',
+] as const;

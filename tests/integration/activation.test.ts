@@ -141,11 +141,12 @@ describe('Agent activation flow', () => {
     expect(JSON.stringify(body.error.details)).toMatch(/defaultLanguage/);
   });
 
-  it('seo-writer needs no credentials and is ready immediately', async () => {
+  it('seo-writer requires Shopify credentials (it publishes blog articles on approve)', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
 
-    const detail = await app
+    // Without credentials: ready=false because the publish_article tool needs Shopify.
+    let detail = await app
       .inject({
         method: 'GET',
         url: '/v1/agents/seo-writer',
@@ -153,7 +154,32 @@ describe('Agent activation flow', () => {
       })
       .then((r) => r.json());
 
-    expect(detail.requiredCredentials).toEqual([]);
+    expect(detail.requiredCredentials).toEqual([expect.objectContaining({ provider: 'shopify' })]);
+    expect(detail.ready).toBe(false);
+
+    const earlyActivate = await app.inject({
+      method: 'POST',
+      url: '/v1/agents/seo-writer/activate',
+      headers: authHeaders(jwt, tenantId),
+      payload: { config: { targetLanguages: ['zh-TW', 'en'] } },
+    });
+    expect(earlyActivate.statusCode).toBe(409);
+
+    // Bind Shopify creds → activation succeeds.
+    await app.inject({
+      method: 'PUT',
+      url: '/v1/credentials/shopify',
+      headers: authHeaders(jwt, tenantId),
+      payload: { secret: 'shpat_x', metadata: { storeUrl: 'demo.myshopify.com' } },
+    });
+
+    detail = await app
+      .inject({
+        method: 'GET',
+        url: '/v1/agents/seo-writer',
+        headers: authHeaders(jwt, tenantId),
+      })
+      .then((r) => r.json());
     expect(detail.ready).toBe(true);
 
     const activate = await app.inject({
@@ -169,6 +195,14 @@ describe('Agent activation flow', () => {
   it('deactivate flips enabled but preserves config', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
+
+    // seo-writer needs Shopify creds bound before activation.
+    await app.inject({
+      method: 'PUT',
+      url: '/v1/credentials/shopify',
+      headers: authHeaders(jwt, tenantId),
+      payload: { secret: 'shpat_x', metadata: { storeUrl: 'demo.myshopify.com' } },
+    });
 
     await app.inject({
       method: 'POST',

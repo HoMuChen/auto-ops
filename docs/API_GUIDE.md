@@ -219,17 +219,23 @@ x-tenant-id: <UUID>
   {
     "id": "seo-writer",
     "name": "AI SEO Writer",
-    "description": "Writes a single multilingual SEO article from a focused brief.",
+    "description": "Writes a single multilingual SEO blog article from a focused brief and publishes it to the tenant Shopify blog after human approval.",
     "availableInPlans": ["basic", "pro", "flagship"],
     "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.4 },
-    "toolIds": [],
-    "requiredCredentials": [],
-    "configSchema": { /* targetLanguages, brandTone, bannedPhrases, preferredKeywords */ },
+    "toolIds": ["shopify.publish_article"],
+    "requiredCredentials": [
+      {
+        "provider": "shopify",
+        "description": "Shopify Admin API token + store URL — needed to publish blog articles",
+        "setupUrl": "https://help.shopify.com/...",
+        "bound": false
+      }
+    ],
+    "configSchema": { /* targetLanguages, brandTone, publishToShopify, blogHandle, defaultAuthor, publishImmediately, ... */ },
     "enabled": false,
-    "ready": true,
+    "ready": false,  ← creds 未綁所以 false
     "planAllowed": true,
-    "credentials": [],
-    "config": {}
+    "credentials": [{"provider":"shopify","bound":false,"description":"..."}]
   },
   {
     "id": "shopify-ops",
@@ -462,35 +468,43 @@ const reader = res.body.getReader();
 
 ## 6.w Pending Tool Call — 寫入型 agent 的兩段式 HITL
 
-某些 agent 需要實際**寫**到外部系統（建商品、發貼文…）。這種 agent 跑完 LLM 後**不會**
-直接打 API；它會把「想呼叫的 tool + 參數」放到 `output.pendingToolCall`，停在 `waiting`
-等 user 按 Approve，框架才在 approve 路徑裡 deterministic 地把那個 tool 點燃。
+某些 agent 需要實際**寫**到外部系統（發部落格、上架商品、發貼文…）。這種 agent 跑完
+LLM 後**不會**直接打 API；它會把「想呼叫的 tool + 參數」放到 `output.pendingToolCall`，
+停在 `waiting` 等 user 按 Approve，框架才在 approve 路徑裡 deterministic 地把 tool 點燃。
 
-代表 agent：`shopify-ops`。
+目前帶 `pendingToolCall` 的 agent：
+- `seo-writer` → `shopify.publish_article`（發部落格文章，**MVP 主流程**）
+- `shopify-ops` → `shopify.create_product`（上架商品）
 
-### `output` 形狀（waiting 狀態）
+### 範例：seo-writer 發部落格
+
+#### `waiting` 狀態的 `output` 形狀
 
 ```json
 {
   "id": "task-uuid",
   "kind": "execution",
   "status": "waiting",
-  "assignedAgent": "shopify-ops",
+  "assignedAgent": "seo-writer",
   "output": {
-    "listing": {
-      "title": "Linen summer shirt",
-      "bodyHtml": "<p>Breathable, lightweight linen shirt for hot summer days.</p>",
-      "tags": ["summer", "linen", "shirt"],
-      "vendor": "Acme Apparel"
+    "article": {
+      "title": "夏日穿搭 5 個必備單品",
+      "bodyHtml": "<h2>選對材質讓夏天更舒服</h2><p>...</p>",
+      "summaryHtml": "5 個夏季必備單品挑選指南，含材質與搭配建議。",
+      "tags": ["夏季穿搭", "女裝", "購物指南"],
+      "language": "zh-TW",
+      "author": "Editorial Team"
     },
     "language": "zh-TW",
+    "publishToShopify": true,
     "pendingToolCall": {
-      "id": "shopify.create_product",
+      "id": "shopify.publish_article",
       "args": {
-        "title": "Linen summer shirt",
-        "bodyHtml": "<p>...</p>",
-        "tags": ["summer", "linen", "shirt"],
-        "vendor": "Acme Apparel"
+        "title": "夏日穿搭 5 個必備單品",
+        "bodyHtml": "<h2>選對材質...</h2>",
+        "summaryHtml": "5 個夏季必備單品挑選指南...",
+        "tags": ["夏季穿搭", "女裝", "購物指南"],
+        "author": "Editorial Team"
       }
     }
   }
@@ -498,36 +512,78 @@ const reader = res.body.getReader();
 ```
 
 UI 應該渲染：
-- 上半：`messages` 最後一條 assistant 訊息（已是 markdown 預覽）+ `output.listing`
-- 中間：「按 Approve 後框架會呼叫 `pendingToolCall.id`」的提示
-- CTA：[Approve & Push to Shopify] (`finalize:true`) / [Feedback]
+- 上半：`messages` 最後一條 assistant 訊息（agent 已產 markdown 預覽含 title / tags / 摘要）
+- 中間：「按 Approve 後會發到 Shopify 部落格 `<blogHandle 或第一個 blog>`，狀態 `<draft 或 published>`」
+- CTA：[Approve & Publish] (`finalize:true`) / [Feedback]
 
-### `finalize:true` 之後
+#### `finalize:true` 之後
 
 `task.output` 會新增：
 ```json
 {
-  "listing": { /* ... */ },
+  "article": { /* ... */ },
   "language": "zh-TW",
-  // pendingToolCall 被消化、清空
+  "publishToShopify": true,
+  // pendingToolCall 被消化清空
   "toolResult": {
-    "productId": 9876543210,
-    "handle": "linen-summer-shirt",
-    "adminUrl": "https://demo-shop.myshopify.com/admin/products/9876543210",
+    "articleId": 4242,
+    "blogId": 200,
+    "blogHandle": "editorial",
+    "handle": "xia-ri-chuan-da-5-ge-bi-bei-dan-pin",
+    "articleUrl": "https://demo-shop.myshopify.com/admin/articles/4242",
+    "publishedAt": null,
     "status": "draft"
   },
   "toolExecutedAt": "2026-05-01T04:43:33.840Z"
 }
 ```
 
-UI 拿到 200 後可立刻顯示「已上架，[在 Shopify 後台看](toolResult.adminUrl)」。
+UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](toolResult.articleUrl)」。
+若 status=`published` 表示已對讀者公開。
+
+#### seo-writer 啟用設定（`POST /v1/agents/seo-writer/activate` 的 config）
+
+```json
+{
+  "config": {
+    "targetLanguages": ["zh-TW", "en"],
+    "brandTone": "professional, slightly playful",
+    "preferredKeywords": ["女裝", "夏季"],
+
+    "publishToShopify": true,            // 預設 true；false 則僅產草稿不發
+    "blogHandle": "editorial",           // 不填→第一個 blog（多數店只有一個 "news"）
+    "defaultAuthor": "Auto-Ops Bot",     // LLM 沒給 author 時用這個
+    "publishImmediately": false          // false→draft，true→直接 published 上線
+  }
+}
+```
+
+> seo-writer **必須**綁 Shopify credentials 才能 activate（即使 `publishToShopify=false`），
+> 因為框架不知道 user 之後會不會切回 publish。Activation 時若沒 creds 會回 409。
+
+### 範例：shopify-ops 建商品
+
+`output.listing` + `pendingToolCall.id = "shopify.create_product"`，approve 後：
+```json
+"toolResult": {
+  "productId": 9876543210,
+  "handle": "linen-summer-shirt",
+  "adminUrl": "https://demo-shop.myshopify.com/admin/products/9876543210",
+  "status": "draft"
+}
+```
 
 ### Tool 失敗
 
 Shopify 回 4xx/5xx → executor 捕捉 → 寫 `task.error.message`、status=`failed`，
 `/approve` 也會回 5xx 給你（不是 200）。UI 應該：
-- 顯示 task 的 error.message
-- 提供「重試」按鈕（之後做：發 retry endpoint，暫時要 user 重派一張新卡）
+- 顯示 task 的 error.message（會包含 Shopify 原始 error 訊息片段）
+- 提供「重試」按鈕（roadmap：發 retry endpoint，暫時要 user 重派一張新卡）
+
+常見失敗：
+- `blogHandle "xxx" not found` → 該店沒有這個 blog handle，去 `/admin/blogs` 確認
+- `Shopify API 401` → access token 失效或權限不足（要 read_/write_content scope）
+- `Shopify API 422` → article 內容違反 Shopify 規則（極少見，title 太長之類）
 
 ### Idempotency
 
@@ -700,6 +756,17 @@ interface ShopifyCreateProductResult {
   status: 'active' | 'draft';
 }
 
+/** What you get back in `output.toolResult` after shopify.publish_article fires. */
+interface ShopifyPublishArticleResult {
+  articleId: number;
+  blogId: number;
+  blogHandle: string;
+  handle: string;
+  articleUrl: string;                  // direct link to /admin/articles/:id
+  publishedAt: string | null;          // null when status='draft'
+  status: 'published' | 'draft';
+}
+
 interface AgentStatus {
   id: string;
   name: string;
@@ -738,7 +805,8 @@ interface AgentStatus {
 | 沒 rate limit | 任意 client 短時間內可灌 N 次 /conversations；UI 自己擋 |
 | 沒 RLS 兜底 | 不影響 UI；純粹是後端安全防線 |
 | `parentTaskId=null` query 還沒解析 | 列「頂層任務」目前要 client-side filter `parentTaskId === null` |
-| 沒 Cloudflare Images / 圖片產出 | strategy/writer 目前只產文字；圖片整合在 roadmap |
+| 沒 Cloudflare Images / 圖片產出 | strategy/writer 目前只產文字 + 部落格發文，文章內沒附圖；圖片整合在 roadmap |
+| seo-writer 必綁 Shopify creds | 即使打算只用 `publishToShopify=false` 純草稿，activate 仍要 creds；roadmap 改為動態 required |
 
 ---
 

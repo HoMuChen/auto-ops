@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, scriptStructured, scriptText } from './helpers/llm-mock.js';
+import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
@@ -34,7 +34,13 @@ describe('Multi-tenant isolation', () => {
 
     // Tenant A creates a task and lets it advance to waiting.
     scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
-    scriptText('# A-only secret content');
+    scriptStructured({
+      title: 'A-only secret content',
+      bodyHtml: '<p>Confidential body for tenant A only.</p>',
+      summaryHtml: 'Confidential summary for tenant A.',
+      tags: ['confidential'],
+      language: 'zh-TW',
+    });
 
     const create = await app.inject({
       method: 'POST',

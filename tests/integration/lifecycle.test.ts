@@ -2,15 +2,22 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, scriptStructured, scriptText } from './helpers/llm-mock.js';
+import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 // Replace the real model registry BEFORE any module under test imports it.
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
+// Stub fetch so the seo-writer's publish_article tool doesn't actually call
+// Shopify. Shared across the file; reset between tests.
+const fetchMock = vi.fn();
+vi.stubGlobal('fetch', fetchMock);
+
 // Imports that depend on the mocked module:
 const { createTestApp } = await import('./helpers/app.js');
 const { getTask } = await import('../../src/tasks/repository.js');
+const { db } = await import('../../src/db/client.js');
+const { tenantCredentials } = await import('../../src/db/schema/index.js');
 
 let app: Awaited<ReturnType<typeof createTestApp>>;
 
@@ -25,23 +32,45 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncateAll();
   clearScript();
+  fetchMock.mockReset();
 });
 
+/**
+ * Article fixture for seo-writer's withStructuredOutput call. Centralised so
+ * each test can just `scriptStructured(article())`.
+ */
+function article(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    title: 'Summer Dresses Buying Guide',
+    bodyHtml: '<p>The lightweight cuts that work all summer long.</p>',
+    summaryHtml: 'A short guide to summer dresses for hot, humid weather.',
+    tags: ['summer', 'dresses', 'guide'],
+    language: 'zh-TW',
+    ...overrides,
+  };
+}
+
+/** Insert a Shopify credential row directly so tests don't need to call the API. */
+async function bindShopifyCredential(tenantId: string): Promise<void> {
+  await db.insert(tenantCredentials).values({
+    tenantId,
+    provider: 'shopify',
+    secret: 'shpat_test_secret',
+    metadata: { storeUrl: 'demo-shop.myshopify.com' },
+  });
+}
+
 describe('Task lifecycle — happy path through HITL gate', () => {
-  it('POST /conversations → worker runs → waiting → /approve(finalize) → done', async () => {
-    // Seed tenant + owner, mint JWT.
+  it('POST /conversations → worker runs → waiting → /approve(finalize) → publishes → done', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
+    await bindShopifyCredential(tenantId);
 
     // Script the supervisor + agent for one full graph turn:
     //   1. Supervisor routes to seo-writer.
-    //   2. seo-writer returns a draft. The agent code sets awaitingApproval=true.
-    scriptStructured({
-      nextAgent: 'seo-writer',
-      clarification: null,
-      done: false,
-    });
-    scriptText('# Summer Dresses Buying Guide\n\nDraft body…');
+    //   2. seo-writer returns a structured article via withStructuredOutput.
+    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
+    scriptStructured(article());
 
     // 1. Dispatch the brief.
     const create = await app.inject({
@@ -52,25 +81,22 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     });
     expect(create.statusCode).toBe(201);
     const taskId = create.json().id as string;
-    expect(taskId).toMatch(/^[0-9a-f-]{36}$/i);
 
-    // Sanity: status is todo, scheduled for the worker.
     let task = await getTask(tenantId, taskId);
     expect(task.status).toBe('todo');
 
-    // 2. Drive one worker tick. Should claim, run the graph, hit the HITL gate.
+    // 2. Drive one worker tick → graph runs → HITL gate.
     const drained = await drainNextTask();
-    expect(drained.claimed).toBe(true);
     expect(drained.taskId).toBe(taskId);
 
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('waiting');
-    // Output payload from the agent should be persisted.
-    expect(task.output).toMatchObject({ draft: expect.stringContaining('Summer Dresses') });
-    // Lock should be released so an approve+re-claim works.
+    expect(task.output).toMatchObject({
+      article: { title: 'Summer Dresses Buying Guide' },
+      pendingToolCall: { id: 'shopify.publish_article' },
+    });
     expect(task.lockedBy).toBeNull();
 
-    // The agent's reply should be appended as an assistant message.
     const messages = await app
       .inject({
         method: 'GET',
@@ -80,8 +106,6 @@ describe('Task lifecycle — happy path through HITL gate', () => {
       .then((r) => r.json());
     expect(messages.map((m: { role: string }) => m.role)).toEqual(['user', 'assistant']);
 
-    // Logs should include the HITL emit from the agent + the runner's
-    // task.waiting line.
     const logs = await app
       .inject({
         method: 'GET',
@@ -93,7 +117,28 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     expect(events).toContain('agent.draft.ready');
     expect(events).toContain('task.waiting');
 
-    // 3. Approve as final answer.
+    // 3. Approve as final → triggers publish_article. Stub blogs.json + articles.json.
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ blogs: [{ id: 100, handle: 'news', title: 'News' }] }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        text: async () => '',
+        json: async () => ({
+          article: {
+            id: 555,
+            handle: 'summer-dresses-buying-guide',
+            blog_id: 100,
+            published_at: null,
+          },
+        }),
+      } as unknown as Response);
+
     const approve = await app.inject({
       method: 'POST',
       url: `/v1/tasks/${taskId}/approve`,
@@ -102,17 +147,28 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     });
     expect(approve.statusCode).toBe(200);
 
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
+    expect(task.output).toMatchObject({
+      toolResult: {
+        articleId: 555,
+        blogId: 100,
+        handle: 'summer-dresses-buying-guide',
+        status: 'draft',
+      },
+    });
     expect(task.completedAt).not.toBeNull();
   });
 
   it('non-finalize approve re-queues the task to todo (waiting → todo transition)', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
+    await bindShopifyCredential(tenantId);
 
     scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
-    scriptText('# First draft');
+    scriptStructured(article({ title: 'First draft' }));
 
     const create = await app.inject({
       method: 'POST',
@@ -126,7 +182,6 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     let task = await getTask(tenantId, taskId);
     expect(task.status).toBe('waiting');
 
-    // Approve WITHOUT finalize → should re-queue, not finalise.
     const approve = await app.inject({
       method: 'POST',
       url: `/v1/tasks/${taskId}/approve`,
@@ -138,14 +193,17 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('todo');
     expect(task.completedAt).toBeNull();
+    // No tool fired — non-finalize doesn't trigger publishing.
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('feedback re-queues with the new user message visible to the agent', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
+    await bindShopifyCredential(tenantId);
 
     scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
-    scriptText('# First draft');
+    scriptStructured(article({ title: 'First draft' }));
 
     const create = await app.inject({
       method: 'POST',
@@ -174,11 +232,10 @@ describe('Task lifecycle — happy path through HITL gate', () => {
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());
-    // user, assistant, user (feedback)
-    expect(messages.map((m: { role: string; content: string }) => m.content)).toEqual([
-      'first brief',
-      '# First draft',
-      'Make the tone more playful',
-    ]);
+    // user (brief), assistant (the rendered preview from the agent), user (feedback)
+    const contents = messages.map((m: { role: string; content: string }) => m.content);
+    expect(contents[0]).toBe('first brief');
+    expect(contents[1]).toContain('First draft'); // markdown preview includes the title
+    expect(contents[2]).toBe('Make the tone more playful');
   });
 });

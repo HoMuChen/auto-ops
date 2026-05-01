@@ -95,4 +95,45 @@ export class ShopifyAdminClient {
       body: JSON.stringify({ product: patch }),
     });
   }
+
+  /**
+   * List blogs on the store. Used by the publish tool to resolve a blog by
+   * handle, or to fall back to the first blog when the agent config doesn't
+   * pin one.
+   */
+  listBlogs(): Promise<{ blogs: { id: number; handle: string; title: string }[] }> {
+    return this.request('blogs.json');
+  }
+
+  /**
+   * Create a new article inside a blog. Maps to Shopify Admin REST
+   * `POST /blogs/:blog_id/articles.json`. Pass `published: false` to create
+   * a draft article that is not visible on the storefront yet.
+   */
+  createArticle(
+    blogId: number,
+    article: {
+      title: string;
+      body_html: string;
+      summary_html?: string;
+      tags?: string[] | string;
+      author?: string;
+      published?: boolean;
+      published_at?: string;
+    },
+  ): Promise<{
+    article: { id: number; handle: string; blog_id: number; published_at: string | null };
+  }> {
+    return this.request(`blogs/${blogId}/articles.json`, {
+      method: 'POST',
+      body: JSON.stringify({
+        article: {
+          ...article,
+          // Shopify accepts either an array or a comma-separated string; send
+          // the canonical form so the receiving end is unambiguous.
+          tags: Array.isArray(article.tags) ? article.tags.join(', ') : article.tags,
+        },
+      }),
+    });
+  }
 }

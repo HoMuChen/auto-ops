@@ -2,19 +2,19 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import {
-  clearScript,
-  llmMockModule,
-  pendingScript,
-  scriptStructured,
-  scriptText,
-} from './helpers/llm-mock.js';
+import { clearScript, llmMockModule, pendingScript, scriptStructured } from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
+// Stub fetch so seo-writer's publish_article call doesn't actually hit Shopify.
+const fetchMock = vi.fn();
+vi.stubGlobal('fetch', fetchMock);
+
 const { createTestApp } = await import('./helpers/app.js');
 const { getTask, listTasks } = await import('../../src/tasks/repository.js');
+const { db } = await import('../../src/db/client.js');
+const { tenantCredentials } = await import('../../src/db/schema/index.js');
 
 let app: Awaited<ReturnType<typeof createTestApp>>;
 
@@ -29,6 +29,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncateAll();
   clearScript();
+  fetchMock.mockReset();
 });
 
 describe('Strategy → Spawn → Execution flow', () => {
@@ -36,6 +37,14 @@ describe('Strategy → Spawn → Execution flow', () => {
     // Strategist is gated to pro+ — seed accordingly.
     const { tenantId, userId, email } = await seedTenantWithOwner({ plan: 'pro' });
     const jwt = await mintJwt({ userId, email });
+    // Children are seo-writer tasks that publish to Shopify; bind a credential
+    // so the publish tool can resolve creds when it fires on approve.
+    await db.insert(tenantCredentials).values({
+      tenantId,
+      provider: 'shopify',
+      secret: 'shpat_test_secret',
+      metadata: { storeUrl: 'demo-shop.myshopify.com' },
+    });
 
     // ── Phase 1: parent strategy task ──────────────────────────────────────
     // Supervisor picks the strategist (one structured call), then the
@@ -136,10 +145,17 @@ describe('Strategy → Spawn → Execution flow', () => {
 
     // ── Phase 4: drain children — supervisor LLM is BYPASSED via pinning ───
     // Each child has assignedAgent='seo-writer' so the supervisor short-circuits;
-    // only the writer's text completion needs to be scripted.
+    // only the writer's structured output needs to be scripted (one per child).
     expect(pendingScript()).toBe(0);
-    scriptText('# Article 1 draft');
-    scriptText('# Article 2 draft');
+    for (let i = 0; i < children.length; i++) {
+      scriptStructured({
+        title: `Article ${i + 1} draft`,
+        bodyHtml: `<p>Body ${i + 1} long enough to satisfy the schema minimum.</p>`,
+        summaryHtml: `Summary ${i + 1} for the article excerpt and meta description.`,
+        tags: ['seo', 'summer'],
+        language: i === 0 ? 'zh-TW' : 'en',
+      });
+    }
 
     const c1 = await drainNextTask();
     expect(c1.claimed).toBe(true);
@@ -149,10 +165,37 @@ describe('Strategy → Spawn → Execution flow', () => {
     for (const child of children) {
       const refreshed = await getTask(tenantId, child.id);
       expect(refreshed.status).toBe('waiting');
-      expect(refreshed.output).toMatchObject({ draft: expect.stringContaining('Article') });
+      expect(refreshed.output).toMatchObject({
+        article: { title: expect.stringContaining('Article') },
+        pendingToolCall: { id: 'shopify.publish_article' },
+      });
     }
 
-    // ── Phase 5: approve each child as final ───────────────────────────────
+    // ── Phase 5: approve each child as final → publish_article fires twice ─
+    // Each approve = one listBlogs + one createArticle = 2 fetch calls.
+    for (let i = 0; i < children.length; i++) {
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ blogs: [{ id: 100, handle: 'news', title: 'News' }] }),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: async () => '',
+          json: async () => ({
+            article: {
+              id: 1000 + i,
+              handle: `article-${i + 1}`,
+              blog_id: 100,
+              published_at: null,
+            },
+          }),
+        } as unknown as Response);
+    }
+
     for (const child of children) {
       const r = await app.inject({
         method: 'POST',
@@ -163,6 +206,10 @@ describe('Strategy → Spawn → Execution flow', () => {
       expect(r.statusCode).toBe(200);
       const final = await getTask(tenantId, child.id);
       expect(final.status).toBe('done');
+      expect(final.output).toMatchObject({
+        toolResult: { blogId: 100, status: 'draft' },
+      });
     }
+    expect(fetchMock).toHaveBeenCalledTimes(children.length * 2);
   });
 });
