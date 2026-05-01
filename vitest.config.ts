@@ -8,7 +8,7 @@ export default defineConfig({
     // tests/integration and are run via `pnpm test:integration` (which sets
     // a different setup file and disables file parallelism for DB safety).
     include: ['tests/**/*.test.ts'],
-    exclude: ['tests/integration/**', 'node_modules', 'dist'],
+    exclude: ['tests/integration/**', 'tests/smoke/**', 'node_modules', 'dist'],
     setupFiles: ['./tests/setup.ts'],
     pool: 'forks',
     reporters: 'default',

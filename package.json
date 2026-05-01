@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:all": "pnpm test && pnpm test:integration",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
