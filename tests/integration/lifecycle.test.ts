@@ -8,7 +8,7 @@ import { drainNextTask } from './helpers/runner.js';
 // Replace the real model registry BEFORE any module under test imports it.
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
-// Stub fetch so the seo-writer's publish_article tool doesn't actually call
+// Stub fetch so the shopify-blog-writer's publish_article tool doesn't actually call
 // Shopify. Shared across the file; reset between tests.
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -36,7 +36,7 @@ beforeEach(async () => {
 });
 
 /**
- * Article fixture for seo-writer's withStructuredOutput call. Centralised so
+ * Article fixture for shopify-blog-writer's withStructuredOutput call. Centralised so
  * each test can just `scriptStructured(article())`.
  */
 function article(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
@@ -67,9 +67,9 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     await bindShopifyCredential(tenantId);
 
     // Script the supervisor + agent for one full graph turn:
-    //   1. Supervisor routes to seo-writer.
-    //   2. seo-writer returns a structured article via withStructuredOutput.
-    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
+    //   1. Supervisor routes to shopify-blog-writer.
+    //   2. shopify-blog-writer returns a structured article via withStructuredOutput.
+    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured(article());
 
     // 1. Dispatch the brief.
@@ -167,7 +167,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     const jwt = await mintJwt({ userId, email });
     await bindShopifyCredential(tenantId);
 
-    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured(article({ title: 'First draft' }));
 
     const create = await app.inject({
@@ -202,7 +202,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     const jwt = await mintJwt({ userId, email });
     await bindShopifyCredential(tenantId);
 
-    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured(article({ title: 'First draft' }));
 
     const create = await app.inject({

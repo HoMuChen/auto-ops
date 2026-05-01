@@ -99,7 +99,7 @@ export const seoStrategistAgent: IAgent = {
     name: 'AI SEO Strategist',
     description:
       'Plans SEO campaigns: turns a high-level brief into a list of focused article topics, ' +
-      'each spawned as an independent execution task for the SEO Writer.',
+      'each spawned as an independent execution task for the Shopify Blog Writer.',
     availableInPlans: ['pro', 'flagship'],
     // Strategy is high-stakes routing logic — use Opus, low temperature so the
     // structured plan is consistent across runs of the same brief.

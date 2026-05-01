@@ -7,7 +7,7 @@ import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
-// Stub fetch so seo-writer's publish_article call doesn't actually hit Shopify.
+// Stub fetch so shopify-blog-writer's publish_article call doesn't actually hit Shopify.
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
@@ -37,7 +37,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     // Strategist is gated to pro+ — seed accordingly.
     const { tenantId, userId, email } = await seedTenantWithOwner({ plan: 'pro' });
     const jwt = await mintJwt({ userId, email });
-    // Children are seo-writer tasks that publish to Shopify; bind a credential
+    // Children are shopify-blog-writer tasks that publish to Shopify; bind a credential
     // so the publish tool can resolve creds when it fires on approve.
     await db.insert(tenantCredentials).values({
       tenantId,
@@ -65,14 +65,14 @@ describe('Strategy → Spawn → Execution flow', () => {
           language: 'zh-TW',
           writerBrief:
             '1500 字 long-form article on layered summer styling for humid Taiwan climate.',
-          assignedAgent: 'seo-writer',
+          assignedAgent: 'shopify-blog-writer',
         },
         {
           title: 'Sustainable summer fabrics buyer guide',
           primaryKeyword: 'sustainable fabrics summer',
           language: 'en',
           writerBrief: 'Buyer guide comparing linen, organic cotton and Tencel for summer apparel.',
-          assignedAgent: 'seo-writer',
+          assignedAgent: 'shopify-blog-writer',
         },
       ],
     });
@@ -98,7 +98,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(parent.output).toMatchObject({
       plan: { topics: expect.any(Array) },
       spawnTasks: expect.arrayContaining([
-        expect.objectContaining({ assignedAgent: 'seo-writer' }),
+        expect.objectContaining({ assignedAgent: 'shopify-blog-writer' }),
       ]),
     });
 
@@ -127,7 +127,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(children).toHaveLength(2);
     for (const child of children) {
       expect(child.kind).toBe('execution');
-      expect(child.assignedAgent).toBe('seo-writer');
+      expect(child.assignedAgent).toBe('shopify-blog-writer');
       expect(child.status).toBe('todo');
       expect(child.input).toHaveProperty('brief');
     }
@@ -144,7 +144,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(stillTwo).toHaveLength(2);
 
     // ── Phase 4: drain children — supervisor LLM is BYPASSED via pinning ───
-    // Each child has assignedAgent='seo-writer' so the supervisor short-circuits;
+    // Each child has assignedAgent='shopify-blog-writer' so the supervisor short-circuits;
     // only the writer's structured output needs to be scripted (one per child).
     expect(pendingScript()).toBe(0);
     for (let i = 0; i < children.length; i++) {

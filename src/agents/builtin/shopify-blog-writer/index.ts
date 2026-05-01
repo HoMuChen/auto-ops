@@ -11,7 +11,7 @@ import type {
   PendingToolCall,
 } from '../../types.js';
 
-const DEFAULT_PROMPT = `You are an SEO Writer AI employee for an e-commerce business.
+const DEFAULT_PROMPT = `You are an Shopify Blog Writer AI employee for an e-commerce business.
 Your job: produce ONE polished, multilingual blog article from a single brief
 and return it as the structured object requested. The framework will publish
 the article to the tenant's Shopify blog after the user reviews and approves.
@@ -98,10 +98,10 @@ const ArticleSchema = z.object({
 
 type ArticleDraft = z.infer<typeof ArticleSchema>;
 
-export const seoWriterAgent: IAgent = {
+export const shopifyBlogWriterAgent: IAgent = {
   manifest: {
-    id: 'seo-writer',
-    name: 'AI SEO Writer',
+    id: 'shopify-blog-writer',
+    name: 'AI Shopify Blog Writer',
     description:
       'Writes a single multilingual SEO blog article from a focused brief and ' +
       'publishes it to the tenant Shopify blog after human approval.',
@@ -146,10 +146,14 @@ export const seoWriterAgent: IAgent = {
     const filteredTools = tools.filter((t) => t.id === 'shopify.publish_article');
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog('agent.started', `SEO Writer drafting article for task ${ctx.taskId}`, {
-        publishToShopify: cfg.publishToShopify,
-        blogHandle: cfg.blogHandle ?? '(default)',
-      });
+      await ctx.emitLog(
+        'agent.started',
+        `Shopify Blog Writer drafting article for task ${ctx.taskId}`,
+        {
+          publishToShopify: cfg.publishToShopify,
+          blogHandle: cfg.blogHandle ?? '(default)',
+        },
+      );
 
       const constraints: string[] = [];
       if (cfg.brandTone) constraints.push(`Tone: ${cfg.brandTone}`);

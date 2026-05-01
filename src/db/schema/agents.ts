@@ -13,7 +13,7 @@ import { tenants } from './tenants.js';
 /**
  * Per-tenant agent configuration ("the user has hired this AI employee").
  *
- * `agentKey` references a registered agent in the AgentRegistry (e.g. "seo-writer").
+ * `agentKey` references a registered agent in the AgentRegistry (e.g. "shopify-blog-writer").
  * `promptOverride` is an optional override of the agent's default system prompt.
  * `toolWhitelist` is an optional whitelist of tool ids the agent is allowed to call.
  * `config` is the user-supplied activation config, validated against

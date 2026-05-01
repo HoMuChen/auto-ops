@@ -16,14 +16,14 @@ const planFixture = {
       primaryKeyword: '夏季穿搭',
       language: 'zh-TW' as const,
       writerBrief: 'Long-form 1500 字文章, focus on layered styling for Taiwan humid summers.',
-      assignedAgent: 'seo-writer',
+      assignedAgent: 'shopify-blog-writer',
     },
     {
       title: 'Sustainable summer fabrics buyer guide',
       primaryKeyword: 'sustainable fabrics summer',
       language: 'en' as const,
       writerBrief: 'Buyer guide comparing linen, organic cotton, and Tencel for summer apparel.',
-      assignedAgent: 'seo-writer',
+      assignedAgent: 'shopify-blog-writer',
       scheduledAt: '2026-06-01T09:00:00.000Z',
     },
   ],
@@ -42,8 +42,8 @@ const { seoStrategistAgent } = await import('../src/agents/builtin/seo-strategis
 
 const PEERS = [
   {
-    id: 'seo-writer',
-    name: 'AI SEO Writer',
+    id: 'shopify-blog-writer',
+    name: 'AI Shopify Blog Writer',
     description: 'Writes a single multilingual SEO article from a focused brief.',
   },
 ];
@@ -69,7 +69,7 @@ describe('seoStrategistAgent.build → invoke', () => {
     expect(result.awaitingApproval).toBe(true);
     expect(result.spawnTasks).toHaveLength(2);
     for (const spawn of result.spawnTasks ?? []) {
-      expect(spawn.assignedAgent).toBe('seo-writer');
+      expect(spawn.assignedAgent).toBe('shopify-blog-writer');
       expect(spawn.input).toHaveProperty('brief');
       expect(spawn.input).toHaveProperty('primaryKeyword');
       expect(spawn.input).toHaveProperty('language');

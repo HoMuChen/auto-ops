@@ -120,15 +120,15 @@ x-tenant-id: <UUID>
 [建第一個 workspace]            POST /v1/tenants    {name,slug,plan} → 回 tenant
                                                     ↓ 拿到 tenant.id
 
-[列可聘員工]                    GET /v1/agents      回 [seo-strategist, seo-writer,
+[列可聘員工]                    GET /v1/agents      回 [seo-strategist, shopify-blog-writer,
   顯示卡片：                                          shopify-ops, ...]
-  - ✓ SEO Writer (ready)                            每個含 ready / credentials
+  - ✓ Shopify Blog Writer (ready)                            每個含 ready / credentials
   - ✓ SEO Strategist (ready, pro+)                  checklist / configSchema
   - ✗ Shopify Ops (need creds)
-                                                    ↓ 老闆點 SEO Writer
+                                                    ↓ 老闆點 Shopify Blog Writer
 
-[啟用 SEO Writer]               POST /v1/agents/    回 { enabled:true, config }
-  渲染 configSchema 表單           seo-writer/
+[啟用 Shopify Blog Writer]               POST /v1/agents/    回 { enabled:true, config }
+  渲染 configSchema 表單           shopify-blog-writer/
   (targetLanguages, brandTone…)    activate
                                                     ↓
 
@@ -203,7 +203,7 @@ x-tenant-id: <UUID>
   {
     "id": "seo-strategist",
     "name": "AI SEO Strategist",
-    "description": "Plans SEO campaigns: turns a high-level brief into a list of focused article topics, each spawned as an independent execution task for the SEO Writer.",
+    "description": "Plans SEO campaigns: turns a high-level brief into a list of focused article topics, each spawned as an independent execution task for the Shopify Blog Writer.",
     "availableInPlans": ["pro", "flagship"],
     "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.2 },
     "toolIds": [],
@@ -217,8 +217,8 @@ x-tenant-id: <UUID>
     "config": {}
   },
   {
-    "id": "seo-writer",
-    "name": "AI SEO Writer",
+    "id": "shopify-blog-writer",
+    "name": "AI Shopify Blog Writer",
     "description": "Writes a single multilingual SEO blog article from a focused brief and publishes it to the tenant Shopify blog after human approval.",
     "availableInPlans": ["basic", "pro", "flagship"],
     "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.4 },
@@ -332,7 +332,7 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 // Request
 {
   "brief": "幫我規劃夏季女裝的 SEO 並發布",
-  "preferredAgent": "seo-writer",                 // 可選；不給就讓 Supervisor 路由
+  "preferredAgent": "shopify-blog-writer",                 // 可選；不給就讓 Supervisor 路由
   "params": { "language": "zh-TW" },              // 可選；任意 KV 給 agent 參考
   "scheduledAt": "2026-05-02T08:00:00Z"           // 可選；未來時間 → 排程
 }
@@ -438,7 +438,7 @@ data: {"event":"agent.draft.ready","message":"SEO draft ready, awaiting approval
 |---|---|
 | `task.started` | 任務進入 graph |
 | `agent.started` | 某 agent 開始跑 |
-| `agent.draft.ready` | SEO Writer draft 完成 |
+| `agent.draft.ready` | Shopify Blog Writer draft 完成 |
 | `agent.plan.ready` | SEO Strategist 計畫完成（父任務 → waiting） |
 | `agent.listing.ready` | Shopify listing 草稿完成 |
 | `task.waiting` | 進入 HITL gate |
@@ -473,10 +473,10 @@ LLM 後**不會**直接打 API；它會把「想呼叫的 tool + 參數」放到
 停在 `waiting` 等 user 按 Approve，框架才在 approve 路徑裡 deterministic 地把 tool 點燃。
 
 目前帶 `pendingToolCall` 的 agent：
-- `seo-writer` → `shopify.publish_article`（發部落格文章，**MVP 主流程**）
+- `shopify-blog-writer` → `shopify.publish_article`（發部落格文章，**MVP 主流程**）
 - `shopify-ops` → `shopify.create_product`（上架商品）
 
-### 範例：seo-writer 發部落格
+### 範例：shopify-blog-writer 發部落格
 
 #### `waiting` 狀態的 `output` 形狀
 
@@ -485,7 +485,7 @@ LLM 後**不會**直接打 API；它會把「想呼叫的 tool + 參數」放到
   "id": "task-uuid",
   "kind": "execution",
   "status": "waiting",
-  "assignedAgent": "seo-writer",
+  "assignedAgent": "shopify-blog-writer",
   "output": {
     "article": {
       "title": "夏日穿搭 5 個必備單品",
@@ -541,7 +541,7 @@ UI 應該渲染：
 UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](toolResult.articleUrl)」。
 若 status=`published` 表示已對讀者公開。
 
-#### seo-writer 啟用設定（`POST /v1/agents/seo-writer/activate` 的 config）
+#### shopify-blog-writer 啟用設定（`POST /v1/agents/shopify-blog-writer/activate` 的 config）
 
 ```json
 {
@@ -558,7 +558,7 @@ UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](toolRes
 }
 ```
 
-> seo-writer **必須**綁 Shopify credentials 才能 activate（即使 `publishToShopify=false`），
+> shopify-blog-writer **必須**綁 Shopify credentials 才能 activate（即使 `publishToShopify=false`），
 > 因為框架不知道 user 之後會不會切回 publish。Activation 時若沒 creds 會回 409。
 
 ### 範例：shopify-ops 建商品
@@ -629,9 +629,9 @@ Shopify 回 4xx/5xx → executor 捕捉 → 寫 `task.error.message`、status=`f
       ]
     },
     "spawnTasks": [
-      { "title": "夏季穿搭 5 個必備單品", "assignedAgent": "seo-writer",
+      { "title": "夏季穿搭 5 個必備單品", "assignedAgent": "shopify-blog-writer",
         "input": { "brief": "...", "primaryKeyword": "...", "language": "zh-TW" } },
-      { "title": "Sustainable summer fabrics buyer guide", "assignedAgent": "seo-writer", ... }
+      { "title": "Sustainable summer fabrics buyer guide", "assignedAgent": "shopify-blog-writer", ... }
     ]
   }
 }
@@ -806,7 +806,7 @@ interface AgentStatus {
 | 沒 RLS 兜底 | 不影響 UI；純粹是後端安全防線 |
 | `parentTaskId=null` query 還沒解析 | 列「頂層任務」目前要 client-side filter `parentTaskId === null` |
 | 沒 Cloudflare Images / 圖片產出 | strategy/writer 目前只產文字 + 部落格發文，文章內沒附圖；圖片整合在 roadmap |
-| seo-writer 必綁 Shopify creds | 即使打算只用 `publishToShopify=false` 純草稿，activate 仍要 creds；roadmap 改為動態 required |
+| shopify-blog-writer 必綁 Shopify creds | 即使打算只用 `publishToShopify=false` 純草稿，activate 仍要 creds；roadmap 改為動態 required |
 
 ---
 

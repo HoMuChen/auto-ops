@@ -31,7 +31,7 @@ beforeEach(async () => {
   fetchMock.mockReset();
 });
 
-describe('SEO Writer → Shopify Blog publishing', () => {
+describe('Shopify Blog Writer → Shopify Blog publishing', () => {
   it('drafts article → waiting → approve → resolves blog → POSTs article → done', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner({ plan: 'basic' });
     const jwt = await mintJwt({ userId, email });
@@ -47,7 +47,7 @@ describe('SEO Writer → Shopify Blog publishing', () => {
     // picks the right blog (not just the first one).
     const activate = await app.inject({
       method: 'POST',
-      url: '/v1/agents/seo-writer/activate',
+      url: '/v1/agents/shopify-blog-writer/activate',
       headers: authHeaders(jwt, tenantId),
       payload: {
         config: {
@@ -60,8 +60,8 @@ describe('SEO Writer → Shopify Blog publishing', () => {
     });
     expect(activate.statusCode).toBe(200);
 
-    // Supervisor → routes to seo-writer; writer → produces structured article.
-    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
+    // Supervisor → routes to shopify-blog-writer; writer → produces structured article.
+    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured({
       title: '夏日穿搭 5 個必備單品',
       bodyHtml:
@@ -85,7 +85,7 @@ describe('SEO Writer → Shopify Blog publishing', () => {
 
     let task = await getTask(tenantId, taskId);
     expect(task.status).toBe('waiting');
-    expect(task.assignedAgent).toBe('seo-writer');
+    expect(task.assignedAgent).toBe('shopify-blog-writer');
     expect(task.output).toMatchObject({
       article: { title: '夏日穿搭 5 個必備單品', language: 'zh-TW' },
       pendingToolCall: {
@@ -190,12 +190,12 @@ describe('SEO Writer → Shopify Blog publishing', () => {
     });
     await app.inject({
       method: 'POST',
-      url: '/v1/agents/seo-writer/activate',
+      url: '/v1/agents/shopify-blog-writer/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: { targetLanguages: ['en'], publishToShopify: false } },
     });
 
-    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured({
       title: 'Drafts only mode',
       bodyHtml: '<p>This article should never reach Shopify.</p>',
@@ -247,7 +247,7 @@ describe('SEO Writer → Shopify Blog publishing', () => {
     });
     await app.inject({
       method: 'POST',
-      url: '/v1/agents/seo-writer/activate',
+      url: '/v1/agents/shopify-blog-writer/activate',
       headers: authHeaders(jwt, tenantId),
       payload: {
         config: {
@@ -258,7 +258,7 @@ describe('SEO Writer → Shopify Blog publishing', () => {
       },
     });
 
-    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured({
       title: 'Will fail to publish',
       bodyHtml: '<p>Long enough body to satisfy the schema minimum length.</p>',

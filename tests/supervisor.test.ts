@@ -56,14 +56,14 @@ describe('runSupervisor — pinned-agent shortcut (execution children)', () => {
       messages: [],
       params: {},
       nextAgent: null,
-      pinnedAgent: 'seo-writer',
+      pinnedAgent: 'shopify-blog-writer',
       lastOutput: null,
       awaitingApproval: false,
     };
 
     const result = await runSupervisor(state);
 
-    expect(result).toEqual({ nextAgent: 'seo-writer' });
+    expect(result).toEqual({ nextAgent: 'shopify-blog-writer' });
     // No registry lookup, no model call — pure deterministic routing.
     expect(buildModelMock).not.toHaveBeenCalled();
   });

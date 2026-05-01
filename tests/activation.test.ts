@@ -173,9 +173,11 @@ describe('builtin agent manifests', () => {
     });
   });
 
-  it('SEO Writer configSchema accepts default empty object', async () => {
-    const { seoWriterAgent } = await import('../src/agents/builtin/seo-writer/index.js');
-    const result = validateAgentConfig(seoWriterAgent.manifest, {});
+  it('Shopify Blog Writer configSchema accepts default empty object', async () => {
+    const { shopifyBlogWriterAgent } = await import(
+      '../src/agents/builtin/shopify-blog-writer/index.js'
+    );
+    const result = validateAgentConfig(shopifyBlogWriterAgent.manifest, {});
     expect(result).toMatchObject({
       targetLanguages: ['zh-TW'],
       bannedPhrases: [],
@@ -183,10 +185,12 @@ describe('builtin agent manifests', () => {
     });
   });
 
-  it('SEO Writer rejects empty targetLanguages array', async () => {
-    const { seoWriterAgent } = await import('../src/agents/builtin/seo-writer/index.js');
-    expect(() => validateAgentConfig(seoWriterAgent.manifest, { targetLanguages: [] })).toThrow(
-      ValidationError,
+  it('Shopify Blog Writer rejects empty targetLanguages array', async () => {
+    const { shopifyBlogWriterAgent } = await import(
+      '../src/agents/builtin/shopify-blog-writer/index.js'
     );
+    expect(() =>
+      validateAgentConfig(shopifyBlogWriterAgent.manifest, { targetLanguages: [] }),
+    ).toThrow(ValidationError);
   });
 });
