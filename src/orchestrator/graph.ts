@@ -24,7 +24,18 @@ import { runSupervisor } from './supervisor.js';
 export interface BuildGraphOptions {
   tenantId: string;
   taskId: string;
-  emitLog: AgentBuildContext['emitLog'];
+  /**
+   * Framework emitLog. Wider signature than `AgentBuildContext.emitLog` —
+   * accepts an optional `speaker` so the graph wrapper can tag every agent
+   * log with the agent's id (or 'supervisor' / 'system' from the runner).
+   * Agents themselves still see the simpler 3-arg surface.
+   */
+  emitLog: (
+    event: string,
+    message: string,
+    data?: Record<string, unknown>,
+    speaker?: string,
+  ) => Promise<void>;
 }
 
 export async function buildGraph(opts: BuildGraphOptions) {
@@ -50,6 +61,11 @@ export async function buildGraph(opts: BuildGraphOptions) {
       // use ctx.systemPrompt as before and automatically get "Current time"
       // (and, in future, tenant industry / brand voice / timezone).
       const basePrompt = override.promptOverride ?? manifest.defaultPrompt;
+      // Wrap the framework emitLog so every entry the agent writes is auto-
+      // tagged with `speaker = manifest.id`. Agents stay ignorant of the
+      // speaker concept; the kanban timeline always knows who's talking.
+      const agentEmitLog: AgentBuildContext['emitLog'] = (event, message, data) =>
+        opts.emitLog(event, message, data, manifest.id);
       const ctx: AgentBuildContext = {
         tenantId: opts.tenantId,
         taskId: opts.taskId,
@@ -59,7 +75,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
         ...(override.toolWhitelist ? { toolWhitelist: override.toolWhitelist } : {}),
         agentConfig: override.config,
         availableExecutionAgents: peerDescriptors,
-        emitLog: opts.emitLog,
+        emitLog: agentEmitLog,
       };
       const runnable = await agent.build(ctx);
 

@@ -8,6 +8,13 @@
       "when": 1777565383143,
       "tag": "0000_jazzy_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777647165373,
+      "tag": "0001_sweet_yellowjacket",
+      "breakpoints": true
     }
   ]
 }

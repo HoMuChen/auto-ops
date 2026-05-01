@@ -3,6 +3,8 @@ import { EventEmitter } from 'node:events';
 export interface TaskLogEvent {
   event: string;
   message: string;
+  /** Who said this — drives the UI avatar/colour. See task_logs.speaker. */
+  speaker?: string;
   data?: Record<string, unknown>;
   at: string;
 }

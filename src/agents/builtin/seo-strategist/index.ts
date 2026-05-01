@@ -133,7 +133,7 @@ export const seoStrategistAgent: IAgent = {
     }
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog('agent.started', `SEO Strategist planning task ${ctx.taskId}`, {
+      await ctx.emitLog('agent.started', '收到 brief，我來規劃幾個主題給老闆挑', {
         maxTopics: cfg.maxTopics,
         availableWorkers: [...validWorkerIds],
       });
@@ -209,7 +209,7 @@ Tenant constraints:
         '_Approve to spawn each article as an independent writer task._',
       ].join('\n');
 
-      await ctx.emitLog('agent.plan.ready', 'SEO content plan ready, awaiting approval', {
+      await ctx.emitLog('agent.plan.ready', `主題列了 ${capped.length} 篇，請老闆過目`, {
         topicCount: capped.length,
       });
 

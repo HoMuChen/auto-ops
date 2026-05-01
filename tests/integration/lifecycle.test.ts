@@ -114,8 +114,12 @@ describe('Task lifecycle — happy path through HITL gate', () => {
       })
       .then((r) => r.json());
     const events = logs.map((l: { event: string }) => l.event);
+    // The agent's own "draft ready" log is now the user-visible "awaiting"
+    // signal — task.waiting was framework noise duplicating it, and was cut.
     expect(events).toContain('agent.draft.ready');
-    expect(events).toContain('task.waiting');
+    // And every agent-emitted log carries the speaker tag.
+    const draftLog = logs.find((l: { event: string }) => l.event === 'agent.draft.ready');
+    expect(draftLog?.speaker).toBe('shopify-blog-writer');
 
     // 3. Approve as final → triggers publish_article. Stub blogs.json + articles.json.
     fetchMock

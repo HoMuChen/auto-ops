@@ -1,0 +1,1 @@
+ALTER TABLE "task_logs" ADD COLUMN "speaker" text;

@@ -64,17 +64,20 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
 
   // Emit logs through the same channel the runner uses so the SSE stream and
   // task_logs stay coherent across a (LLM run → HITL → tool fire) lifecycle.
+  // Tool execution is the agent acting on the boss's approval — speaker is
+  // the agent that prepared the call, not 'system'.
+  const speaker = agent.manifest.id;
   const emitLog = async (
     event: string,
     message: string,
     data?: Record<string, unknown>,
   ): Promise<void> => {
-    await appendTaskLog({ tenantId, taskId, event, message, data });
-    eventBus.publish(taskId, { event, message, data, at: new Date().toISOString() });
+    await appendTaskLog({ tenantId, taskId, event, message, speaker, data });
+    eventBus.publish(taskId, { event, message, speaker, data, at: new Date().toISOString() });
   };
 
-  await emitLog('tool.started', `Executing ${pending.id} after HITL approval`, {
-    agentId: agent.manifest.id,
+  await emitLog('tool.started', '收到指示，我來執行', {
+    toolId: pending.id,
   });
 
   // Build a minimal context — tool execution doesn't need a model call, but
@@ -106,14 +109,17 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
   } catch (err) {
     log.error({ err }, 'Tool execution failed');
     const message = err instanceof Error ? err.message : String(err);
-    await emitLog('tool.failed', `Tool ${pending.id} failed: ${message}`);
+    await emitLog('tool.failed', `失敗了，我這邊回報的錯誤：${message}`, {
+      toolId: pending.id,
+    });
     await updateTaskStatus(tenantId, taskId, 'failed', {
       error: { message, stack: err instanceof Error ? err.stack : undefined },
     });
     throw err;
   }
 
-  await emitLog('tool.completed', `Tool ${pending.id} succeeded`, {
+  await emitLog('tool.completed', '處理好了 ✓', {
+    toolId: pending.id,
     resultPreview:
       typeof result === 'string' ? result.slice(0, 200) : 'structured (see task.output.toolResult)',
   });
@@ -141,7 +147,21 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
 
   if (!updated) throw new NotFoundError(`Task ${taskId} disappeared during tool execution`);
 
-  await emitLog('task.completed', 'Task completed via post-approval tool execution');
+  // Final framework summary line — speaker switches to 'system' since this
+  // wraps up the whole task, not the agent's tool call specifically.
+  await appendTaskLog({
+    tenantId,
+    taskId,
+    event: 'task.completed',
+    speaker: 'system',
+    message: '任務完成 ✓',
+  });
+  eventBus.publish(taskId, {
+    event: 'task.completed',
+    message: '任務完成 ✓',
+    speaker: 'system',
+    at: new Date().toISOString(),
+  });
 
   return updated;
 }

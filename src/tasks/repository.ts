@@ -171,7 +171,7 @@ export async function finalizeStrategyTask(
   tenantId: string,
   taskId: string,
 ): Promise<{ parent: Task; children: Task[] }> {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [parent] = await tx
       .select()
       .from(tasks)
@@ -196,7 +196,7 @@ export async function finalizeStrategyTask(
         .select()
         .from(tasks)
         .where(and(eq(tasks.tenantId, tenantId), eq(tasks.parentTaskId, taskId)));
-      return { parent, children: existing };
+      return { parent, children: existing, alreadySpawned: true as const };
     }
 
     assertTransition(parent.status, 'done');
@@ -254,8 +254,24 @@ export async function finalizeStrategyTask(
       .returning();
     if (!updated) throw new NotFoundError(`Task ${taskId}`);
 
-    return { parent: updated, children };
+    return { parent: updated, children, alreadySpawned: false as const };
   });
+
+  // Best-effort timeline entry — not in the tx (a failed log insert mustn't
+  // roll back the spawn). On idempotent re-entry (already spawned) we don't
+  // re-log; the original entry is enough.
+  if (!result.alreadySpawned && result.children.length > 0) {
+    await appendTaskLog({
+      tenantId,
+      taskId,
+      event: 'task.spawned',
+      speaker: 'system',
+      message: `已建立 ${result.children.length} 張子任務，員工陸續開工中`,
+      data: { childTaskIds: result.children.map((c) => c.id) },
+    });
+  }
+
+  return { parent: result.parent, children: result.children };
 }
 
 /** Append a log line; persists for audit and is fanned out via the EventBus. */
@@ -265,6 +281,12 @@ export async function appendTaskLog(input: {
   level?: 'debug' | 'info' | 'warn' | 'error';
   event: string;
   message: string;
+  /**
+   * Who is speaking. `'system'` for framework events, `'supervisor'` for the
+   * routing LLM, otherwise an agent id. Drives the UI avatar/colour so the
+   * kanban timeline reads like a Slack thread instead of a syslog.
+   */
+  speaker?: string;
   data?: Record<string, unknown>;
 }): Promise<void> {
   await db.insert(taskLogs).values({
@@ -273,6 +295,7 @@ export async function appendTaskLog(input: {
     level: input.level ?? 'info',
     event: input.event,
     message: input.message,
+    speaker: input.speaker ?? null,
     data: input.data,
   });
 }
@@ -287,6 +310,7 @@ export async function listTaskLogs(
     createdAt: Date;
     level: string;
     event: string;
+    speaker: string | null;
     message: string;
     data: Record<string, unknown> | null;
   }[]
@@ -300,6 +324,7 @@ export async function listTaskLogs(
       createdAt: taskLogs.createdAt,
       level: taskLogs.level,
       event: taskLogs.event,
+      speaker: taskLogs.speaker,
       message: taskLogs.message,
       data: taskLogs.data,
     })

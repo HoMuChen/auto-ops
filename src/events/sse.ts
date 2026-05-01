@@ -53,6 +53,7 @@ export async function streamTaskLogs(
     write({
       event: row.event,
       message: row.message,
+      ...(row.speaker ? { speaker: row.speaker } : {}),
       data: row.data ?? undefined,
       at: row.createdAt.toISOString(),
     });

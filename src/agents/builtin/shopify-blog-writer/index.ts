@@ -145,14 +145,10 @@ export const shopifyBlogWriterAgent: IAgent = {
     const filteredTools = tools.filter((t) => t.id === 'shopify.publish_article');
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog(
-        'agent.started',
-        `Shopify Blog Writer drafting article for task ${ctx.taskId}`,
-        {
-          publishToShopify: cfg.publishToShopify,
-          blogHandle: cfg.blogHandle ?? '(default)',
-        },
-      );
+      await ctx.emitLog('agent.started', '開始寫稿了，給我一點時間', {
+        publishToShopify: cfg.publishToShopify,
+        blogHandle: cfg.blogHandle ?? '(default)',
+      });
 
       const constraints: string[] = [];
       if (cfg.brandTone) constraints.push(`Tone: ${cfg.brandTone}`);
@@ -180,12 +176,16 @@ export const shopifyBlogWriterAgent: IAgent = {
 
       const preview = renderArticleMarkdown(article, cfg);
 
-      await ctx.emitLog('agent.draft.ready', 'SEO article ready, awaiting approval', {
-        title: article.title,
-        language: article.language,
-        bodyLength: article.bodyHtml.length,
-        publishOnApprove: cfg.publishToShopify,
-      });
+      await ctx.emitLog(
+        'agent.draft.ready',
+        `草稿好了：「${article.title}」，老闆過目，OK 我就${cfg.publishToShopify ? '發到部落格' : '存草稿'}`,
+        {
+          title: article.title,
+          language: article.language,
+          bodyLength: article.bodyHtml.length,
+          publishOnApprove: cfg.publishToShopify,
+        },
+      );
 
       const result: AgentOutput = {
         message: preview,

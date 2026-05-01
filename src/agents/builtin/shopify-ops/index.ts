@@ -114,7 +114,7 @@ export const shopifyOpsAgent: IAgent = {
       : tools;
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog('agent.started', `Shopify Ops drafting listing for task ${ctx.taskId}`, {
+      await ctx.emitLog('agent.started', '商品資料我來整理一下', {
         language: cfg.defaultLanguage,
         autoPublish: cfg.shopify.autoPublish,
       });
@@ -154,10 +154,14 @@ Tenant constraints:
 
       const preview = renderListingMarkdown(listing, cfg.shopify.autoPublish);
 
-      await ctx.emitLog('agent.listing.ready', 'Product listing prepared, awaiting approval', {
-        toolsAvailable: filteredTools.map((t) => t.id),
-        pendingTool: pendingToolCall.id,
-      });
+      await ctx.emitLog(
+        'agent.listing.ready',
+        `商品 listing 準備好：「${listing.title}」，老闆確認 OK 我就上架`,
+        {
+          toolsAvailable: filteredTools.map((t) => t.id),
+          pendingTool: pendingToolCall.id,
+        },
+      );
 
       return {
         message: preview,

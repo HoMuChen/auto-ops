@@ -19,17 +19,35 @@ import { appendTaskLog, releaseLock, updateTaskStatus } from './repository.js';
 export async function runTaskThroughGraph(task: Task): Promise<void> {
   const log = logger.child({ taskId: task.id, tenantId: task.tenantId });
 
+  // 4-arg emitLog: agents see only the first 3 (event/message/data) — the
+  // graph wrapper auto-fills `speaker`. Framework events here pass speaker
+  // explicitly ('system' / 'supervisor').
   const emitLog = async (
     event: string,
     message: string,
     data?: Record<string, unknown>,
+    speaker?: string,
   ): Promise<void> => {
-    await appendTaskLog({ tenantId: task.tenantId, taskId: task.id, event, message, data });
-    eventBus.publish(task.id, { event, message, data, at: new Date().toISOString() });
+    await appendTaskLog({
+      tenantId: task.tenantId,
+      taskId: task.id,
+      event,
+      message,
+      ...(speaker ? { speaker } : {}),
+      data,
+    });
+    eventBus.publish(task.id, {
+      event,
+      message,
+      speaker,
+      data,
+      at: new Date().toISOString(),
+    });
   };
 
   try {
-    await emitLog('task.started', `Task ${task.id} entering graph`);
+    // No "task.started" — pre-agent framework noise; the agent's own first
+    // emitLog (within ~1s) tells the user the worker started.
 
     const graph = await buildGraph({
       tenantId: task.tenantId,
@@ -112,25 +130,36 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
         ...kindPatch,
         ...agentPatch,
       });
-      await emitLog('task.waiting', 'Task awaiting human approval', {
-        pendingSpawnCount: finalState.lastOutput?.spawnTasks?.length ?? 0,
-      });
+      // Agents emit their own "ready / awaiting" log before returning, so we
+      // don't double up here. The one gap is the supervisor: it has no
+      // ctx.emitLog, so when *it* returns the awaiting state (clarification
+      // path) we mirror its message into the timeline ourselves.
+      if (finalState.lastOutput?.agentId === 'supervisor') {
+        await emitLog(
+          'supervisor.clarified',
+          finalState.lastOutput.message,
+          undefined,
+          'supervisor',
+        );
+      }
     } else {
       await updateTaskStatus(task.tenantId, task.id, 'done', {
         output: persistedOutput,
         ...kindPatch,
         ...agentPatch,
       });
-      await emitLog('task.completed', 'Task completed successfully');
+      await emitLog('task.completed', '任務完成 ✓', undefined, 'system');
     }
   } catch (err) {
     log.error({ err }, 'Task execution failed');
+    const errMessage = err instanceof Error ? err.message : 'Unknown error';
     await appendTaskLog({
       tenantId: task.tenantId,
       taskId: task.id,
       level: 'error',
       event: 'task.failed',
-      message: err instanceof Error ? err.message : 'Unknown error',
+      speaker: 'system',
+      message: `出狀況了：${errMessage}`,
       data: { stack: err instanceof Error ? err.stack : undefined },
     });
     await updateTaskStatus(task.tenantId, task.id, 'failed', {

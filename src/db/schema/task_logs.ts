@@ -22,6 +22,13 @@ export const taskLogs = pgTable(
     level: text('level', { enum: taskLogLevelEnum }).notNull().default('info'),
     /** Short event tag, e.g. "agent.started", "tool.shopify.create_product", "gate.waiting". */
     event: text('event').notNull(),
+    /**
+     * Who is speaking — drives the UI avatar / colour. Reserved values:
+     * `'system'` for framework-emitted events, `'supervisor'` for the routing
+     * LLM. Otherwise an agent id from the registry (e.g. `'shopify-blog-writer'`).
+     * Nullable for backward compat / unattributed system noise.
+     */
+    speaker: text('speaker'),
     /** Human-readable detail line shown in the kanban card. */
     message: text('message').notNull(),
     /** Optional structured data (tool args, model usage, etc). */
