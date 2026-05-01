@@ -50,6 +50,11 @@ export class ShopifyAdminClient {
     return new ShopifyAdminClient(creds);
   }
 
+  /** The myshopify.com domain — useful for building admin/storefront URLs. */
+  get storeDomain(): string {
+    return this.creds.storeUrl;
+  }
+
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const url = new URL(path, `https://${this.creds.storeUrl}/admin/api/2024-10/`);
     const res = await fetch(url, {

@@ -11,11 +11,20 @@ import type {
 } from '../../types.js';
 
 const DEFAULT_PROMPT = `You are an Operations Assistant for a Shopify store.
-Your job: prepare product listings (title, description, specs, tags) and call the
-Shopify Admin API to create or update them. Always:
-- Surface a structured listing for human approval BEFORE calling any write tool.
-- Never invent SKUs, prices, or stock counts; use what the user provides.
-- After approval, call shopify.create_product or shopify.update_product as needed.`;
+Your job: read a brief about a product and produce a polished listing draft —
+title, body (HTML), tags, vendor — ready for the human to review and approve.
+You do NOT call any tool yourself. The framework will call shopify.create_product
+on your behalf only after the user explicitly approves the draft via the HITL gate.
+
+Hard rules:
+- Never invent SKUs, prices, or stock counts; mention only what the brief includes.
+- Body must be safe, well-formed HTML (use <p>, <ul>/<li>, <h3>; no <script>/<style>).
+- Tags: 3–8 short lower-case keywords, comma-free.
+- Default vendor and language come from the agent config; honour them unless the
+  brief explicitly overrides.
+- Use the tenant's default language (see config) for the listing copy.
+
+Return strictly the structured object requested.`;
 
 /**
  * User-facing activation config. The frontend renders this as a form (via
@@ -46,6 +55,26 @@ const configSchema = z.object({
 
 type ShopifyOpsConfig = z.infer<typeof configSchema>;
 
+/**
+ * Structured product listing the LLM produces. Maps directly onto Shopify's
+ * Admin REST `POST /products` body (after the framework adds `status`).
+ */
+const ListingSchema = z.object({
+  title: z.string().min(1).max(255).describe('Product title shown on the storefront.'),
+  bodyHtml: z
+    .string()
+    .min(1)
+    .describe('Product description as HTML. Use <p>, <ul>/<li>, <h3>; never <script>/<style>.'),
+  tags: z.array(z.string().min(1)).min(1).max(20).describe('Short keyword tags. 3–8 is ideal.'),
+  vendor: z.string().min(1).describe('Brand/vendor for the product.'),
+  productType: z
+    .string()
+    .optional()
+    .describe('Optional Shopify product type (category) — keep blank if unsure.'),
+});
+
+type ProductListing = z.infer<typeof ListingSchema>;
+
 export const shopifyOpsAgent: IAgent = {
   manifest: {
     id: 'shopify-ops',
@@ -72,7 +101,9 @@ export const shopifyOpsAgent: IAgent = {
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
     const cfg = configSchema.parse(ctx.agentConfig ?? {}) as ShopifyOpsConfig;
-    const model = buildModel(ctx.modelConfig);
+    const model = buildModel(ctx.modelConfig).withStructuredOutput(ListingSchema, {
+      name: 'shopify_product_listing',
+    });
     const tools = await buildShopifyTools(ctx.tenantId, {
       ...(cfg.shopify.credentialLabel ? { credentialLabel: cfg.shopify.credentialLabel } : {}),
       ...(cfg.shopify.defaultVendor ? { defaultVendor: cfg.shopify.defaultVendor } : {}),
@@ -84,35 +115,77 @@ export const shopifyOpsAgent: IAgent = {
       : tools;
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog('agent.started', `Shopify Ops starting on task ${ctx.taskId}`, {
+      await ctx.emitLog('agent.started', `Shopify Ops drafting listing for task ${ctx.taskId}`, {
         language: cfg.defaultLanguage,
         autoPublish: cfg.shopify.autoPublish,
       });
 
+      const constraints = [
+        `Tenant default vendor: ${cfg.shopify.defaultVendor ?? '(none — must infer or use brief)'}`,
+        `Tenant default language: ${cfg.defaultLanguage}`,
+        `Auto-publish on creation: ${cfg.shopify.autoPublish} (informational — the listing is created as draft/active by the framework, not by you)`,
+      ];
+
+      const systemMessage = `${ctx.systemPrompt}
+
+Tenant constraints:
+- ${constraints.join('\n- ')}`;
+
       const messages = [
-        new SystemMessage(ctx.systemPrompt),
+        new SystemMessage(systemMessage),
         ...input.messages.map((m) =>
           m.role === 'user' ? new HumanMessage(m.content) : new HumanMessage(m.content),
         ),
       ];
 
-      // MVP: produce the listing draft and request approval. Tool execution
-      // happens in a separate step after the user approves the Waiting gate.
-      const response = await model.invoke(messages);
-      const text =
-        typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+      const listing = (await model.invoke(messages)) as ProductListing;
+
+      // Args mirror the LangChain tool schema in shopify/tools.ts:
+      // { title, bodyHtml, tags, vendor }. The tool resolves credentials and
+      // applies status=active|draft from agent config inside its closure.
+      const pendingToolCall = {
+        id: 'shopify.create_product',
+        args: {
+          title: listing.title,
+          bodyHtml: listing.bodyHtml,
+          tags: listing.tags,
+          vendor: listing.vendor,
+        },
+      };
+
+      const preview = renderListingMarkdown(listing, cfg.shopify.autoPublish);
 
       await ctx.emitLog('agent.listing.ready', 'Product listing prepared, awaiting approval', {
         toolsAvailable: filteredTools.map((t) => t.id),
+        pendingTool: pendingToolCall.id,
       });
 
       return {
-        message: text,
+        message: preview,
         awaitingApproval: true,
-        payload: { listing: text, language: cfg.defaultLanguage },
+        payload: { listing, language: cfg.defaultLanguage },
+        pendingToolCall,
       };
     };
 
     return { tools: filteredTools, invoke };
   },
 };
+
+function renderListingMarkdown(listing: ProductListing, autoPublish: boolean): string {
+  return [
+    `# ${listing.title}`,
+    '',
+    `**Vendor:** ${listing.vendor}${
+      listing.productType ? ` · **Type:** ${listing.productType}` : ''
+    }`,
+    `**Tags:** ${listing.tags.join(', ')}`,
+    `**On approve:** create product as \`${autoPublish ? 'active' : 'draft'}\` in Shopify`,
+    '',
+    '---',
+    '',
+    listing.bodyHtml,
+    '',
+    '_Approve to push this to Shopify; Feedback to ask for revisions._',
+  ].join('\n');
+}

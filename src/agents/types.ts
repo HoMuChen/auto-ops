@@ -162,6 +162,22 @@ export interface SpawnTaskRequest {
   scheduledAt?: string;
 }
 
+/**
+ * A tool the agent prepared but did NOT execute itself — it should fire only
+ * after a human approves the HITL gate. The framework persists this on the
+ * task and invokes the tool when the user calls /approve with finalize=true.
+ *
+ * Use cases: any agent that mutates external state (Shopify create_product,
+ * Threads post, Klaviyo send). The agent first proposes the call, the user
+ * reviews, then the framework executes deterministically.
+ */
+export interface PendingToolCall {
+  /** Tool id from the agent's `tools` list, e.g. "shopify.create_product". */
+  id: string;
+  /** Arguments matching the tool's input schema. */
+  args: Record<string, unknown>;
+}
+
 export interface AgentOutput {
   /** Assistant message produced by the agent. */
   message: string;
@@ -176,6 +192,13 @@ export interface AgentOutput {
    * is finalised. Only meaningful for strategy-kind agents; ignored otherwise.
    */
   spawnTasks?: SpawnTaskRequest[];
+  /**
+   * Tool the framework should invoke after the user approves this gate. Lets
+   * write-tools (Shopify create, social post, etc.) stay deterministic and
+   * gated on explicit human consent. The agent must list the tool in its
+   * `tools` array so the framework can resolve and execute it.
+   */
+  pendingToolCall?: PendingToolCall;
 }
 
 /** The full Agent: manifest + a factory that produces a runnable for a given context. */

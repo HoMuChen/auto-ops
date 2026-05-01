@@ -73,6 +73,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
           message: result.message,
           payload: result.payload,
           ...(result.spawnTasks ? { spawnTasks: result.spawnTasks } : {}),
+          ...(result.pendingToolCall ? { pendingToolCall: result.pendingToolCall } : {}),
         },
         awaitingApproval: result.awaitingApproval ?? false,
         nextAgent: null,

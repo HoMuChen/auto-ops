@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { streamTaskLogs } from '../../events/sse.js';
 import { ForbiddenError, IllegalStateError } from '../../lib/errors.js';
+import { executeApprovedToolCall } from '../../orchestrator/tool-executor.js';
 import { appendMessage, listMessages } from '../../tasks/messages.js';
 import {
   finalizeStrategyTask,
@@ -122,12 +123,18 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       }
       // Approve = transition back to 'todo' so the worker re-picks it up,
       // OR finalize as 'done' if the user accepts the current draft as the final result.
-      // Finalising a strategy task atomically spawns its planned execution
-      // children (idempotent on retry) before marking it done.
+      // Three finalize behaviours, in priority order:
+      //   1. strategy task → atomically spawn planned execution children
+      //   2. execution task with output.pendingToolCall → fire the deferred tool
+      //      (e.g. shopify.create_product) and persist the API result
+      //   3. plain text-only task → just transition to done
       if (body?.finalize) {
         if (task.kind === 'strategy') {
           const { parent } = await finalizeStrategyTask(req.tenantId, taskId);
           return parent;
+        }
+        if (task.output && (task.output as { pendingToolCall?: unknown }).pendingToolCall) {
+          return executeApprovedToolCall(req.tenantId, taskId);
         }
         return updateTaskStatus(req.tenantId, taskId, 'done');
       }

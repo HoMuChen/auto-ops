@@ -378,10 +378,11 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 #### `POST /v1/tasks/:taskId/approve`
 HITL 核准。
 ```json
-// finalize:true → 任務結案
-//   - execution 任務：status='done'
-//   - strategy 任務：status='done' 並原子地建立所有 output.spawnTasks 列出的子任務
-//     （見「任務裂變」一節）
+// finalize:true → 任務結案，三種行為依 task 內容自動分流：
+//   1. strategy task → 原子地建立所有 output.spawnTasks 列出的子任務（見「任務裂變」）
+//   2. execution task 且 output.pendingToolCall 存在 → 框架幫你呼叫該 tool
+//      （Shopify create_product 等寫入操作）, 結果寫到 output.toolResult, status='done'
+//   3. execution task 純文字（沒 pendingToolCall） → 直接 status='done'
 // finalize:false (預設) → 重新排回 worker（讓下一個 agent 跑或讓 supervisor 決定 done）
 { "finalize": true }
 ```
@@ -437,7 +438,9 @@ data: {"event":"agent.draft.ready","message":"SEO draft ready, awaiting approval
 | `task.waiting` | 進入 HITL gate |
 | `task.completed` | done |
 | `task.failed` | 失敗 |
-| `tool.shopify.create_product` | (未來) tool 被呼叫 |
+| `tool.started` | 框架開始執行 pendingToolCall（HITL 通過後） |
+| `tool.completed` | tool 成功，結果在 `task.output.toolResult` |
+| `tool.failed` | tool 失敗，task 轉 failed |
 
 **JS 範例：**
 ```js
@@ -454,6 +457,82 @@ const res = await fetch(url, {
 const reader = res.body.getReader();
 // ... 用 TextDecoder + 解 "id:\nevent:\ndata:\n\n" 區塊
 ```
+
+---
+
+## 6.w Pending Tool Call — 寫入型 agent 的兩段式 HITL
+
+某些 agent 需要實際**寫**到外部系統（建商品、發貼文…）。這種 agent 跑完 LLM 後**不會**
+直接打 API；它會把「想呼叫的 tool + 參數」放到 `output.pendingToolCall`，停在 `waiting`
+等 user 按 Approve，框架才在 approve 路徑裡 deterministic 地把那個 tool 點燃。
+
+代表 agent：`shopify-ops`。
+
+### `output` 形狀（waiting 狀態）
+
+```json
+{
+  "id": "task-uuid",
+  "kind": "execution",
+  "status": "waiting",
+  "assignedAgent": "shopify-ops",
+  "output": {
+    "listing": {
+      "title": "Linen summer shirt",
+      "bodyHtml": "<p>Breathable, lightweight linen shirt for hot summer days.</p>",
+      "tags": ["summer", "linen", "shirt"],
+      "vendor": "Acme Apparel"
+    },
+    "language": "zh-TW",
+    "pendingToolCall": {
+      "id": "shopify.create_product",
+      "args": {
+        "title": "Linen summer shirt",
+        "bodyHtml": "<p>...</p>",
+        "tags": ["summer", "linen", "shirt"],
+        "vendor": "Acme Apparel"
+      }
+    }
+  }
+}
+```
+
+UI 應該渲染：
+- 上半：`messages` 最後一條 assistant 訊息（已是 markdown 預覽）+ `output.listing`
+- 中間：「按 Approve 後框架會呼叫 `pendingToolCall.id`」的提示
+- CTA：[Approve & Push to Shopify] (`finalize:true`) / [Feedback]
+
+### `finalize:true` 之後
+
+`task.output` 會新增：
+```json
+{
+  "listing": { /* ... */ },
+  "language": "zh-TW",
+  // pendingToolCall 被消化、清空
+  "toolResult": {
+    "productId": 9876543210,
+    "handle": "linen-summer-shirt",
+    "adminUrl": "https://demo-shop.myshopify.com/admin/products/9876543210",
+    "status": "draft"
+  },
+  "toolExecutedAt": "2026-05-01T04:43:33.840Z"
+}
+```
+
+UI 拿到 200 後可立刻顯示「已上架，[在 Shopify 後台看](toolResult.adminUrl)」。
+
+### Tool 失敗
+
+Shopify 回 4xx/5xx → executor 捕捉 → 寫 `task.error.message`、status=`failed`，
+`/approve` 也會回 5xx 給你（不是 200）。UI 應該：
+- 顯示 task 的 error.message
+- 提供「重試」按鈕（之後做：發 retry endpoint，暫時要 user 重派一張新卡）
+
+### Idempotency
+
+- 第二次呼叫 approve(finalize=true)：executor 看到 `output.toolExecutedAt` 已戳就直接回現狀 task，**不會重複呼叫 Shopify**
+- 但若第一次呼叫已轉成 `done`，state machine 會擋下 done → done 的 transition；這時 approve 會回 422（safe to ignore on UI side — 已成功）
 
 ---
 
@@ -605,6 +684,20 @@ interface SpawnTaskRequest {
   assignedAgent: string;
   input: Record<string, unknown>;
   scheduledAt?: string;
+}
+
+/** Write-tool gate — `output.pendingToolCall` is fired by the framework on finalize. */
+interface PendingToolCall {
+  id: string;                          // e.g. 'shopify.create_product'
+  args: Record<string, unknown>;       // matches the tool's input schema
+}
+
+/** What you get back in `output.toolResult` after shopify.create_product fires. */
+interface ShopifyCreateProductResult {
+  productId: number;
+  handle: string;
+  adminUrl: string;                    // direct link to /admin/products/:id
+  status: 'active' | 'draft';
 }
 
 interface AgentStatus {

@@ -42,10 +42,19 @@ export async function buildShopifyTools(
         vendor: input.vendor ?? defaultVendor,
         status: autoPublish ? 'active' : 'draft',
       });
-      return JSON.stringify(result);
+      // Returning the raw object lets the post-approval executor stash
+      // structured fields (productId, handle, adminUrl) on task.output without
+      // re-parsing JSON.
+      const product = result.product;
+      return {
+        productId: product.id,
+        handle: product.handle,
+        adminUrl: `https://${client.storeDomain}/admin/products/${product.id}`,
+        status: autoPublish ? 'active' : 'draft',
+      };
     },
     {
-      name: 'shopify_create_product',
+      name: 'shopify.create_product',
       description: 'Create a new Shopify product. Requires approval before execution.',
       schema: z.object({
         title: z.string(),
@@ -60,10 +69,15 @@ export async function buildShopifyTools(
     async (input: { productId: number; patch: Record<string, unknown> }) => {
       const client = await ShopifyAdminClient.forTenant(tenantId, credentialLabel);
       const result = await client.updateProduct(input.productId, input.patch);
-      return JSON.stringify(result);
+      const product = result.product;
+      return {
+        productId: product.id,
+        handle: product.handle,
+        adminUrl: `https://${client.storeDomain}/admin/products/${product.id}`,
+      };
     },
     {
-      name: 'shopify_update_product',
+      name: 'shopify.update_product',
       description: 'Update fields on an existing Shopify product. Requires approval.',
       schema: z.object({
         productId: z.number(),

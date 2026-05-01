@@ -77,13 +77,17 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
       });
     }
 
-    // Merge agent payload with spawn requests so the approve route can later
-    // read pending children from task.output without needing graph state.
+    // Merge agent payload with framework-level intents (spawnTasks,
+    // pendingToolCall) so the approve route can read them from task.output
+    // without needing access to graph state.
     const persistedOutput = finalState.lastOutput
       ? {
           ...(finalState.lastOutput.payload ?? {}),
           ...(finalState.lastOutput.spawnTasks
             ? { spawnTasks: finalState.lastOutput.spawnTasks }
+            : {}),
+          ...(finalState.lastOutput.pendingToolCall
+            ? { pendingToolCall: finalState.lastOutput.pendingToolCall }
             : {}),
         }
       : null;
@@ -94,10 +98,19 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
     const hasSpawn = (finalState.lastOutput?.spawnTasks?.length ?? 0) > 0;
     const kindPatch: { kind?: 'strategy' } = hasSpawn ? { kind: 'strategy' } : {};
 
+    // Stamp the agent that produced the latest output so downstream paths
+    // (post-approval tool executor, audit log, kanban grouping) don't need to
+    // guess. The supervisor may have picked it dynamically — the task row
+    // wouldn't otherwise know.
+    const agentPatch: { assignedAgent?: string } = finalState.lastOutput?.agentId
+      ? { assignedAgent: finalState.lastOutput.agentId }
+      : {};
+
     if (finalState.awaitingApproval) {
       await updateTaskStatus(task.tenantId, task.id, 'waiting', {
         output: persistedOutput,
         ...kindPatch,
+        ...agentPatch,
       });
       await emitLog('task.waiting', 'Task awaiting human approval', {
         pendingSpawnCount: finalState.lastOutput?.spawnTasks?.length ?? 0,
@@ -106,6 +119,7 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
       await updateTaskStatus(task.tenantId, task.id, 'done', {
         output: persistedOutput,
         ...kindPatch,
+        ...agentPatch,
       });
       await emitLog('task.completed', 'Task completed successfully');
     }
