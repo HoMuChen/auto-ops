@@ -2,6 +2,20 @@ import { z } from 'zod';
 
 export const TaskStatusSchema = z.enum(['todo', 'in_progress', 'waiting', 'done', 'failed']);
 
+/**
+ * Drizzle returns timestamp columns as `Date` instances; Fastify response
+ * serialization runs Zod's `parse` which doesn't natively know about Date.
+ * Coerce to an ISO string so the wire format stays consistent.
+ */
+const IsoDate = z.preprocess(
+  (v) => (v instanceof Date ? v.toISOString() : v),
+  z.string().datetime(),
+);
+const NullableIsoDate = z.preprocess(
+  (v) => (v instanceof Date ? v.toISOString() : v),
+  z.string().datetime().nullable(),
+);
+
 export const TaskSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
@@ -14,10 +28,10 @@ export const TaskSchema = z.object({
   input: z.record(z.unknown()),
   output: z.record(z.unknown()).nullable(),
   error: z.object({ message: z.string(), stack: z.string().optional() }).nullable().optional(),
-  scheduledAt: z.string().datetime().nullable(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  completedAt: z.string().datetime().nullable(),
+  scheduledAt: NullableIsoDate,
+  createdAt: IsoDate,
+  updatedAt: IsoDate,
+  completedAt: NullableIsoDate,
 });
 
 export const CreateConversationBody = z.object({

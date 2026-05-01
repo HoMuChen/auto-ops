@@ -90,6 +90,11 @@ export async function updateTaskStatus(
  * Picks the oldest eligible task (status='todo', scheduled_at due, no live lock)
  * and stamps it with `locked_by` + `locked_until` + status='in_progress' in a
  * single UPDATE. Returns null if no task is available.
+ *
+ * Implementation note: the UPDATE returns only the claimed `id`, then we
+ * re-select with the Drizzle query builder so the result has properly mapped
+ * camelCase fields (raw `db.execute(sql\`...\`)` returns snake_case rows from
+ * postgres-js, which would silently make `task.tenantId` undefined).
  */
 export async function claimNextTask(opts: {
   workerId: string;
@@ -99,7 +104,7 @@ export async function claimNextTask(opts: {
   // ISO string and let Postgres parse it as timestamptz.
   const leaseUntil = new Date(Date.now() + opts.leaseMs).toISOString();
 
-  const result = await db.execute<Task>(sql`
+  const result = await db.execute<{ id: string }>(sql`
     UPDATE tasks
     SET status = 'in_progress',
         locked_by = ${opts.workerId},
@@ -114,11 +119,16 @@ export async function claimNextTask(opts: {
       FOR UPDATE SKIP LOCKED
       LIMIT 1
     )
-    RETURNING *
+    RETURNING id
   `);
 
-  const row = (result as unknown as { rows?: Task[] }).rows?.[0] ?? (result as Task[])[0];
-  return row ?? null;
+  const rows =
+    (result as unknown as { rows?: { id: string }[] }).rows ?? (result as { id: string }[]);
+  const claimedId = rows[0]?.id;
+  if (!claimedId) return null;
+
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, claimedId)).limit(1);
+  return task ?? null;
 }
 
 export async function releaseLock(taskId: string): Promise<void> {
