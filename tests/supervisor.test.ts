@@ -1,3 +1,4 @@
+import { AIMessage } from '@langchain/core/messages';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
@@ -8,12 +9,13 @@ import { describe, expect, it, vi } from 'vitest';
  * Mock the registry + model registry so the test is hermetic — no DB, no LLM.
  */
 
+const listForTenantMock = vi.fn(async () => {
+  throw new Error('listForTenant must not be called during HITL gate');
+});
+
 vi.mock('../src/agents/registry.js', () => ({
   agentRegistry: {
-    // listForTenant should NOT be called when awaitingApproval is true.
-    listForTenant: vi.fn(async () => {
-      throw new Error('listForTenant must not be called during HITL gate');
-    }),
+    listForTenant: listForTenantMock,
   },
 }));
 
@@ -66,5 +68,63 @@ describe('runSupervisor — pinned-agent shortcut (execution children)', () => {
     expect(result).toEqual({ nextAgent: 'shopify-blog-writer' });
     // No registry lookup, no model call — pure deterministic routing.
     expect(buildModelMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Regression: a clarification from the supervisor must be persisted through
+ * the same path agents use (lastOutput) so the runner writes it to
+ * `messages`/`tasks.output`. Previously the clarification only survived in
+ * LangGraph's checkpoint blob, leaving the user staring at a status flip with
+ * no visible message.
+ *
+ * Also: the message added to the channel must be an AIMessage, not a
+ * HumanMessage — otherwise the next supervisor turn would re-feed the
+ * supervisor's own question back as a fake user follow-up.
+ */
+describe('runSupervisor — clarification path persists through lastOutput', () => {
+  it('fills lastOutput and tags the channel message as AI', async () => {
+    listForTenantMock.mockReset();
+    buildModelMock.mockReset();
+    listForTenantMock.mockResolvedValueOnce([
+      { manifest: { id: 'shopify-blog-writer', description: 'writes one Shopify blog article' } },
+    ] as never);
+
+    const invokeMock = vi.fn(async () => ({
+      nextAgent: null,
+      clarification: 'Could you clarify the target language?',
+      done: false,
+    }));
+    buildModelMock.mockImplementation(
+      () =>
+        ({
+          withStructuredOutput: () => ({ invoke: invokeMock }),
+        }) as never,
+    );
+
+    const state = {
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      taskId: '00000000-0000-0000-0000-000000000002',
+      messages: [],
+      params: { brief: 'Write something' },
+      nextAgent: null,
+      pinnedAgent: null,
+      lastOutput: null,
+      awaitingApproval: false,
+    };
+
+    const result = await runSupervisor(state);
+
+    expect(result.awaitingApproval).toBe(true);
+    expect(result.nextAgent).toBeNull();
+    expect(result.lastOutput).toEqual({
+      agentId: 'supervisor',
+      message: 'Could you clarify the target language?',
+      payload: { kind: 'clarification' },
+    });
+    expect(result.messages).toHaveLength(1);
+    const [msg] = result.messages ?? [];
+    expect(msg).toBeInstanceOf(AIMessage);
+    expect(msg?.content).toBe('[supervisor] Could you clarify the target language?');
   });
 });

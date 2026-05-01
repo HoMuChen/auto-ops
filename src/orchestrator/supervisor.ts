@@ -1,4 +1,4 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { agentRegistry } from '../agents/registry.js';
 import { buildModel } from '../llm/model-registry.js';
@@ -82,10 +82,20 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
   ]);
 
   if (decision.clarification) {
+    // Treat the supervisor as a first-class node when it speaks to the user:
+    // tag the message as AI (so the next supervisor turn doesn't re-feed it as
+    // a fake follow-up brief) and fill `lastOutput` so the runner persists it
+    // through the same path agents use — clarification then surfaces in the
+    // `messages` table and `tasks.output`, not just in the checkpoint blob.
     return {
-      messages: [new HumanMessage(`[supervisor] ${decision.clarification}`)],
+      messages: [new AIMessage(`[supervisor] ${decision.clarification}`)],
       nextAgent: null,
       awaitingApproval: true,
+      lastOutput: {
+        agentId: 'supervisor',
+        message: decision.clarification,
+        payload: { kind: 'clarification' },
+      },
     };
   }
 
