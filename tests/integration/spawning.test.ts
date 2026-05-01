@@ -58,6 +58,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     });
     scriptStructured({
       reasoning: 'Three-pronged plan covering core summer keyword clusters.',
+      progressNote: '規劃了 2 個切角，主軸是夏季關鍵字，老闆過目',
       topics: [
         {
           title: '夏季穿搭 5 個必備單品',
@@ -154,6 +155,7 @@ describe('Strategy → Spawn → Execution flow', () => {
         summaryHtml: `Summary ${i + 1} for the article excerpt and meta description.`,
         tags: ['seo', 'summer'],
         language: i === 0 ? 'zh-TW' : 'en',
+        progressNote: `Article ${i + 1} 草稿好了，老闆過目`,
       });
     }
 

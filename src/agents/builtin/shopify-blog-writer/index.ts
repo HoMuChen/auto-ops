@@ -94,6 +94,16 @@ const ArticleSchema = z.object({
     .enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko'])
     .describe('The language the article is written in.'),
   author: z.string().optional().describe('Author byline. Leave blank to use the agent default.'),
+  progressNote: z
+    .string()
+    .min(10)
+    .max(200)
+    .describe(
+      '一句話對老闆回報你剛完成什麼、有什麼特別著重的點。' +
+        '例：「草稿好了，這篇我特別強調機能麻料適合台灣濕熱夏天，老闆看一下開頭那段」。' +
+        '用 zh-TW 第一人稱，對話對象是「老闆」，不要寫成「I have completed...」這種翻譯腔。' +
+        '這段會直接顯示在看板的進度時間軸上，所以要像員工口頭回報而不是技術 log。',
+    ),
 });
 
 type ArticleDraft = z.infer<typeof ArticleSchema>;
@@ -176,16 +186,15 @@ export const shopifyBlogWriterAgent: IAgent = {
 
       const preview = renderArticleMarkdown(article, cfg);
 
-      await ctx.emitLog(
-        'agent.draft.ready',
-        `草稿好了：「${article.title}」，老闆過目，OK 我就${cfg.publishToShopify ? '發到部落格' : '存草稿'}`,
-        {
-          title: article.title,
-          language: article.language,
-          bodyLength: article.bodyHtml.length,
-          publishOnApprove: cfg.publishToShopify,
-        },
-      );
+      // The LLM is told (via the schema describe) to fill `progressNote` as a
+      // first-person update to the boss. Use it directly as the timeline log
+      // so each progress update has the model's own context-aware narration.
+      await ctx.emitLog('agent.draft.ready', article.progressNote, {
+        title: article.title,
+        language: article.language,
+        bodyLength: article.bodyHtml.length,
+        publishOnApprove: cfg.publishToShopify,
+      });
 
       const result: AgentOutput = {
         message: preview,

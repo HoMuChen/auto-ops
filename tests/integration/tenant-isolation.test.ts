@@ -40,6 +40,7 @@ describe('Multi-tenant isolation', () => {
       summaryHtml: 'Confidential summary for tenant A.',
       tags: ['confidential'],
       language: 'zh-TW',
+      progressNote: 'Draft ready, awaiting review.',
     });
 
     const create = await app.inject({

@@ -15,6 +15,7 @@ const listingFixture = {
   bodyHtml: '<p>A breathable, lightweight linen shirt for hot summer days.</p>',
   tags: ['summer', 'linen', 'shirt', 'mens'],
   vendor: 'Acme Apparel',
+  progressNote: 'Listing 整理好了，主打透氣材質，老闆過目',
 };
 
 const invokeMock = vi.fn(async () => listingFixture);
@@ -86,6 +87,20 @@ describe('shopifyOpsAgent.build → invoke', () => {
     expect(result.message).toContain('Linen summer shirt');
     expect(result.message).toContain('Acme Apparel');
     expect(result.message).toContain('draft'); // autoPublish=false → draft
+  });
+
+  it('uses the LLM-produced progressNote as the agent.listing.ready timeline message', async () => {
+    const emitLog = vi.fn(
+      async (_event: string, _message: string, _data?: Record<string, unknown>) => {},
+    );
+    const runnable = await shopifyOpsAgent.build({ ...ctx, emitLog });
+    await runnable.invoke({
+      messages: [{ role: 'user', content: 'shirt' }],
+      params: {},
+    });
+
+    const readyCall = emitLog.mock.calls.find((c) => c[0] === 'agent.listing.ready');
+    expect(readyCall?.[1]).toBe('Listing 整理好了，主打透氣材質，老闆過目');
   });
 
   it('does not invoke any tool from inside the agent (deferred to executor)', async () => {

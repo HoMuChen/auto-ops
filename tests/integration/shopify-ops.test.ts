@@ -75,6 +75,7 @@ describe('Shopify Ops end-to-end (text only, no images)', () => {
       bodyHtml: '<p>Breathable, lightweight linen shirt for hot summer days.</p>',
       tags: ['summer', 'linen', 'shirt'],
       vendor: 'Acme Apparel',
+      progressNote: 'Listing 整理好了，主打透氣材質，老闆過目',
     });
 
     // Dispatch the brief.
@@ -188,6 +189,7 @@ describe('Shopify Ops end-to-end (text only, no images)', () => {
       bodyHtml: '<p>nope</p>',
       tags: ['x'],
       vendor: 'Acme',
+      progressNote: 'Listing 草擬好了，但這次資訊偏少',
     });
 
     const create = await app.inject({

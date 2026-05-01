@@ -71,6 +71,16 @@ const ListingSchema = z.object({
     .string()
     .optional()
     .describe('Optional Shopify product type (category) — keep blank if unsure.'),
+  progressNote: z
+    .string()
+    .min(10)
+    .max(200)
+    .describe(
+      '一句話對老闆回報你剛完成什麼。' +
+        '例：「listing 整理好了，我用了 Acme 當 vendor，特別強調台灣製造這點，老闆看一下品牌語氣對不對」。' +
+        '用 zh-TW 第一人稱，對話對象是「老闆」，不要寫翻譯腔。' +
+        '這段直接顯示在看板進度上。',
+    ),
 });
 
 type ProductListing = z.infer<typeof ListingSchema>;
@@ -154,14 +164,12 @@ Tenant constraints:
 
       const preview = renderListingMarkdown(listing, cfg.shopify.autoPublish);
 
-      await ctx.emitLog(
-        'agent.listing.ready',
-        `商品 listing 準備好：「${listing.title}」，老闆確認 OK 我就上架`,
-        {
-          toolsAvailable: filteredTools.map((t) => t.id),
-          pendingTool: pendingToolCall.id,
-        },
-      );
+      // Use the model's first-person progressNote as the timeline log.
+      await ctx.emitLog('agent.listing.ready', listing.progressNote, {
+        title: listing.title,
+        toolsAvailable: filteredTools.map((t) => t.id),
+        pendingTool: pendingToolCall.id,
+      });
 
       return {
         message: preview,

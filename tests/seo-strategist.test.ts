@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const planFixture = {
   reasoning: 'Three pillars covering top-of-funnel awareness for the summer campaign.',
+  progressNote: '規劃了 2 個主軸，圍繞夏季 + 永續，老闆過目',
   topics: [
     {
       title: '夏季穿搭 5 個必備單品',
@@ -124,6 +125,7 @@ describe('seoStrategistAgent.build → invoke', () => {
   it('throws at invoke time if the LLM hallucinates an unknown assignedAgent', async () => {
     invokeMock.mockResolvedValueOnce({
       reasoning: 'plan with bad assignee',
+      progressNote: '計畫好了但 worker 名稱可能有誤',
       topics: [
         {
           title: 'whatever',
@@ -141,5 +143,19 @@ describe('seoStrategistAgent.build → invoke', () => {
         params: {},
       }),
     ).rejects.toThrow(/unknown worker agent/);
+  });
+
+  it('uses the LLM-produced progressNote as the agent.plan.ready timeline message', async () => {
+    const emitLog = vi.fn(
+      async (_event: string, _message: string, _data?: Record<string, unknown>) => {},
+    );
+    const runnable = await seoStrategistAgent.build({ ...ctx, emitLog });
+    await runnable.invoke({
+      messages: [{ role: 'user', content: 'plan' }],
+      params: {},
+    });
+
+    const readyCall = emitLog.mock.calls.find((c) => c[0] === 'agent.plan.ready');
+    expect(readyCall?.[1]).toBe('規劃了 2 個主軸，圍繞夏季 + 永續，老闆過目');
   });
 });

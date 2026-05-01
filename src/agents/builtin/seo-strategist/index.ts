@@ -68,6 +68,16 @@ const PlanSchema = z.object({
   reasoning: z
     .string()
     .describe('One-paragraph rationale: why this set of topics covers the brief.'),
+  progressNote: z
+    .string()
+    .min(10)
+    .max(200)
+    .describe(
+      '一句話對老闆回報你的整體規劃思路（不要重複每篇文章細節）。' +
+        '例：「規劃了 5 個切角，主軸是把夏季穿搭跟商品做關聯，我覺得第 2 篇是流量主力」。' +
+        '用 zh-TW 第一人稱，對話對象是「老闆」。' +
+        '這段會直接顯示在看板的進度時間軸上。',
+    ),
   topics: z
     .array(
       z.object({
@@ -209,7 +219,8 @@ Tenant constraints:
         '_Approve to spawn each article as an independent writer task._',
       ].join('\n');
 
-      await ctx.emitLog('agent.plan.ready', `主題列了 ${capped.length} 篇，請老闆過目`, {
+      // Use the model's first-person progressNote as the timeline log.
+      await ctx.emitLog('agent.plan.ready', plan.progressNote, {
         topicCount: capped.length,
       });
 

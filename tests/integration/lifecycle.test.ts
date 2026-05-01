@@ -46,6 +46,7 @@ function article(overrides: Partial<Record<string, unknown>> = {}): Record<strin
     summaryHtml: 'A short guide to summer dresses for hot, humid weather.',
     tags: ['summer', 'dresses', 'guide'],
     language: 'zh-TW',
+    progressNote: '草稿好了，這篇我著重在輕薄涼感面料，老闆看一下開頭那段',
     ...overrides,
   };
 }

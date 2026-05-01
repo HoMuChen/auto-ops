@@ -70,6 +70,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
       tags: ['夏季穿搭', '女裝', '購物指南'],
       language: 'zh-TW',
       author: 'Editorial Team',
+      progressNote: '草稿好了，這篇我從機能性切入而不是純穿搭，老闆看一下',
     });
 
     const create = await app.inject({
@@ -202,6 +203,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
       summaryHtml: 'A draft to be exported manually.',
       tags: ['draft', 'manual'],
       language: 'en',
+      progressNote: 'Draft done, saving locally per the publishToShopify=false config.',
     });
 
     const create = await app.inject({
@@ -265,6 +267,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
       summaryHtml: 'A summary that will never be published.',
       tags: ['fail'],
       language: 'en',
+      progressNote: 'Draft ready, queued for publish.',
     });
 
     const create = await app.inject({
