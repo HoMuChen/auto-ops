@@ -13,13 +13,16 @@ import type {
 const DEFAULT_PROMPT = `You are an SEO Strategist AI employee for an e-commerce business.
 Your job: turn a high-level SEO brief (a season, a campaign, a product line) into a
 concrete content plan — a list of focused article topics that, together, deliver
-the strategy. You do NOT write the articles yourself; the SEO Writer agent will
-take each topic and produce one article.
+the strategy. You do NOT write the articles yourself; you pick which downstream
+worker agent should handle each topic.
 
 For every topic in the plan you MUST provide:
 - A focused angle (single intent, single primary keyword cluster).
 - The target language for that piece.
 - Enough brief in "writerBrief" that a writer can start without asking questions.
+- The "assignedAgent" id of the worker that should produce the article.
+  Pick from the "Available worker agents" list below — each entry shows the
+  agent's id and what it can do. If no listed agent fits a topic, drop the topic.
 
 Constraints:
 - Plan between 3 and {MAX_TOPICS} topics. Fewer is better than padding.
@@ -71,6 +74,12 @@ const PlanSchema = z.object({
           .string()
           .min(20)
           .describe('Self-contained brief the writer agent receives as task.input.brief.'),
+        assignedAgent: z
+          .string()
+          .describe(
+            'Id of the worker agent that should produce this article. Must be one of the ids ' +
+              'listed in "Available worker agents" in the system prompt.',
+          ),
         scheduledAt: z
           .string()
           .datetime()
@@ -108,9 +117,20 @@ export const seoStrategistAgent: IAgent = {
       name: 'seo_content_plan',
     });
 
+    // Whitelist of worker ids the LLM may pick from. Built once per build.
+    const validWorkerIds = new Set(ctx.availableExecutionAgents.map((a) => a.id));
+    if (validWorkerIds.size === 0) {
+      // Fail fast at build time rather than producing a plan that would be
+      // rejected at finalize time. Surfaces config drift early.
+      throw new Error(
+        'seo-strategist requires at least one peer worker agent to be enabled for the tenant',
+      );
+    }
+
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
       await ctx.emitLog('agent.started', `SEO Strategist planning task ${ctx.taskId}`, {
         maxTopics: cfg.maxTopics,
+        availableWorkers: [...validWorkerIds],
       });
 
       const constraints: string[] = [`Maximum topics: ${cfg.maxTopics}`];
@@ -122,7 +142,14 @@ export const seoStrategistAgent: IAgent = {
         `Default languages if user did not specify: ${cfg.defaultLanguages.join(', ')}`,
       );
 
+      const workerRoster = ctx.availableExecutionAgents
+        .map((a) => `- ${a.id}: ${a.description}`)
+        .join('\n');
+
       const systemMessage = `${ctx.systemPrompt.replace('{MAX_TOPICS}', String(cfg.maxTopics))}
+
+Available worker agents (pick one id per topic for the "assignedAgent" field):
+${workerRoster}
 
 Tenant constraints:
 - ${constraints.join('\n- ')}`;
@@ -137,10 +164,23 @@ Tenant constraints:
       const plan = (await model.invoke(messages)) as ContentPlan;
       const capped: ContentTopic[] = plan.topics.slice(0, cfg.maxTopics);
 
+      // Defensive validation: structured output gives us `assignedAgent: string`
+      // but z.string() can't enforce membership in a runtime-built set. Catch
+      // an LLM that hallucinates a worker id here so it surfaces as a clear
+      // task error instead of an obscure "node not found" later.
+      const invalid = capped.filter((t) => !validWorkerIds.has(t.assignedAgent));
+      if (invalid.length > 0) {
+        throw new Error(
+          `SEO Strategist picked unknown worker agent(s): ${invalid
+            .map((t) => `"${t.assignedAgent}" for topic "${t.title}"`)
+            .join('; ')}. Available workers: ${[...validWorkerIds].join(', ')}`,
+        );
+      }
+
       const spawnTasks: SpawnTaskRequest[] = capped.map((t) => ({
         title: t.title,
         description: `SEO article — primary keyword: ${t.primaryKeyword}`,
-        assignedAgent: 'seo-writer',
+        assignedAgent: t.assignedAgent,
         input: {
           brief: t.writerBrief,
           primaryKeyword: t.primaryKeyword,

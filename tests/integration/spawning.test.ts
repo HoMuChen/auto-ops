@@ -56,12 +56,14 @@ describe('Strategy → Spawn → Execution flow', () => {
           language: 'zh-TW',
           writerBrief:
             '1500 字 long-form article on layered summer styling for humid Taiwan climate.',
+          assignedAgent: 'seo-writer',
         },
         {
           title: 'Sustainable summer fabrics buyer guide',
           primaryKeyword: 'sustainable fabrics summer',
           language: 'en',
           writerBrief: 'Buyer guide comparing linen, organic cotton and Tencel for summer apparel.',
+          assignedAgent: 'seo-writer',
         },
       ],
     });

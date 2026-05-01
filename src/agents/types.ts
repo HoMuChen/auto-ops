@@ -72,6 +72,16 @@ export interface AgentManifest {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Lightweight description of another registered agent — used by strategy
+ * agents to know what execution workers they can hand work to.
+ */
+export interface PeerAgentDescriptor {
+  id: string;
+  name: string;
+  description: string;
+}
+
 /** Context passed when building an agent's runnable node. */
 export interface AgentBuildContext {
   tenantId: string;
@@ -87,6 +97,13 @@ export interface AgentBuildContext {
    * Empty object when the agent has no schema or no row in `agent_configs`.
    */
   agentConfig: Record<string, unknown>;
+  /**
+   * Other agents enabled for this tenant — strategy agents use this list to
+   * decide which `assignedAgent` to put on each `SpawnTaskRequest`. Excludes
+   * the building agent itself (so a strategist doesn't accidentally spawn
+   * itself recursively).
+   */
+  availableExecutionAgents: PeerAgentDescriptor[];
   /** Logger callback — agents emit atomic logs through this. */
   emitLog: (event: string, message: string, data?: Record<string, unknown>) => Promise<void>;
 }

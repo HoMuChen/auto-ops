@@ -33,6 +33,16 @@ export async function buildGraph(opts: BuildGraphOptions) {
 
   for (const agent of agents) {
     const manifest = agent.manifest;
+    // Peers visible to *this* agent: every other tenant-enabled agent. Strategy
+    // agents use this list to decide who to assign each child to.
+    const peerDescriptors = agents
+      .filter((a) => a.manifest.id !== manifest.id)
+      .map((a) => ({
+        id: a.manifest.id,
+        name: a.manifest.name,
+        description: a.manifest.description,
+      }));
+
     graph.addNode(manifest.id, async (state: GraphState) => {
       const override = await agentRegistry.loadConfig(opts.tenantId, manifest.id);
       const ctx: AgentBuildContext = {
@@ -43,6 +53,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
         systemPrompt: override.promptOverride ?? manifest.defaultPrompt,
         ...(override.toolWhitelist ? { toolWhitelist: override.toolWhitelist } : {}),
         agentConfig: override.config,
+        availableExecutionAgents: peerDescriptors,
         emitLog: opts.emitLog,
       };
       const runnable = await agent.build(ctx);

@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import { agentRegistry } from '../agents/registry.js';
 import type { SpawnTaskRequest } from '../agents/types.js';
 import { db } from '../db/client.js';
 import { type NewTask, type Task, type TaskStatus, taskLogs, tasks } from '../db/schema/index.js';
-import { NotFoundError } from '../lib/errors.js';
+import { NotFoundError, ValidationError } from '../lib/errors.js';
 import { assertTransition } from './state-machine.js';
 
 export interface CreateTaskInput {
@@ -201,6 +202,21 @@ export async function finalizeStrategyTask(
     assertTransition(parent.status, 'done');
 
     const specs = output.spawnTasks ?? [];
+
+    // Defense in depth: refuse to insert children whose assignedAgent isn't in
+    // the registry. The producing agent already validates this, but a stale
+    // checkpoint, a renamed agent, or a manual DB write could otherwise leave
+    // children unrunnable (worker would hit "node not found" in the graph).
+    const unknownAssignees = specs
+      .map((s) => s.assignedAgent)
+      .filter((id) => !agentRegistry.has(id));
+    if (unknownAssignees.length > 0) {
+      throw new ValidationError(
+        `spawnTasks reference unregistered agents: ${[...new Set(unknownAssignees)].join(', ')}`,
+        { unknownAssignees: [...new Set(unknownAssignees)] },
+      );
+    }
+
     const children: Task[] = [];
     for (const spec of specs) {
       const row: NewTask = {
