@@ -34,10 +34,10 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     const jwt = await mintJwt({ userId, email });
 
     // Script the supervisor + agent for one full graph turn:
-    //   1. Supervisor routes to seo-expert.
-    //   2. seo-expert returns a draft. The agent code sets awaitingApproval=true.
+    //   1. Supervisor routes to seo-writer.
+    //   2. seo-writer returns a draft. The agent code sets awaitingApproval=true.
     scriptStructured({
-      nextAgent: 'seo-expert',
+      nextAgent: 'seo-writer',
       clarification: null,
       done: false,
     });
@@ -111,7 +111,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
 
-    scriptStructured({ nextAgent: 'seo-expert', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
     scriptText('# First draft');
 
     const create = await app.inject({
@@ -144,7 +144,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
 
-    scriptStructured({ nextAgent: 'seo-expert', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
     scriptText('# First draft');
 
     const create = await app.inject({

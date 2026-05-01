@@ -1,4 +1,5 @@
-import { seoExpertAgent } from './builtin/seo-expert/index.js';
+import { seoStrategistAgent } from './builtin/seo-strategist/index.js';
+import { seoWriterAgent } from './builtin/seo-writer/index.js';
 import { shopifyOpsAgent } from './builtin/shopify-ops/index.js';
 import { agentRegistry } from './registry.js';
 
@@ -18,7 +19,8 @@ let bootstrapped = false;
  */
 export function bootstrapAgents(): void {
   if (bootstrapped) return;
-  agentRegistry.register(seoExpertAgent);
+  agentRegistry.register(seoStrategistAgent);
+  agentRegistry.register(seoWriterAgent);
   agentRegistry.register(shopifyOpsAgent);
   bootstrapped = true;
 }

@@ -10,8 +10,16 @@ Your job: read the user's brief, decide which employee to dispatch next, or ask 
 
 Routing rules:
 - Choose exactly one employee from the available list, by their id.
-- If the brief lacks essential parameters (e.g. target language, product SKU, audience), set "nextAgent" to null and write a clarifying question into "clarification".
-- If the work is complete and no further employee should be dispatched, set "nextAgent" to null and "done" to true.
+- Strategy vs Execution: planning briefs (e.g. "plan the summer SEO campaign", "design a content calendar")
+  belong to a *strategist* employee — they produce a plan that the platform splits into independent
+  child execution tasks for downstream workers. Single, focused work (e.g. "write THIS one article",
+  "list THIS one product") belongs to an *execution* employee. Pick the strategist when the user is
+  asking for a plan with multiple deliverables; pick the execution worker when they're asking for one
+  concrete artifact.
+- If the brief lacks essential parameters (e.g. target language, product SKU, audience), set "nextAgent"
+  to null and write a clarifying question into "clarification".
+- If the work is complete and no further employee should be dispatched, set "nextAgent" to null and
+  "done" to true.
 
 Output strictly the JSON schema requested.`;
 
@@ -45,6 +53,14 @@ const SUPERVISOR_MODEL: ModelConfig = {
 export async function runSupervisor(state: GraphState): Promise<Partial<GraphState>> {
   if (state.awaitingApproval) {
     return {};
+  }
+
+  // Deterministic shortcut for execution children: when the parent strategy
+  // already named the owning agent, skip the routing LLM call on the first
+  // hop. After the agent runs once (lastOutput set) we let normal routing
+  // resume so multi-step execution flows still work.
+  if (state.pinnedAgent && !state.lastOutput) {
+    return { nextAgent: state.pinnedAgent };
   }
 
   const available = await agentRegistry.listForTenant(state.tenantId);

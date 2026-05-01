@@ -35,6 +35,7 @@ describe('runSupervisor — HITL gate handling (C1)', () => {
       messages: [],
       params: {},
       nextAgent: null,
+      pinnedAgent: null,
       lastOutput: null,
       awaitingApproval: true,
     };
@@ -43,6 +44,27 @@ describe('runSupervisor — HITL gate handling (C1)', () => {
 
     // Must NOT clear the gate; reducer is replace-only so {} preserves it.
     expect(result).toEqual({});
+    expect(buildModelMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('runSupervisor — pinned-agent shortcut (execution children)', () => {
+  it('routes directly to pinnedAgent on first hop without an LLM call', async () => {
+    const state = {
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      taskId: '00000000-0000-0000-0000-000000000002',
+      messages: [],
+      params: {},
+      nextAgent: null,
+      pinnedAgent: 'seo-writer',
+      lastOutput: null,
+      awaitingApproval: false,
+    };
+
+    const result = await runSupervisor(state);
+
+    expect(result).toEqual({ nextAgent: 'seo-writer' });
+    // No registry lookup, no model call — pure deterministic routing.
     expect(buildModelMock).not.toHaveBeenCalled();
   });
 });

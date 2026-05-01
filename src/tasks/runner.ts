@@ -54,6 +54,9 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
         taskId: task.id,
         brief,
         params: (task.input as Record<string, unknown>) ?? {},
+        // Execution children carry an explicit owner; pinning bypasses the
+        // supervisor LLM on the first hop. Strategy parents leave this null.
+        pinnedAgent: task.assignedAgent,
       });
     } else {
       // Resumed run: pull any new user messages since last checkpoint and inject.
@@ -74,14 +77,35 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
       });
     }
 
+    // Merge agent payload with spawn requests so the approve route can later
+    // read pending children from task.output without needing graph state.
+    const persistedOutput = finalState.lastOutput
+      ? {
+          ...(finalState.lastOutput.payload ?? {}),
+          ...(finalState.lastOutput.spawnTasks
+            ? { spawnTasks: finalState.lastOutput.spawnTasks }
+            : {}),
+        }
+      : null;
+
+    // Auto-promote to strategy kind whenever the agent emitted children. This
+    // keeps `task.kind` consistent with the actual behaviour at finalize time
+    // even if the conversation route created the task as the default 'execution'.
+    const hasSpawn = (finalState.lastOutput?.spawnTasks?.length ?? 0) > 0;
+    const kindPatch: { kind?: 'strategy' } = hasSpawn ? { kind: 'strategy' } : {};
+
     if (finalState.awaitingApproval) {
       await updateTaskStatus(task.tenantId, task.id, 'waiting', {
-        output: finalState.lastOutput?.payload ?? null,
+        output: persistedOutput,
+        ...kindPatch,
       });
-      await emitLog('task.waiting', 'Task awaiting human approval');
+      await emitLog('task.waiting', 'Task awaiting human approval', {
+        pendingSpawnCount: finalState.lastOutput?.spawnTasks?.length ?? 0,
+      });
     } else {
       await updateTaskStatus(task.tenantId, task.id, 'done', {
-        output: finalState.lastOutput?.payload ?? null,
+        output: persistedOutput,
+        ...kindPatch,
       });
       await emitLog('task.completed', 'Task completed successfully');
     }

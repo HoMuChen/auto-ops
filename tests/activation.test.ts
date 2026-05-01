@@ -173,9 +173,9 @@ describe('builtin agent manifests', () => {
     });
   });
 
-  it('SEO Expert configSchema accepts default empty object', async () => {
-    const { seoExpertAgent } = await import('../src/agents/builtin/seo-expert/index.js');
-    const result = validateAgentConfig(seoExpertAgent.manifest, {});
+  it('SEO Writer configSchema accepts default empty object', async () => {
+    const { seoWriterAgent } = await import('../src/agents/builtin/seo-writer/index.js');
+    const result = validateAgentConfig(seoWriterAgent.manifest, {});
     expect(result).toMatchObject({
       targetLanguages: ['zh-TW'],
       bannedPhrases: [],
@@ -183,9 +183,9 @@ describe('builtin agent manifests', () => {
     });
   });
 
-  it('SEO Expert rejects empty targetLanguages array', async () => {
-    const { seoExpertAgent } = await import('../src/agents/builtin/seo-expert/index.js');
-    expect(() => validateAgentConfig(seoExpertAgent.manifest, { targetLanguages: [] })).toThrow(
+  it('SEO Writer rejects empty targetLanguages array', async () => {
+    const { seoWriterAgent } = await import('../src/agents/builtin/seo-writer/index.js');
+    expect(() => validateAgentConfig(seoWriterAgent.manifest, { targetLanguages: [] })).toThrow(
       ValidationError,
     );
   });

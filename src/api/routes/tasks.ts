@@ -3,7 +3,13 @@ import { z } from 'zod';
 import { streamTaskLogs } from '../../events/sse.js';
 import { ForbiddenError, IllegalStateError } from '../../lib/errors.js';
 import { appendMessage, listMessages } from '../../tasks/messages.js';
-import { getTask, listTaskLogs, listTasks, updateTaskStatus } from '../../tasks/repository.js';
+import {
+  finalizeStrategyTask,
+  getTask,
+  listTaskLogs,
+  listTasks,
+  updateTaskStatus,
+} from '../../tasks/repository.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireTenant } from '../middleware/tenant.js';
 import {
@@ -116,8 +122,16 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       }
       // Approve = transition back to 'todo' so the worker re-picks it up,
       // OR finalize as 'done' if the user accepts the current draft as the final result.
-      const next = body?.finalize ? 'done' : 'todo';
-      return updateTaskStatus(req.tenantId, taskId, next);
+      // Finalising a strategy task atomically spawns its planned execution
+      // children (idempotent on retry) before marking it done.
+      if (body?.finalize) {
+        if (task.kind === 'strategy') {
+          const { parent } = await finalizeStrategyTask(req.tenantId, taskId);
+          return parent;
+        }
+        return updateTaskStatus(req.tenantId, taskId, 'done');
+      }
+      return updateTaskStatus(req.tenantId, taskId, 'todo');
     },
   );
 

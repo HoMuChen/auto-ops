@@ -141,14 +141,14 @@ describe('Agent activation flow', () => {
     expect(JSON.stringify(body.error.details)).toMatch(/defaultLanguage/);
   });
 
-  it('seo-expert needs no credentials and is ready immediately', async () => {
+  it('seo-writer needs no credentials and is ready immediately', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
 
     const detail = await app
       .inject({
         method: 'GET',
-        url: '/v1/agents/seo-expert',
+        url: '/v1/agents/seo-writer',
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());
@@ -158,7 +158,7 @@ describe('Agent activation flow', () => {
 
     const activate = await app.inject({
       method: 'POST',
-      url: '/v1/agents/seo-expert/activate',
+      url: '/v1/agents/seo-writer/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: { targetLanguages: ['zh-TW', 'en'] } },
     });
@@ -172,14 +172,14 @@ describe('Agent activation flow', () => {
 
     await app.inject({
       method: 'POST',
-      url: '/v1/agents/seo-expert/activate',
+      url: '/v1/agents/seo-writer/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: { targetLanguages: ['ja'] } },
     });
 
     const deactivate = await app.inject({
       method: 'POST',
-      url: '/v1/agents/seo-expert/deactivate',
+      url: '/v1/agents/seo-writer/deactivate',
       headers: authHeaders(jwt, tenantId),
     });
     expect(deactivate.statusCode).toBe(204);
@@ -187,7 +187,7 @@ describe('Agent activation flow', () => {
     const detail = await app
       .inject({
         method: 'GET',
-        url: '/v1/agents/seo-expert',
+        url: '/v1/agents/seo-writer',
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());

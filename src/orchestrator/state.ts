@@ -1,5 +1,6 @@
 import type { BaseMessage } from '@langchain/core/messages';
 import { Annotation, type StateGraphArgs } from '@langchain/langgraph';
+import type { SpawnTaskRequest } from '../agents/types.js';
 
 /**
  * GraphState — the shared state passed between Supervisor and Worker nodes.
@@ -30,11 +31,25 @@ export const GraphStateAnnotation = Annotation.Root({
     default: () => null,
   }),
 
+  /**
+   * Pre-assigned agent for this task — set when an execution-kind child task
+   * was spawned with an explicit `assignedAgent`. The Supervisor honours this
+   * on the first hop and skips its LLM routing call. Once the agent has run
+   * once (`lastOutput` set), normal supervisor routing resumes for subsequent
+   * hops, so multi-step execution flows are still possible.
+   */
+  pinnedAgent: Annotation<string | null>({
+    reducer: (_curr, next) => next,
+    default: () => null,
+  }),
+
   /** Latest output from a worker node, surfaced to the kanban card. */
   lastOutput: Annotation<{
     agentId: string;
     message: string;
     payload?: Record<string, unknown>;
+    /** Children the agent wants spawned when this task is finalised. */
+    spawnTasks?: SpawnTaskRequest[];
   } | null>({
     reducer: (_curr, next) => next,
     default: () => null,

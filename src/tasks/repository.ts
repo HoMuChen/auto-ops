@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import type { SpawnTaskRequest } from '../agents/types.js';
 import { db } from '../db/client.js';
 import { type NewTask, type Task, type TaskStatus, taskLogs, tasks } from '../db/schema/index.js';
 import { NotFoundError } from '../lib/errors.js';
@@ -64,7 +65,7 @@ export async function updateTaskStatus(
   tenantId: string,
   taskId: string,
   to: TaskStatus,
-  patch?: Partial<Pick<Task, 'output' | 'error' | 'assignedAgent'>>,
+  patch?: Partial<Pick<Task, 'output' | 'error' | 'assignedAgent' | 'kind'>>,
 ): Promise<Task> {
   const current = await getTask(tenantId, taskId);
   assertTransition(current.status, to);
@@ -150,6 +151,95 @@ export async function reclaimExpiredLocks(): Promise<number> {
     )
     .returning({ id: tasks.id });
   return result.length;
+}
+
+/**
+ * Atomic strategy-task finalisation.
+ *
+ * Reads the parent's `output.spawnTasks`, creates one execution-kind child per
+ * spec, transitions the parent to `done`, and stamps `output.spawnedTaskIds`
+ * + `output.spawnedAt` so a retry of the same approve call is a no-op.
+ *
+ * Idempotency: if `output.spawnedAt` is already set, returns the existing
+ * children without re-inserting. This keeps the approve API safe to retry
+ * and protects against double-spawn under network jitter.
+ *
+ * Throws if the parent isn't a strategy task or isn't currently `waiting`.
+ */
+export async function finalizeStrategyTask(
+  tenantId: string,
+  taskId: string,
+): Promise<{ parent: Task; children: Task[] }> {
+  return db.transaction(async (tx) => {
+    const [parent] = await tx
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)))
+      .for('update')
+      .limit(1);
+    if (!parent) throw new NotFoundError(`Task ${taskId}`);
+    if (parent.kind !== 'strategy') {
+      throw new Error(`Task ${taskId} is not a strategy task (kind=${parent.kind})`);
+    }
+
+    const output = (parent.output ?? {}) as Record<string, unknown> & {
+      spawnTasks?: SpawnTaskRequest[];
+      spawnedAt?: string;
+      spawnedTaskIds?: string[];
+    };
+
+    // Idempotent path: already spawned → just return existing children. Skip
+    // the transition check so a retry against an already-done parent is a no-op.
+    if (output.spawnedAt && output.spawnedTaskIds?.length) {
+      const existing = await tx
+        .select()
+        .from(tasks)
+        .where(and(eq(tasks.tenantId, tenantId), eq(tasks.parentTaskId, taskId)));
+      return { parent, children: existing };
+    }
+
+    assertTransition(parent.status, 'done');
+
+    const specs = output.spawnTasks ?? [];
+    const children: Task[] = [];
+    for (const spec of specs) {
+      const row: NewTask = {
+        tenantId,
+        parentTaskId: taskId,
+        title: spec.title,
+        description: spec.description,
+        kind: 'execution',
+        assignedAgent: spec.assignedAgent,
+        input: spec.input,
+        scheduledAt: spec.scheduledAt ? new Date(spec.scheduledAt) : undefined,
+        status: 'todo',
+      };
+      const [created] = await tx.insert(tasks).values(row).returning();
+      if (!created) throw new Error('Child task insert returned no row');
+      children.push(created);
+    }
+
+    const nextOutput = {
+      ...output,
+      spawnTasks: undefined,
+      spawnedAt: new Date().toISOString(),
+      spawnedTaskIds: children.map((c) => c.id),
+    };
+
+    const [updated] = await tx
+      .update(tasks)
+      .set({
+        status: 'done',
+        output: nextOutput,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)))
+      .returning();
+    if (!updated) throw new NotFoundError(`Task ${taskId}`);
+
+    return { parent: updated, children };
+  });
 }
 
 /** Append a log line; persists for audit and is fanned out via the EventBus. */

@@ -120,14 +120,15 @@ x-tenant-id: <UUID>
 [建第一個 workspace]            POST /v1/tenants    {name,slug,plan} → 回 tenant
                                                     ↓ 拿到 tenant.id
 
-[列可聘員工]                    GET /v1/agents      回 [seo-expert, shopify-ops, ...]
-  顯示卡片：                                        每個含 ready / credentials
-  - ✓ SEO Expert (ready)                            checklist / configSchema
+[列可聘員工]                    GET /v1/agents      回 [seo-strategist, seo-writer,
+  顯示卡片：                                          shopify-ops, ...]
+  - ✓ SEO Writer (ready)                            每個含 ready / credentials
+  - ✓ SEO Strategist (ready, pro+)                  checklist / configSchema
   - ✗ Shopify Ops (need creds)
-                                                    ↓ 老闆點 SEO Expert
+                                                    ↓ 老闆點 SEO Writer
 
-[啟用 SEO Expert]               POST /v1/agents/    回 { enabled:true, config }
-  渲染 configSchema 表單           seo-expert/
+[啟用 SEO Writer]               POST /v1/agents/    回 { enabled:true, config }
+  渲染 configSchema 表單           seo-writer/
   (targetLanguages, brandTone…)    activate
                                                     ↓
 
@@ -200,14 +201,30 @@ x-tenant-id: <UUID>
 ```json
 [
   {
-    "id": "seo-expert",
-    "name": "AI SEO Expert",
-    "description": "Researches keywords and writes multilingual SEO content.",
+    "id": "seo-strategist",
+    "name": "AI SEO Strategist",
+    "description": "Plans SEO campaigns: turns a high-level brief into a list of focused article topics, each spawned as an independent execution task for the SEO Writer.",
+    "availableInPlans": ["pro", "flagship"],
+    "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.2 },
+    "toolIds": [],
+    "requiredCredentials": [],
+    "configSchema": { /* JSON Schema — maxTopics, defaultLanguages, brandTone, preferredKeywords */ },
+    "metadata": { "kind": "strategy" },
+    "enabled": false,
+    "ready": true,
+    "planAllowed": false,  ← basic plan 看到這個值會是 false
+    "credentials": [],
+    "config": {}
+  },
+  {
+    "id": "seo-writer",
+    "name": "AI SEO Writer",
+    "description": "Writes a single multilingual SEO article from a focused brief.",
     "availableInPlans": ["basic", "pro", "flagship"],
     "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.4 },
     "toolIds": [],
     "requiredCredentials": [],
-    "configSchema": { /* JSON Schema for the activation form */ },
+    "configSchema": { /* targetLanguages, brandTone, bannedPhrases, preferredKeywords */ },
     "enabled": false,
     "ready": true,
     "planAllowed": true,
@@ -309,7 +326,7 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 // Request
 {
   "brief": "幫我規劃夏季女裝的 SEO 並發布",
-  "preferredAgent": "seo-expert",                 // 可選；不給就讓 Supervisor 路由
+  "preferredAgent": "seo-writer",                 // 可選；不給就讓 Supervisor 路由
   "params": { "language": "zh-TW" },              // 可選；任意 KV 給 agent 參考
   "scheduledAt": "2026-05-02T08:00:00Z"           // 可選；未來時間 → 排程
 }
@@ -342,10 +359,11 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 | 欄位 | 意義 |
 |---|---|
 | `status` | `todo / in_progress / waiting / done / failed` |
-| `output` | 任務最後輸出（agent 的 draft、shopify 上架結果等） |
+| `kind` | `strategy`（會裂變出子任務）或 `execution`（單一可交付成果）。詳見「任務裂變」 |
+| `output` | 任務最後輸出（agent 的 draft、shopify 上架結果、或 strategy 任務的 plan + spawnTasks）|
 | `error` | 失敗原因 |
-| `assignedAgent` | 上次跑的 agent id |
-| `parentTaskId` | 若是裂變子任務 |
+| `assignedAgent` | 上次跑的 agent id（execution 子任務在建立時就帶這個值）|
+| `parentTaskId` | 若是裂變子任務，指向父任務 |
 | `scheduledAt` / `completedAt` / 各 timestamp | ISO 8601 |
 
 #### `GET /v1/tasks/:taskId/messages`
@@ -360,11 +378,18 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 #### `POST /v1/tasks/:taskId/approve`
 HITL 核准。
 ```json
-// finalize:true → 任務直接結案 (status='done')
+// finalize:true → 任務結案
+//   - execution 任務：status='done'
+//   - strategy 任務：status='done' 並原子地建立所有 output.spawnTasks 列出的子任務
+//     （見「任務裂變」一節）
 // finalize:false (預設) → 重新排回 worker（讓下一個 agent 跑或讓 supervisor 決定 done）
 { "finalize": true }
 ```
 422 → 任務不在 `waiting` 狀態。
+
+> 對 strategy 任務再次呼叫 finalize-approve **目前會 422**（done → done 是非法 transition）。
+> 後端的 `finalizeStrategyTask` 本身有 idempotency 保護（不會重複建子任務），但 approve API
+> 不會代你重試。Client 收到 200 後就把這個父任務當作已結案。
 
 #### `POST /v1/tasks/:taskId/feedback`
 HITL 修改要求。會 append 一條 user message 到對話 thread，task → todo，worker 會帶著新 feedback 再跑。
@@ -406,7 +431,8 @@ data: {"event":"agent.draft.ready","message":"SEO draft ready, awaiting approval
 |---|---|
 | `task.started` | 任務進入 graph |
 | `agent.started` | 某 agent 開始跑 |
-| `agent.draft.ready` | SEO draft 完成 |
+| `agent.draft.ready` | SEO Writer draft 完成 |
+| `agent.plan.ready` | SEO Strategist 計畫完成（父任務 → waiting） |
 | `agent.listing.ready` | Shopify listing 草稿完成 |
 | `task.waiting` | 進入 HITL gate |
 | `task.completed` | done |
@@ -428,6 +454,89 @@ const res = await fetch(url, {
 const reader = res.body.getReader();
 // ... 用 TextDecoder + 解 "id:\nevent:\ndata:\n\n" 區塊
 ```
+
+---
+
+## 6.x 任務裂變 (Task Spawning) — Strategy → Execution
+
+### 概念
+
+兩種任務 `kind`，狀態機完全相同，UI 渲染要分開：
+
+| kind | 誰建的 | 例子 | 結束時 |
+|---|---|---|---|
+| `strategy` | user 透過 `/conversations` 派一個「規劃型」brief，supervisor 路由到 strategist agent | 「規劃夏季女裝 SEO」「規劃這 20 個 SKU 的上架排程」 | `finalize=true` 的 approve **會原子地建出 N 個子任務** |
+| `execution` | strategy 父任務 finalize 時自動建出，或 user 直接派一個明確 brief | 「寫這一篇 SEO 文章」「上架這個商品」 | 一般 done |
+
+> **kind 是動態的**：`/conversations` 預設建 `kind: 'execution'`。當 worker 跑完發現
+> agent 回傳了 `spawnTasks`，runner 會把任務升級為 `kind: 'strategy'`。所以 UI 不能
+> 在 task 剛建立時就決定渲染樣式，要在 status 變 `waiting` 後再讀 `kind`。
+
+### Strategy 任務的 `output` 形狀
+
+當 strategy 任務進入 `waiting`（「計畫好了，等你核准」）時：
+```json
+{
+  "id": "parent-uuid",
+  "kind": "strategy",
+  "status": "waiting",
+  "output": {
+    "plan": {
+      "reasoning": "Three-pronged plan covering core summer keyword clusters.",
+      "topics": [
+        {
+          "title": "夏季穿搭 5 個必備單品",
+          "primaryKeyword": "夏季穿搭",
+          "language": "zh-TW",
+          "writerBrief": "1500 字 long-form article …"
+        },
+        { "title": "Sustainable summer fabrics buyer guide", "language": "en", ... }
+      ]
+    },
+    "spawnTasks": [
+      { "title": "夏季穿搭 5 個必備單品", "assignedAgent": "seo-writer",
+        "input": { "brief": "...", "primaryKeyword": "...", "language": "zh-TW" } },
+      { "title": "Sustainable summer fabrics buyer guide", "assignedAgent": "seo-writer", ... }
+    ]
+  }
+}
+```
+
+UI 應該渲染：
+- 上半：`output.plan.reasoning` + 主訊息（`messages` 最後一條 assistant 訊息已是 markdown 摘要）
+- 下半：「即將建立 N 張子卡」清單（從 `output.spawnTasks` 拿 title/assignedAgent）
+- 兩個 CTA：[Approve & Spawn] (`finalize:true`) / [Feedback]（要求調整計畫）
+
+### `finalize=true` 之後
+
+- 父任務 `status='done'`
+- `output.spawnedAt` / `output.spawnedTaskIds` 被寫入（idempotency 用）
+- N 個子任務被建出，`parent_task_id` 指向父，`kind='execution'`，`assignedAgent` 已綁定，`status='todo'`
+
+UI 拿到 200 回應後立刻刷新 task 列表（或 SSE/polling），就會看到子任務出現。
+
+### 子任務的執行
+
+每張子卡：
+- worker 撿走 → 跑 graph → supervisor 看見 `pinnedAgent`（從 `task.assignedAgent` 來）→ **跳過 LLM 路由直接呼叫該 agent**
+- agent 跑完同樣會 `awaitingApproval=true` → 子卡進 `waiting` → user 各自 approve/feedback
+
+換句話說每張子卡都是完整獨立的 HITL 流程，UI 不需特別處理「父子關係」就能 work，只是在
+列表上分組顯示更直覺。
+
+### 看板渲染建議
+
+```
+┌─ 父卡 (kind: strategy) ─────────────────────────────────┐
+│  📋 規劃夏季女裝 SEO     status: done                    │
+│  Plan: 2 篇文章                                          │
+│   └─ 子卡 #1  夏季穿搭 5 個必備單品   status: waiting   │
+│   └─ 子卡 #2  Sustainable summer …    status: in_progress│
+└──────────────────────────────────────────────────────────┘
+```
+
+要列出某父任務的所有子任務：`GET /v1/tasks?parentTaskId=<父uuid>`
+要列出所有「頂層任務」（沒有父）：`GET /v1/tasks?parentTaskId=null` *(查詢字串現用 `null` 字串還沒支援，目前先過濾 client-side)*
 
 ---
 
@@ -470,9 +579,12 @@ pnpm dlx openapi-typescript http://127.0.0.1:8080/docs/json -o src/api-types.ts
 ```ts
 type TaskStatus = 'todo' | 'in_progress' | 'waiting' | 'done' | 'failed';
 
+type TaskKind = 'strategy' | 'execution';
+
 interface Task {
   id: string;
   status: TaskStatus;
+  kind: TaskKind;
   title: string;
   description: string | null;
   output: Record<string, unknown> | null;
@@ -484,6 +596,15 @@ interface Task {
   updatedAt: string;
   completedAt: string | null;
   // ...
+}
+
+/** Strategy task output shape — `output.spawnTasks` is what will be spawned on finalize. */
+interface SpawnTaskRequest {
+  title: string;
+  description?: string;
+  assignedAgent: string;
+  input: Record<string, unknown>;
+  scheduledAt?: string;
 }
 
 interface AgentStatus {
@@ -522,8 +643,9 @@ interface AgentStatus {
 | 沒 webhook | 後端任務狀態變化沒法主動通知 UI；只能 SSE / polling |
 | credentials 明文存 DB | 顯示 secret 預覽（明碼）的 UI 別做，未來會改加密 |
 | 沒 rate limit | 任意 client 短時間內可灌 N 次 /conversations；UI 自己擋 |
-| 沒 task 裂變 helper | 「策略型任務 → 10 篇執行任務」這個流程後端還沒做完，UI 暫時只有單任務 |
 | 沒 RLS 兜底 | 不影響 UI；純粹是後端安全防線 |
+| `parentTaskId=null` query 還沒解析 | 列「頂層任務」目前要 client-side filter `parentTaskId === null` |
+| 沒 Cloudflare Images / 圖片產出 | strategy/writer 目前只產文字；圖片整合在 roadmap |
 
 ---
 

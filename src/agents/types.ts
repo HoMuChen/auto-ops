@@ -31,7 +31,7 @@ export interface RequiredCredential {
 }
 
 export interface AgentManifest {
-  /** Stable identifier, used as DB key and as LangGraph node id. e.g. "seo-expert". */
+  /** Stable identifier, used as DB key and as LangGraph node id. e.g. "seo-writer". */
   id: string;
   /** Human-readable name shown in UI. */
   name: string;
@@ -123,6 +123,28 @@ export interface AgentInput {
   params: Record<string, unknown>;
 }
 
+/**
+ * One execution-task spec a strategy agent wants the framework to create on
+ * its behalf. The framework stamps `parent_task_id`, `tenant_id`, `kind` and
+ * persists the row — agents never call the DB directly.
+ *
+ * Spawn happens deterministically when the parent strategy task transitions
+ * to `done` (i.e. user approves the plan with `finalize=true`), so the user
+ * has a chance to reject the plan before any children are created.
+ */
+export interface SpawnTaskRequest {
+  /** Short title shown on the kanban card. */
+  title: string;
+  /** Optional longer description. */
+  description?: string;
+  /** Which agent will own this child. Must be a registered agent id. */
+  assignedAgent: string;
+  /** Free-form input the child agent receives as `task.input`. Should include a `brief`. */
+  input: Record<string, unknown>;
+  /** When the child should first become eligible for the worker (ISO string). */
+  scheduledAt?: string;
+}
+
 export interface AgentOutput {
   /** Assistant message produced by the agent. */
   message: string;
@@ -132,6 +154,11 @@ export interface AgentOutput {
   payload?: Record<string, unknown>;
   /** Tool calls the agent made, for audit. */
   toolCalls?: { id: string; args: Record<string, unknown>; result?: unknown }[];
+  /**
+   * Children this agent wants the framework to spawn when the parent task
+   * is finalised. Only meaningful for strategy-kind agents; ignored otherwise.
+   */
+  spawnTasks?: SpawnTaskRequest[];
 }
 
 /** The full Agent: manifest + a factory that produces a runnable for a given context. */

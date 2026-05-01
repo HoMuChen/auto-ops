@@ -12,7 +12,7 @@ import type { z } from 'zod';
  * Use:
  *   vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
  *   beforeEach(() => clearScript());
- *   scriptStructured({ nextAgent: 'seo-expert', clarification: null, done: false });
+ *   scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
  *   scriptText('# Draft article ...');
  *
  * Calls drain the queue in order. An unscripted call throws so test gaps

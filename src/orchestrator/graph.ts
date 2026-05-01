@@ -61,6 +61,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
           agentId: manifest.id,
           message: result.message,
           payload: result.payload,
+          ...(result.spawnTasks ? { spawnTasks: result.spawnTasks } : {}),
         },
         awaitingApproval: result.awaitingApproval ?? false,
         nextAgent: null,
@@ -88,6 +89,8 @@ export function initialState(input: {
   taskId: string;
   brief: string;
   params: Record<string, unknown>;
+  /** Set for execution children spawned with an explicit owner — bypasses the supervisor LLM. */
+  pinnedAgent?: string | null;
 }): Partial<GraphState> {
   return {
     tenantId: input.tenantId,
@@ -95,6 +98,7 @@ export function initialState(input: {
     messages: [new HumanMessage(input.brief)],
     params: input.params,
     nextAgent: null,
+    pinnedAgent: input.pinnedAgent ?? null,
     awaitingApproval: false,
     lastOutput: null,
   };

@@ -9,12 +9,13 @@ import type {
   IAgent,
 } from '../../types.js';
 
-const DEFAULT_PROMPT = `You are an SEO Expert AI employee for an e-commerce business.
-Your job: produce multilingual blog articles, product copy, and keyword strategies
-that align with the tenant's brand voice. Always:
+const DEFAULT_PROMPT = `You are an SEO Writer AI employee for an e-commerce business.
+Your job: produce ONE polished, multilingual blog article from a single brief.
+Always:
 - Output structured Markdown with clear H1/H2 hierarchy.
 - Include a meta_title (<= 60 chars) and meta_description (<= 155 chars).
 - Honor any tone/keyword/forbidden constraints in the brief.
+- Stay focused on the single topic in the brief — do NOT propose other articles.
 When you finish a draft, return it and request approval — never auto-publish.`;
 
 const configSchema = z.object({
@@ -34,34 +35,27 @@ const configSchema = z.object({
     .describe('Keywords the agent should weave in when natural'),
 });
 
-type SeoConfig = z.infer<typeof configSchema>;
+type SeoWriterConfig = z.infer<typeof configSchema>;
 
-export const seoExpertAgent: IAgent = {
+export const seoWriterAgent: IAgent = {
   manifest: {
-    id: 'seo-expert',
-    name: 'AI SEO Expert',
-    description: 'Researches keywords and writes multilingual SEO content.',
+    id: 'seo-writer',
+    name: 'AI SEO Writer',
+    description: 'Writes a single multilingual SEO article from a focused brief.',
     availableInPlans: ['basic', 'pro', 'flagship'],
-    // Opus for higher-quality long-form content; SEO articles are worth the
-    // extra spend. Bump temperature for richer prose.
     defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.4 },
     defaultPrompt: DEFAULT_PROMPT,
-
-    // No external tools yet — keyword research integrations come later.
     toolIds: [],
-
-    // No required credentials — pure text generation against the LLM.
     requiredCredentials: [],
-
     configSchema,
   },
 
   build(ctx: AgentBuildContext): AgentRunnable {
-    const cfg = configSchema.parse(ctx.agentConfig ?? {}) as SeoConfig;
+    const cfg = configSchema.parse(ctx.agentConfig ?? {}) as SeoWriterConfig;
     const model = buildModel(ctx.modelConfig);
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      await ctx.emitLog('agent.started', `SEO Expert starting on task ${ctx.taskId}`, {
+      await ctx.emitLog('agent.started', `SEO Writer starting on task ${ctx.taskId}`, {
         languages: cfg.targetLanguages,
       });
 

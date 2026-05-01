@@ -33,7 +33,7 @@ describe('Multi-tenant isolation', () => {
     const jwtB = await mintJwt({ userId: b.userId, email: b.email });
 
     // Tenant A creates a task and lets it advance to waiting.
-    scriptStructured({ nextAgent: 'seo-expert', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'seo-writer', clarification: null, done: false });
     scriptText('# A-only secret content');
 
     const create = await app.inject({
