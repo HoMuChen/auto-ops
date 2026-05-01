@@ -192,4 +192,38 @@ describe('builtin agent manifests', () => {
       validateAgentConfig(shopifyBlogWriterAgent.manifest, { targetLanguages: [] }),
     ).toThrow(ValidationError);
   });
+
+  // Frontend forms emit `null` for empty optional inputs (JSON has no
+  // `undefined`). Make sure the user-facing optional string fields accept
+  // null, not just undefined — otherwise activation 400s the moment the user
+  // leaves an optional field blank.
+  it('Shopify Blog Writer accepts null for optional string fields', async () => {
+    const { shopifyBlogWriterAgent } = await import(
+      '../src/agents/builtin/shopify-blog-writer/index.js'
+    );
+    expect(() =>
+      validateAgentConfig(shopifyBlogWriterAgent.manifest, {
+        blogHandle: null,
+        defaultAuthor: null,
+        brandTone: null,
+        credentialLabel: null,
+      }),
+    ).not.toThrow();
+  });
+
+  it('Shopify Ops accepts null for optional string fields', async () => {
+    const { shopifyOpsAgent } = await import('../src/agents/builtin/shopify-ops/index.js');
+    expect(() =>
+      validateAgentConfig(shopifyOpsAgent.manifest, {
+        shopify: { credentialLabel: null, defaultVendor: null },
+      }),
+    ).not.toThrow();
+  });
+
+  it('SEO Strategist accepts null for optional brandTone', async () => {
+    const { seoStrategistAgent } = await import('../src/agents/builtin/seo-strategist/index.js');
+    expect(() =>
+      validateAgentConfig(seoStrategistAgent.manifest, { brandTone: null }),
+    ).not.toThrow();
+  });
 });

@@ -34,7 +34,7 @@ const configSchema = z.object({
     .describe('Languages this writer is fluent in (informational; the brief picks one).'),
   brandTone: z
     .string()
-    .optional()
+    .nullish()
     .describe('Free-form tone description, e.g. "warm, professional, slightly playful"'),
   bannedPhrases: z.array(z.string()).default([]).describe('Phrases the agent must never use'),
   preferredKeywords: z
@@ -52,11 +52,11 @@ const configSchema = z.object({
     ),
   blogHandle: z
     .string()
-    .optional()
+    .nullish()
     .describe('Shopify blog handle (e.g. "news"). Defaults to the first blog on the store.'),
   defaultAuthor: z
     .string()
-    .optional()
+    .nullish()
     .describe('Author byline written to the article when the brief does not specify one.'),
   publishImmediately: z
     .boolean()
@@ -66,7 +66,7 @@ const configSchema = z.object({
     ),
   credentialLabel: z
     .string()
-    .optional()
+    .nullish()
     .describe('Which Shopify credential row to use when the tenant has multiple stores.'),
 });
 

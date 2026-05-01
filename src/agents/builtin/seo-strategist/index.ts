@@ -48,7 +48,7 @@ const configSchema = z.object({
     .describe('Languages used when the brief does not specify per-topic languages'),
   brandTone: z
     .string()
-    .optional()
+    .nullish()
     .describe('Free-form tone description forwarded to each child writer task'),
   preferredKeywords: z
     .array(z.string())

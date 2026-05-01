@@ -35,11 +35,11 @@ const configSchema = z.object({
     .object({
       credentialLabel: z
         .string()
-        .optional()
+        .nullish()
         .describe('Which Shopify connection to use when multiple are bound'),
       defaultVendor: z
         .string()
-        .optional()
+        .nullish()
         .describe('Vendor name applied when the AI does not infer one'),
       autoPublish: z
         .boolean()
