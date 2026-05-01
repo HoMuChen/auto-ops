@@ -1,3 +1,22 @@
+-- ============================================================================
+-- DISABLED — see filename suffix.
+--
+-- This migration is intentionally NOT picked up by `pnpm db:migrate`
+-- (the runner globs for "*.sql"; this file ends in ".sql.disabled").
+--
+-- Why: RLS requires every tenant-scoped query to run inside `withTenantContext`
+-- (which issues `SET LOCAL app.tenant_id`). The application currently relies on
+-- app-layer `WHERE tenant_id = ?` filters and does NOT call `withTenantContext`
+-- on the request path. Enabling these policies before that wiring would cause
+-- every read/write to filter to zero rows.
+--
+-- To re-enable:
+--   1. Wire `withTenantContext` into a Fastify preHandler after `requireTenant`,
+--      and refactor every tenant-scoped repository call to receive the tx.
+--   2. Switch the polling worker to connect as the `auto_ops_worker` role
+--      (BYPASSRLS) so it can claim tasks across tenants.
+--   3. Rename this file back to `0001_rls_policies.sql` and run db:migrate.
+-- ============================================================================
 -- Defense-in-depth RLS policies.
 -- Application code is the primary enforcement point (see src/db/tenant-context.ts).
 -- These policies act as a safety net so a buggy query cannot leak across tenants.

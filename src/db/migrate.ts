@@ -25,7 +25,15 @@ async function main() {
   try {
     const dir = './drizzle';
     const files = await readdir(dir);
-    const handwritten = files.filter((f) => f.startsWith('0001_') && f.endsWith('.sql')).sort();
+    // Pick up everything ending in `.sql` that's NOT a Drizzle-generated file.
+    // Drizzle generates `<idx>_<name>.sql` plus a `meta/` dir; handwritten files
+    // live alongside them and follow the same numeric prefix convention.
+    // Files renamed `*.sql.disabled` are intentionally skipped (see the file's
+    // header for the rationale and how to re-enable).
+    const drizzleJournal = await readFile(join(dir, 'meta/_journal.json'), 'utf8');
+    const journal = JSON.parse(drizzleJournal) as { entries?: { tag: string }[] };
+    const generatedSet = new Set((journal.entries ?? []).map((e) => `${e.tag}.sql`));
+    const handwritten = files.filter((f) => f.endsWith('.sql') && !generatedSet.has(f)).sort();
     for (const file of handwritten) {
       const path = join(dir, file);
       const content = await readFile(path, 'utf8');

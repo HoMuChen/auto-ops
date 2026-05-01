@@ -35,8 +35,18 @@ const SUPERVISOR_MODEL: ModelConfig = {
  *
  * Reads the conversation + tenant's available agent manifests, then asks the
  * model to either route to an agent, ask for clarification, or finish.
+ *
+ * IMPORTANT: when an agent has just returned with `awaitingApproval=true`, the
+ * graph routes back through this node. We MUST NOT issue a new LLM call or
+ * overwrite the gate flag — otherwise the HITL pause never reaches the runner
+ * and the task races straight to `done`. Short-circuit and let the conditional
+ * edge route to END.
  */
 export async function runSupervisor(state: GraphState): Promise<Partial<GraphState>> {
+  if (state.awaitingApproval) {
+    return {};
+  }
+
   const available = await agentRegistry.listForTenant(state.tenantId);
   const roster = available.map((a) => `- ${a.manifest.id}: ${a.manifest.description}`).join('\n');
 

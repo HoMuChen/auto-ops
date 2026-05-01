@@ -10,15 +10,16 @@ import { IllegalStateError } from '../lib/errors.js';
  *   in_progress → done             (final success)
  *   in_progress → failed           (unrecoverable error)
  *   in_progress → todo             (retry — bumps attempt counter)
- *   waiting → in_progress          (user Approve/Feedback resumes)
- *   waiting → done                 (user Approve as final answer)
+ *   waiting → todo                 (user Approve/Feedback re-queues so worker re-picks it up)
+ *   waiting → in_progress          (direct resume by an in-process runner; rare)
+ *   waiting → done                 (user Approve as final answer, finalize=true)
  *   waiting → failed               (user Discard)
  *   * → failed                     (admin force-fail)
  */
 const allowed: Record<TaskStatus, TaskStatus[]> = {
   todo: ['in_progress', 'failed'],
   in_progress: ['waiting', 'done', 'failed', 'todo'],
-  waiting: ['in_progress', 'done', 'failed'],
+  waiting: ['todo', 'in_progress', 'done', 'failed'],
   done: [],
   failed: ['todo'], // allow manual retry
 };

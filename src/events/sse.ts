@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { listTaskLogs } from '../tasks/repository.js';
+import { getTask, listTaskLogs } from '../tasks/repository.js';
 import { type TaskLogEvent, eventBus } from './event-bus.js';
 
 /**
@@ -24,6 +24,11 @@ export async function streamTaskLogs(
     return;
   }
   const { taskId } = req.params;
+
+  // Verify the task belongs to this tenant BEFORE opening the SSE stream — the
+  // EventBus is keyed only on taskId, so without this check a caller could
+  // subscribe to live logs of any task whose UUID they know.
+  await getTask(tenantId, taskId); // throws NotFoundError → 404 via error handler
 
   const lastEventId = req.headers['last-event-id'];
   const sinceParam = (Array.isArray(lastEventId) ? lastEventId[0] : lastEventId) ?? req.query.since;

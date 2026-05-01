@@ -14,10 +14,14 @@ describe('canTransition', () => {
     }
   });
 
-  it('allows waiting → in_progress / done / failed', () => {
-    for (const to of ['in_progress', 'done', 'failed'] as const) {
+  it('allows waiting → todo / in_progress / done / failed', () => {
+    for (const to of ['todo', 'in_progress', 'done', 'failed'] as const) {
       expect(canTransition('waiting', to)).toBe(true);
     }
+  });
+
+  it('waiting → todo re-queues the task for the polling worker (used by Approve/Feedback)', () => {
+    expect(canTransition('waiting', 'todo')).toBe(true);
   });
 
   it('treats done as terminal', () => {
