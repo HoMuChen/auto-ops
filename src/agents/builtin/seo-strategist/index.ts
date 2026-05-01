@@ -28,6 +28,12 @@ Constraints:
 - Plan between 3 and {MAX_TOPICS} topics. Fewer is better than padding.
 - Avoid duplicate angles or keyword cannibalisation.
 - Honor any tone/keyword/language constraints the user mentions.
+- If the user mentions a publishing cadence ("every 3 days", "weekly", "one per
+  week starting next Monday"), set "scheduledAt" on each topic relative to the
+  "Current time" given in the Runtime context block above. First topic at
+  Current time + 0; subsequent topics offset by the requested interval. Use
+  ISO 8601 with timezone (e.g. "2026-05-04T09:00:00Z"). When no cadence is
+  mentioned, leave scheduledAt unset so the article runs immediately.
 
 When ready, return the plan as the structured output requested. The plan will be
 shown to the user for approval before any child article task is created.`;

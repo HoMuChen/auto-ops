@@ -128,3 +128,48 @@ describe('runSupervisor — clarification path persists through lastOutput', () 
     expect(msg?.content).toBe('[supervisor] Could you clarify the target language?');
   });
 });
+
+/**
+ * Regression: every LLM call (supervisor + each agent) must receive the
+ * runtime context block — currently just `Current time`, but the universal
+ * insertion point for future tenant/industry/timezone facts. Without this,
+ * "every 3 days" / "next week" type asks have no anchor.
+ */
+describe('runSupervisor — runtime context injected into system message', () => {
+  it('prepends the Runtime context block to the supervisor system prompt', async () => {
+    listForTenantMock.mockReset();
+    buildModelMock.mockReset();
+    listForTenantMock.mockResolvedValueOnce([
+      { manifest: { id: 'shopify-blog-writer', description: 'fake' } },
+    ] as never);
+
+    let capturedMessages: { content: string }[] | null = null;
+    const invokeMock = vi.fn(async (msgs: { content: string }[]) => {
+      capturedMessages = msgs;
+      return { nextAgent: 'shopify-blog-writer', clarification: null, done: false };
+    });
+    buildModelMock.mockImplementation(
+      () =>
+        ({
+          withStructuredOutput: () => ({ invoke: invokeMock }),
+        }) as never,
+    );
+
+    await runSupervisor({
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      taskId: '00000000-0000-0000-0000-000000000002',
+      messages: [],
+      params: { brief: 'Write something about linen' },
+      nextAgent: null,
+      pinnedAgent: null,
+      lastOutput: null,
+      awaitingApproval: false,
+    });
+
+    expect(invokeMock).toHaveBeenCalledOnce();
+    const systemMsg = capturedMessages![0]!;
+    expect(systemMsg.content).toMatch(/^Runtime context:\n- Current time: \d{4}-\d{2}-\d{2}T/);
+    // The original SUPERVISOR_PROMPT must still be present after the block.
+    expect(systemMsg.content).toContain('You are the Supervisor');
+  });
+});

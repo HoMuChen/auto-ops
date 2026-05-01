@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { agentRegistry } from '../agents/registry.js';
 import { buildModel } from '../llm/model-registry.js';
 import type { ModelConfig } from '../llm/types.js';
+import { buildRuntimeContext } from './runtime-context.js';
 import type { GraphState } from './state.js';
 
 const SUPERVISOR_PROMPT = `You are the Supervisor of a team of AI digital employees for an e-commerce business.
@@ -77,7 +78,7 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
       .join('\n\n') || JSON.stringify(state.params);
 
   const decision = await model.invoke([
-    new SystemMessage(SUPERVISOR_PROMPT),
+    new SystemMessage(buildRuntimeContext() + SUPERVISOR_PROMPT),
     new HumanMessage(`Available employees:\n${roster}\n\nUser brief:\n${userBrief}`),
   ]);
 

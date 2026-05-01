@@ -3,6 +3,7 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { agentRegistry } from '../agents/registry.js';
 import type { AgentBuildContext } from '../agents/types.js';
 import { getCheckpointer } from './checkpointer.js';
+import { buildRuntimeContext } from './runtime-context.js';
 import { type GraphState, GraphStateAnnotation } from './state.js';
 import { runSupervisor } from './supervisor.js';
 
@@ -45,12 +46,16 @@ export async function buildGraph(opts: BuildGraphOptions) {
 
     graph.addNode(manifest.id, async (state: GraphState) => {
       const override = await agentRegistry.loadConfig(opts.tenantId, manifest.id);
+      // Prepend the runtime context block — agents need not opt in; they just
+      // use ctx.systemPrompt as before and automatically get "Current time"
+      // (and, in future, tenant industry / brand voice / timezone).
+      const basePrompt = override.promptOverride ?? manifest.defaultPrompt;
       const ctx: AgentBuildContext = {
         tenantId: opts.tenantId,
         taskId: opts.taskId,
         // Model is fixed in the manifest — no per-tenant override.
         modelConfig: manifest.defaultModel,
-        systemPrompt: override.promptOverride ?? manifest.defaultPrompt,
+        systemPrompt: buildRuntimeContext() + basePrompt,
         ...(override.toolWhitelist ? { toolWhitelist: override.toolWhitelist } : {}),
         agentConfig: override.config,
         availableExecutionAgents: peerDescriptors,
