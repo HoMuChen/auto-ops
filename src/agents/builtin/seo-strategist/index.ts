@@ -100,7 +100,6 @@ export const seoStrategistAgent: IAgent = {
     description:
       'Plans SEO campaigns: turns a high-level brief into a list of focused article topics, ' +
       'each spawned as an independent execution task for the Shopify Blog Writer.',
-    availableInPlans: ['pro', 'flagship'],
     // Strategy is high-stakes routing logic — use Opus, low temperature so the
     // structured plan is consistent across runs of the same brief.
     defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.2 },

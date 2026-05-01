@@ -1,6 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { ZodType } from 'zod';
-import type { CredentialProvider, SubscriptionPlan } from '../db/schema/index.js';
+import type { CredentialProvider } from '../db/schema/index.js';
 import type { ModelConfig } from '../llm/types.js';
 
 /**
@@ -37,8 +37,6 @@ export interface AgentManifest {
   name: string;
   /** One-line description used by Supervisor for routing decisions. */
   description: string;
-  /** Subscription plans that include this agent. */
-  availableInPlans: readonly SubscriptionPlan[];
   /** Default model used when no per-tenant override exists. */
   defaultModel: ModelConfig;
   /** Default system prompt used when no per-tenant override exists. */

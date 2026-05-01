@@ -38,7 +38,6 @@ describe('Agent activation flow', () => {
       .then((r) => r.json());
 
     expect(detail.id).toBe('shopify-ops');
-    expect(detail.planAllowed).toBe(true);
     expect(detail.enabled).toBe(false);
     expect(detail.ready).toBe(false);
     expect(detail.credentials).toEqual([

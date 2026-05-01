@@ -3,13 +3,12 @@ import { AgentRegistry } from '../src/agents/registry.js';
 import type { IAgent } from '../src/agents/types.js';
 import { NotFoundError } from '../src/lib/errors.js';
 
-function fakeAgent(id: string, plans: ('basic' | 'pro' | 'flagship')[] = ['basic']): IAgent {
+function fakeAgent(id: string): IAgent {
   return {
     manifest: {
       id,
       name: id,
       description: `fake agent ${id}`,
-      availableInPlans: plans,
       defaultModel: { model: 'anthropic/fake-model' },
       defaultPrompt: 'fake prompt',
     },

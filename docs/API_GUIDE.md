@@ -231,7 +231,6 @@ x-tenant-id: <UUID>
     "id": "seo-strategist",
     "name": "AI SEO Strategist",
     "description": "Plans SEO campaigns: turns a high-level brief into a list of focused article topics, each spawned as an independent execution task for the Shopify Blog Writer.",
-    "availableInPlans": ["pro", "flagship"],
     "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.2 },
     "toolIds": [],
     "requiredCredentials": [],
@@ -239,7 +238,6 @@ x-tenant-id: <UUID>
     "metadata": { "kind": "strategy" },
     "enabled": false,
     "ready": true,
-    "planAllowed": false,  ← basic plan 看到這個值會是 false
     "credentials": [],
     "config": {}
   },
@@ -247,7 +245,6 @@ x-tenant-id: <UUID>
     "id": "shopify-blog-writer",
     "name": "AI Shopify Blog Writer",
     "description": "Writes a single multilingual SEO blog article from a focused brief and publishes it to the tenant Shopify blog after human approval.",
-    "availableInPlans": ["basic", "pro", "flagship"],
     "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.4 },
     "toolIds": ["shopify.publish_article"],
     "requiredCredentials": [
@@ -261,7 +258,6 @@ x-tenant-id: <UUID>
     "configSchema": { /* targetLanguages, brandTone, publishToShopify, blogHandle, defaultAuthor, publishImmediately, ... */ },
     "enabled": false,
     "ready": false,  ← creds 未綁所以 false
-    "planAllowed": true,
     "credentials": [{"provider":"shopify","bound":false,"description":"..."}]
   },
   {
@@ -283,10 +279,10 @@ x-tenant-id: <UUID>
 ```
 
 #### `GET /v1/agents/:agentId`
-單一 agent，內容同上但加上 `promptOverride` / `toolWhitelist`（pro 用戶可調）。
+單一 agent，內容同上但加上 `promptOverride` / `toolWhitelist`。
 
 #### `POST /v1/agents/:agentId/activate`
-驗證 plan + creds 都備好 + config 通過 manifest.configSchema → 啟用。
+驗證 creds 都備好 + config 通過 manifest.configSchema → 啟用。所有 agent 對所有 tenant 可見，沒有 plan-tier 限制。
 ```json
 // Request
 {
@@ -306,7 +302,6 @@ x-tenant-id: <UUID>
 | HTTP | code | 意思 |
 |---|---|---|
 | 400 | `validation_error` | config 不通過 Zod schema → `details.fieldErrors` 有具體欄位 |
-| 403 | `forbidden` | tenant plan 不含此 agent（plan upgrade 推銷時機） |
 | 404 | `not_found` | agentId 不存在 |
 | 409 | `conflict` | required credentials 還沒綁 → `details.missing` 列出哪些 provider |
 
@@ -803,7 +798,6 @@ interface AgentStatus {
   configSchema: Record<string, unknown> | null;  // JSON Schema
   enabled: boolean;
   ready: boolean;
-  planAllowed: boolean;
   config: Record<string, unknown>;
 }
 ```

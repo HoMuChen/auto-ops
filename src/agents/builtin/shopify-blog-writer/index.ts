@@ -105,7 +105,6 @@ export const shopifyBlogWriterAgent: IAgent = {
     description:
       'Writes a single multilingual SEO blog article from a focused brief and ' +
       'publishes it to the tenant Shopify blog after human approval.',
-    availableInPlans: ['basic', 'pro', 'flagship'],
     defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.4 },
     defaultPrompt: DEFAULT_PROMPT,
     // The publish tool needs Shopify creds; surfaced as a static tool id so

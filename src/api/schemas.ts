@@ -70,7 +70,6 @@ export const AgentManifestSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  availableInPlans: z.array(z.string()),
   defaultModel: z.object({
     provider: z.string(),
     model: z.string(),

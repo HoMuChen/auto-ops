@@ -31,7 +31,6 @@ function manifestPayload(manifest: AgentManifest): Record<string, unknown> {
     id: manifest.id,
     name: manifest.name,
     description: manifest.description,
-    availableInPlans: [...manifest.availableInPlans],
     defaultModel: manifest.defaultModel,
     toolIds: manifest.toolIds ?? [],
     requiredCredentials: manifest.requiredCredentials ?? [],
@@ -57,7 +56,6 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
           ...manifestPayload(m),
           enabled: status.enabled,
           ready: status.ready,
-          planAllowed: status.planAllowed,
           credentials: status.credentials,
           config: status.config,
         };
@@ -84,7 +82,6 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
         ...manifestPayload(status.agent.manifest),
         enabled: status.enabled,
         ready: status.ready,
-        planAllowed: status.planAllowed,
         credentials: status.credentials,
         config: status.config,
         promptOverride: status.promptOverride,

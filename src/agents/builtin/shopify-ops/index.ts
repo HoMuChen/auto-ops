@@ -80,7 +80,6 @@ export const shopifyOpsAgent: IAgent = {
     id: 'shopify-ops',
     name: 'AI Shopify Ops Assistant',
     description: 'Prepares Shopify product listings and pushes them to the store.',
-    availableInPlans: ['basic', 'pro', 'flagship'],
     // Sonnet is fast + cheap + strong at structured output — well-suited to
     // turning a brief into a tidy product listing.
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.2 },

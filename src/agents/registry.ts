@@ -1,11 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import {
-  type SubscriptionPlan,
-  agentConfigs,
-  tenantCredentials,
-  tenants,
-} from '../db/schema/index.js';
+import { agentConfigs, tenantCredentials, tenants } from '../db/schema/index.js';
 import { ForbiddenError, NotFoundError } from '../lib/errors.js';
 import {
   type CredentialChecklistItem,
@@ -19,7 +14,6 @@ import type { AgentManifest, IAgent } from './types.js';
 export interface ActivationStatus {
   agent: IAgent;
   enabled: boolean;
-  planAllowed: boolean;
   config: Record<string, unknown>;
   promptOverride: string | null;
   toolWhitelist: string[] | null;
@@ -40,10 +34,11 @@ export interface ActivateInput {
  * Process-wide AgentRegistry.
  *
  * - Agents register themselves at bootstrap (see agents/index.ts).
- * - `listForTenant(tenantId)` discovers enabled agents (plan + explicit toggle).
+ * - `listForTenant(tenantId)` discovers enabled agents (explicit on/off toggle
+ *   only; every registered agent is visible to every tenant by default).
  * - `getActivationStatus()` powers the UI's "hire this employee" preview.
  * - `activate()` is the single write path for enabling an agent — it validates
- *   plan, required credentials, and configSchema before upserting.
+ *   required credentials and configSchema before upserting.
  *
  * This is the single insertion point for "聘用 AI 員工" gating logic.
  */
@@ -77,7 +72,8 @@ export class AgentRegistry {
   }
 
   /**
-   * Agents currently enabled for a tenant (plan-allowed + agent_configs.enabled).
+   * Agents currently enabled for a tenant. A tenant sees every registered
+   * agent unless they've explicitly disabled it via `agent_configs.enabled=false`.
    * Used by the Supervisor + graph builder.
    */
   async listForTenant(tenantId: string): Promise<IAgent[]> {
@@ -91,11 +87,7 @@ export class AgentRegistry {
 
     const overrideMap = new Map(overrides.map((o) => [o.agentKey, o.enabled]));
 
-    return [...this.agents.values()].filter((agent) => {
-      const planAllowed = agent.manifest.availableInPlans.includes(tenant.plan as SubscriptionPlan);
-      if (!planAllowed) return false;
-      return overrideMap.get(agent.manifest.id) ?? true;
-    });
+    return [...this.agents.values()].filter((agent) => overrideMap.get(agent.manifest.id) ?? true);
   }
 
   async resolveAgent(tenantId: string, agentId: string): Promise<IAgent> {
@@ -117,7 +109,6 @@ export class AgentRegistry {
 
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
     if (!tenant) throw new NotFoundError(`Tenant ${tenantId}`);
-    const planAllowed = agent.manifest.availableInPlans.includes(tenant.plan as SubscriptionPlan);
 
     const [override] = await db
       .select()
@@ -128,13 +119,11 @@ export class AgentRegistry {
     const presence = await loadCredentialPresence(tenantId);
     const credentials = buildCredentialChecklist(agent.manifest, presence);
 
-    const credsReady = credentials.every((c) => c.bound);
-    const ready = planAllowed && credsReady;
+    const ready = credentials.every((c) => c.bound);
 
     return {
       agent,
       enabled: override?.enabled ?? false,
-      planAllowed,
       config: (override?.config as Record<string, unknown>) ?? {},
       promptOverride: override?.promptOverride ?? null,
       toolWhitelist: override?.toolWhitelist ?? null,
@@ -146,9 +135,8 @@ export class AgentRegistry {
   /**
    * Activate an agent for a tenant. Validates:
    *   1. Agent exists in the registry.
-   *   2. Tenant's subscription plan includes this agent.
-   *   3. All `requiredCredentials` are bound.
-   *   4. `config` parses against `manifest.configSchema`.
+   *   2. All `requiredCredentials` are bound.
+   *   3. `config` parses against `manifest.configSchema`.
    *
    * On success, upserts the `agent_configs` row with `enabled=true`. Idempotent —
    * re-activating with new config replaces the old config.
@@ -161,11 +149,6 @@ export class AgentRegistry {
 
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, input.tenantId)).limit(1);
     if (!tenant) throw new NotFoundError(`Tenant ${input.tenantId}`);
-    if (!agent.manifest.availableInPlans.includes(tenant.plan as SubscriptionPlan)) {
-      throw new ForbiddenError(
-        `Agent ${agent.manifest.id} is not available on the ${tenant.plan} plan`,
-      );
-    }
 
     const presence = await loadCredentialPresence(input.tenantId);
     assertCredentialsBound(agent.manifest, presence);
