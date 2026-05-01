@@ -55,18 +55,45 @@ UI 開發時可以從 OpenAPI JSON 自動產 client（推薦 `openapi-typescript
 我們**沒有**自己的登入端點 — auth 完全靠 **Supabase**：
 
 1. UI 用 `@supabase/supabase-js`（或 GoTrue 直接）做註冊 / 登入
-2. 拿到 Supabase 簽的 **JWT (HS256)**
+2. 拿到 Supabase 簽的 **access token**
 3. 對 auto-ops API 的所有 `/v1/*` 請求都帶：
 
 ```
-Authorization: Bearer <SUPABASE_JWT>
+Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
 ```
 
 JWT 必須含 `sub`（user UUID）和 `email`，否則 401。
 
 **第一次 auth 自動建 `users` row** — 不用呼叫任何 provisioning 端點。
 
-### Local dev：拿 JWT 的最快方式
+### Server 怎麼驗 token
+
+API server **不**自己簽發 token，只 verify。新版 Supabase（CLI v2 / 啟用
+asymmetric keys 的 hosted project）用 **ES256** 簽 access token，public key
+放在：
+
+```
+${SUPABASE_URL}/auth/v1/.well-known/jwks.json
+```
+
+Server 從這個 JWKS 抓 key 驗，不需要 shared secret。Legacy 專案還在用
+**HS256** 的話，把 shared secret 放 `SUPABASE_JWT_SECRET`，server 會看 JWT
+header `alg` 自動分流（`ES256/RS256` → JWKS、`HS256` → secret）。
+
+### Supabase 的兩把 key（API key，不是 JWT）
+
+CLI v2 之後，`supabase status` 顯示的是：
+
+| Key | 給誰 | 等同於舊名 |
+|---|---|---|
+| `sb_publishable_…` | browser / UI | anon key |
+| `sb_secret_…` | server-only（admin endpoints） | service_role key |
+
+UI 端跑 `@supabase/supabase-js` 用 publishable key；secret key **不可** 進
+browser bundle。auto-ops API server 不需要 publishable key，只需要
+`SUPABASE_URL`（拿 JWKS 用）。
+
+### Local dev：拿 access token 的最快方式
 
 兩種：
 
@@ -75,13 +102,13 @@ JWT 必須含 `sub`（user UUID）和 `email`，否則 401。
 
 **(b) 直接呼叫 GoTrue**
 ```bash
+# apikey 用 supabase status 顯示的 Publishable key（sb_publishable_…）
 curl -X POST 'http://127.0.0.1:54321/auth/v1/signup' \
-  -H 'apikey: <ANON_KEY>' \
+  -H 'apikey: <PUBLISHABLE_KEY>' \
   -H 'Content-Type: application/json' \
   -d '{"email":"u@example.com","password":"password123"}'
-# → 回 access_token
+# → 回 access_token（ES256 簽的）
 ```
-（`<ANON_KEY>` 在 `.env` 的 `SUPABASE_ANON_KEY`）
 
 ---
 
