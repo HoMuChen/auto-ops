@@ -17,6 +17,18 @@ if (!databaseUrl) {
   );
 }
 
+// Hard guard: integration tests TRUNCATE every app table between cases. Refuse
+// to run against anything that isn't unmistakably a local DB. No env-var escape
+// hatch by design — if a remote test DB is ever wanted, edit this allowlist
+// explicitly so the change shows up in code review.
+const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+const dbHost = new URL(databaseUrl).hostname;
+if (!LOCAL_HOSTS.has(dbHost)) {
+  throw new Error(
+    `Integration tests refused: DATABASE_URL host is "${dbHost}", not local. These tests TRUNCATE every app table — running them against a non-local DB would destroy data. Point DATABASE_URL at the local Supabase CLI (127.0.0.1:54322) and try again.`,
+  );
+}
+
 // Quick connectivity probe before tests start, so failures surface clearly.
 const probe = postgres(databaseUrl, { max: 1, idle_timeout: 1, connect_timeout: 5 });
 try {
