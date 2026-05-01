@@ -159,9 +159,16 @@ x-tenant-id: <UUID>
   (targetLanguages, brandTone…)    activate
                                                     ↓
 
-[首頁有「對話框」可派任務]      POST /v1/tasks          回 task (status:'todo')
-  user 輸入：「幫我寫一篇        {brief, params?}        ↓ 拿 task.id
-   夏季女裝的 SEO 文章」
+[首頁兩個入口擇一]              ──── A 老闆已想清楚 ──────────────────────────
+  A. 直接派任務                 POST /v1/tasks          回 task (status:'todo')
+  B. 先聊一下再派任務            {brief, params?}        ↓ 拿 task.id
+                                ──── B 模糊念頭 ──────────────────────────────
+  user 輸入：「幫我寫一篇        POST /v1/intakes        回 intake + reply +
+   夏季女裝的 SEO 文章」          {message}              readyToFinalize=false
+                                ↓ 多輪對話 (POST /v1/intakes/:id/messages)
+                                ↓ 對話到 readyToFinalize=true
+                                POST /v1/intakes/:id/   回 { intake, task }
+                                  finalize              ↓ task.status='todo'
 
 [Kanban 顯示卡片進 In Progress]  GET /v1/tasks/:id     polling 或 SSE 看更新
 [Log 即時跳動]                   /stream  (SSE)         接收 agent.draft.ready 等
@@ -348,8 +355,17 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 
 ### Tasks — 建立（派任務的入口）
 
+派任務有 **兩個入口**，依老闆對任務的清晰度自行選：
+
+| 入口 | 何時用 | 流程 |
+|---|---|---|
+| `POST /v1/tasks` | 老闆已經想清楚了，brief 一句話講完就能跑 | 直接建 task → `todo` → worker 撿走 |
+| `POST /v1/intakes` | 老闆只有模糊念頭，需要先聊一下才知道要做什麼 | 跟 intake agent 對話到 readyToFinalize → `/finalize` 才建 task |
+
+兩個流程**不會混淆**：intake 對話是獨立實體（`task_intakes` 表），不會出現在看板上；只有 finalize 之後 spawn 的 task 才會。
+
 #### `POST /v1/tasks`
-這是 user 在「對話框」打字按 send 時呼叫的端點。直接寫一筆 `tasks` row（status='todo'）+ 一筆 user message，worker 會非同步 poll 走。supervisor 需要釐清時，澄清會走 HITL gate（task 進 `waiting`）— 沒有 pre-task 對話實體，「對話」一律發生在 task 殼裡。
+這是 user 在「對話框」打字按 send 時呼叫的端點。直接寫一筆 `tasks` row（status='todo'）+ 一筆 user message，worker 會非同步 poll 走。supervisor 在執行中需要釐清時，澄清會走 HITL gate（task 進 `waiting`）— 那是「執行中的 HITL」，跟 intake 的「執行前的釐清」是兩回事。
 ```json
 // Request
 {
@@ -372,6 +388,110 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 - worker（後端）會在 `WORKER_POLL_INTERVAL_MS`（dev=2s）內撿走
 - 跑完一輪後 status → `waiting` 或 `done`
 - UI 用 `GET /v1/tasks/:id` polling 或 `/v1/tasks/:id/stream` SSE
+
+---
+
+### Intakes — 前置釐清對話（pre-task chat）
+
+老闆有時候自己也說不清楚要做什麼。intake 提供「先聊一下、確定好了再建任務」的入口；對話過程**完全獨立於看板**（`task_intakes` 表），看板只看到 finalize 後 spawn 的 task。
+
+**Intake agent 的特性：**
+- 不上 supervisor LangGraph、不持久化 checkpoint，純粹是 LLM 一輪一輪跟老闆對話
+- 每輪都會更新 `draftTitle` / `draftBrief`（老闆隨時看得到「目前 AI 理解的任務長什麼樣」）
+- 偵測到資訊夠了會把 `readyToFinalize=true`，UI 應該開啟「建立任務」按鈕
+- 用一個比 supervisor 輕的 model（`anthropic/claude-sonnet-4.6`，code-fixed）
+
+**生命週期：**
+```
+open ──/finalize──> finalized   (spawn 一張新 task)
+open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
+```
+
+#### `POST /v1/intakes`
+開新對話。第一句話 + intake agent 的第一個回覆會在同一筆 INSERT 寫入。
+```json
+// Request
+{ "message": "幫我寫篇 SEO 文章" }
+
+// Response 201
+{
+  "intake": {
+    "id": "uuid",
+    "status": "open",
+    "messages": [
+      { "role": "user", "content": "幫我寫篇 SEO 文章", "createdAt": "2026-05-01T..." },
+      { "role": "assistant", "content": "了解，老闆要寫幾篇？目標客群是哪一塊？", "createdAt": "2026-05-01T..." }
+    ],
+    "draftTitle": "SEO 文章撰寫",
+    "draftBrief": "老闆要產出 SEO 文章，內容尚需釐清主題與目標客群。",
+    "finalizedTaskId": null,
+    "finalizedAt": null,
+    "createdAt": "...",
+    "updatedAt": "..."
+  },
+  "reply": "了解，老闆要寫幾篇？目標客群是哪一塊？",
+  "readyToFinalize": false,
+  "missingInfo": ["數量", "目標客群"]
+}
+```
+
+#### `POST /v1/intakes/:intakeId/messages`
+接續對話一輪。state 必須是 `open`，否則 422。
+```json
+// Request
+{ "message": "一篇就好，目標客群 25-35 歲女性" }
+
+// Response 200 — 同 POST /v1/intakes 的 shape
+{ "intake": { ... }, "reply": "...", "readyToFinalize": true, "missingInfo": [] }
+```
+
+#### `POST /v1/intakes/:intakeId/finalize`
+把 intake 收尾、spawn 一張真實的 task。**Idempotent** — 重打回傳同一張 task。
+```json
+// Request — body 全可選；不給就用 agent 維護的 draft
+{
+  "title": "夏季穿搭 SEO 文章",        // 可選 override
+  "brief": "撰寫一篇 SEO 文章，主題...", // 可選 override
+  "preferredAgent": "shopify-blog-writer" // 可選；給了 worker 直接 pin 這顆 agent
+}
+
+// Response 200
+{
+  "intake": {
+    "id": "uuid",
+    "status": "finalized",
+    "finalizedTaskId": "task-uuid",
+    "finalizedAt": "2026-05-01T...",
+    ...
+  },
+  "task": {
+    "id": "task-uuid",
+    "status": "todo",
+    "title": "夏季穿搭 SEO 文章",
+    "description": "撰寫一篇 SEO 文章，主題...",
+    "kind": "execution",
+    "input": { "brief": "...", "intakeId": "intake-uuid" },
+    ...
+  }
+}
+```
+
+**錯誤情境：**
+| HTTP | code | 意思 |
+|---|---|---|
+| 422 | `illegal_state` | intake 已經是 `finalized` / `abandoned`；或 draft 還沒生出 title/brief |
+| 404 | `not_found` | intakeId 不存在 / 不屬於該 tenant |
+
+`task.input.intakeId` 會回填 intake id — 之後若想做「從 task 反查當初的對話脈絡」按鈕，這就是連結。
+
+#### `POST /v1/intakes/:intakeId/abandon`
+丟掉對話。state 必須是 `open`，否則 422。回 200 + intake row（status='abandoned'）。
+
+#### `GET /v1/intakes?status=`
+列當前 tenant 的 intakes（最新更新在前）。`status` 可選 filter (`open` / `finalized` / `abandoned`)。
+
+#### `GET /v1/intakes/:intakeId`
+單一 intake 完整資訊（含整段 messages 陣列）。
 
 ---
 
@@ -787,6 +907,34 @@ interface ShopifyPublishArticleResult {
   articleUrl: string;                  // direct link to /admin/articles/:id
   publishedAt: string | null;          // null when status='draft'
   status: 'published' | 'draft';
+}
+
+type IntakeStatus = 'open' | 'finalized' | 'abandoned';
+
+interface IntakeMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+interface Intake {
+  id: string;
+  status: IntakeStatus;
+  messages: IntakeMessage[];
+  draftTitle: string | null;
+  draftBrief: string | null;
+  finalizedTaskId: string | null;
+  finalizedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What POST /v1/intakes and /v1/intakes/:id/messages return. */
+interface IntakeTurnResult {
+  intake: Intake;
+  reply: string;
+  readyToFinalize: boolean;
+  missingInfo: string[];
 }
 
 interface AgentStatus {

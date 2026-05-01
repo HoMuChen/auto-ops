@@ -11,6 +11,7 @@ const APP_TABLES = [
   'agent_configs',
   'messages',
   'task_logs',
+  'task_intakes',
   'tasks',
   'tenant_members',
   'tenants',

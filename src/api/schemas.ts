@@ -87,3 +87,63 @@ export const ErrorEnvelope = z.object({
     details: z.unknown().optional(),
   }),
 });
+
+export const IntakeStatusSchema = z.enum(['open', 'finalized', 'abandoned']);
+
+export const IntakeMessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+  createdAt: z.string().datetime(),
+});
+
+export const IntakeSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  createdBy: z.string().uuid().nullable(),
+  status: IntakeStatusSchema,
+  messages: z.array(IntakeMessageSchema),
+  draftTitle: z.string().nullable(),
+  draftBrief: z.string().nullable(),
+  finalizedTaskId: z.string().uuid().nullable(),
+  finalizedAt: NullableIsoDate,
+  createdAt: IsoDate,
+  updatedAt: IsoDate,
+});
+
+export const StartIntakeBody = z.object({
+  message: z.string().min(1, 'first message is required'),
+});
+export type StartIntakeBody = z.infer<typeof StartIntakeBody>;
+
+export const IntakeMessageBody = z.object({
+  message: z.string().min(1),
+});
+export type IntakeMessageBody = z.infer<typeof IntakeMessageBody>;
+
+export const FinalizeIntakeBody = z
+  .object({
+    /** Optional override — defaults to the agent's current draftTitle. */
+    title: z.string().min(1).max(120).optional(),
+    /** Optional override — defaults to the agent's current draftBrief. */
+    brief: z.string().min(1).optional(),
+    preferredAgent: z.string().optional(),
+  })
+  .optional();
+export type FinalizeIntakeBody = z.infer<typeof FinalizeIntakeBody>;
+
+/**
+ * The shape returned by POST /intakes (start) and POST /intakes/:id/messages (turn).
+ * Bundles the intake row + the agent's structured turn so the UI can update
+ * the chat, the live draft preview, and the finalize button in one render.
+ */
+export const IntakeTurnResultSchema = z.object({
+  intake: IntakeSchema,
+  reply: z.string(),
+  readyToFinalize: z.boolean(),
+  missingInfo: z.array(z.string()),
+});
+
+export const FinalizeIntakeResultSchema = z.object({
+  intake: IntakeSchema,
+  task: TaskSchema,
+});

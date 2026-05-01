@@ -15,6 +15,13 @@
       "when": 1777647165373,
       "tag": "0001_sweet_yellowjacket",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777651632577,
+      "tag": "0002_curved_black_crow",
+      "breakpoints": true
     }
   ]
 }
