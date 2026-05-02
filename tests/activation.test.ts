@@ -163,12 +163,13 @@ describe('validateAgentConfig', () => {
 });
 
 describe('builtin agent manifests', () => {
-  it('Shopify Ops configSchema accepts default empty object', async () => {
-    const { shopifyOpsAgent } = await import('../src/agents/builtin/shopify-ops/index.js');
-    const result = validateAgentConfig(shopifyOpsAgent.manifest, {});
+  it('Shopify Publisher configSchema accepts default empty object', async () => {
+    const { shopifyPublisherAgent } = await import(
+      '../src/agents/builtin/shopify-publisher/index.js'
+    );
+    const result = validateAgentConfig(shopifyPublisherAgent.manifest, {});
     expect(result).toMatchObject({
       shopify: { autoPublish: false },
-      defaultLanguage: 'zh-TW',
     });
   });
 
@@ -211,11 +212,13 @@ describe('builtin agent manifests', () => {
     ).not.toThrow();
   });
 
-  it('Shopify Ops accepts null for optional string fields', async () => {
-    const { shopifyOpsAgent } = await import('../src/agents/builtin/shopify-ops/index.js');
+  it('Shopify Publisher accepts null for optional string fields', async () => {
+    const { shopifyPublisherAgent } = await import(
+      '../src/agents/builtin/shopify-publisher/index.js'
+    );
     expect(() =>
-      validateAgentConfig(shopifyOpsAgent.manifest, {
-        shopify: { credentialLabel: null, defaultVendor: null },
+      validateAgentConfig(shopifyPublisherAgent.manifest, {
+        shopify: { credentialLabel: null },
       }),
     ).not.toThrow();
   });
