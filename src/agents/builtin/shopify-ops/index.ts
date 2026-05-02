@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { env } from '../../../config/env.js';
+import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-client.js';
+import { getImageById, insertImage } from '../../../integrations/cloudflare/images-repository.js';
+import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
+import { IMAGE_TOOL_IDS, buildImageTools } from '../../../integrations/openai-images/tools.js';
 import { SHOPIFY_TOOL_IDS, buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
 import { buildAgentMessages } from '../../lib/messages.js';
@@ -51,6 +56,16 @@ const configSchema = z.object({
     .enum(['zh-TW', 'en', 'ja'])
     .default('zh-TW')
     .describe('Primary language used in product listings'),
+  images: z
+    .object({
+      autoGenerate: z.boolean().default(true).describe(
+        'If true, agent generates product images when none are in the task',
+      ),
+      style: z.string().nullish().describe(
+        'Image style hint, e.g. "clean white background, product photography"',
+      ),
+    })
+    .default({}),
 });
 
 type ShopifyOpsConfig = z.infer<typeof configSchema>;
@@ -95,7 +110,7 @@ export const shopifyOpsAgent: IAgent = {
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.2 },
     defaultPrompt: DEFAULT_PROMPT,
 
-    toolIds: SHOPIFY_TOOL_IDS,
+    toolIds: [...SHOPIFY_TOOL_IDS, ...IMAGE_TOOL_IDS],
 
     requiredCredentials: [
       {
@@ -119,6 +134,26 @@ export const shopifyOpsAgent: IAgent = {
       autoPublish: cfg.shopify.autoPublish,
     });
 
+    const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+    const cfToken = env.CLOUDFLARE_IMAGES_TOKEN;
+    const accountHash = env.CLOUDFLARE_IMAGES_HASH;
+    const openaiKey = env.OPENAI_API_KEY;
+
+    const imageTools =
+      accountId && cfToken && accountHash && openaiKey
+        ? buildImageTools(ctx.tenantId, {
+            openaiClient: new OpenAIImagesClient({ apiKey: openaiKey }),
+            cfClient: new CloudflareImagesClient({ accountId, token: cfToken, accountHash }),
+            insertImage,
+            getImageById,
+            fetchImageBuffer: async (url) => {
+              const res = await fetch(url);
+              return Buffer.from(await res.arrayBuffer());
+            },
+            taskId: ctx.taskId,
+          })
+        : [];
+
     const filteredTools = ctx.toolWhitelist
       ? tools.filter((t) => ctx.toolWhitelist?.includes(t.id))
       : tools;
@@ -138,9 +173,27 @@ export const shopifyOpsAgent: IAgent = {
       const messages = await buildAgentMessages(ctx.systemPrompt, input.messages, constraints, input.imageResolver);
       const listing = (await model.invoke(messages)) as ProductListing;
 
-      // Args mirror the LangChain tool schema in shopify/tools.ts:
-      // { title, bodyHtml, tags, vendor }. The tool resolves credentials and
-      // applies status=active|draft from agent config inside its closure.
+      // Resolve images: use uploaded ones if provided, else generate if configured.
+      let imageIds: string[] = [];
+      const inputImageIds = (input.params as { imageIds?: string[] }).imageIds ?? [];
+
+      if (inputImageIds.length > 0) {
+        imageIds = inputImageIds;
+      } else if (cfg.images.autoGenerate && imageTools.length > 0) {
+        const genTool = imageTools.find((t) => t.id === 'images.generate');
+        if (genTool) {
+          const styleHint = cfg.images.style ?? 'clean white background, product photography';
+          const imgResult = (await genTool.tool.invoke({
+            prompt: `${listing.title}. ${styleHint}`,
+          })) as { id: string; url: string };
+          imageIds = [imgResult.id];
+        }
+      }
+
+      // Resolve UUIDs to URLs for Shopify (Shopify needs URLs not internal IDs).
+      const imageUrls =
+        imageIds.length > 0 && input.imageResolver ? await input.imageResolver(imageIds) : [];
+
       const pendingToolCall = {
         id: 'shopify.create_product',
         args: {
@@ -148,6 +201,7 @@ export const shopifyOpsAgent: IAgent = {
           bodyHtml: listing.bodyHtml,
           tags: listing.tags,
           vendor: listing.vendor,
+          ...(imageUrls.length > 0 ? { images: imageUrls.map((url) => ({ url })) } : {}),
         },
       };
 
@@ -168,7 +222,7 @@ export const shopifyOpsAgent: IAgent = {
       };
     };
 
-    return { tools: filteredTools, invoke };
+    return { tools: [...filteredTools, ...imageTools], invoke };
   },
 };
 
