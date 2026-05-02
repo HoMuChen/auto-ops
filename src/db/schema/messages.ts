@@ -28,7 +28,7 @@ export const messages = pgTable(
     agentKey: text('agent_key'),
     content: text('content').notNull(),
     /** Tool calls / structured payloads attached to this message. */
-    data: jsonb('data').$type<Record<string, unknown>>(),
+    data: jsonb('data').$type<{ imageIds?: string[]; [key: string]: unknown }>(),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

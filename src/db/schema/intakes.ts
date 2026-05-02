@@ -14,6 +14,7 @@ export type IntakeMessage = {
   role: IntakeMessageRole;
   content: string;
   createdAt: string;
+  imageIds?: string[];
 };
 
 /**

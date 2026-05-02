@@ -41,6 +41,7 @@ describe('runSupervisor — HITL gate handling (C1)', () => {
       lastOutput: null,
       awaitingApproval: true,
       currentTaskOutput: null,
+      taskImageIds: null,
     };
 
     const result = await runSupervisor(state);
@@ -63,6 +64,7 @@ describe('runSupervisor — pinned-agent shortcut (execution children)', () => {
       lastOutput: null,
       awaitingApproval: false,
       currentTaskOutput: null,
+      taskImageIds: null,
     };
 
     const result = await runSupervisor(state);
@@ -114,6 +116,7 @@ describe('runSupervisor — clarification path persists through lastOutput', () 
       lastOutput: null,
       awaitingApproval: false,
       currentTaskOutput: null,
+      taskImageIds: null,
     };
 
     const result = await runSupervisor(state);
@@ -168,6 +171,7 @@ describe('runSupervisor — runtime context injected into system message', () =>
       lastOutput: null,
       awaitingApproval: false,
       currentTaskOutput: null,
+      taskImageIds: null,
     });
 
     expect(invokeMock).toHaveBeenCalledOnce();

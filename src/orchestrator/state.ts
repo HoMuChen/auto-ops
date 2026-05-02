@@ -71,6 +71,12 @@ export const GraphStateAnnotation = Annotation.Root({
     reducer: (_curr, next) => next,
     default: () => null,
   }),
+
+  /** All image UUIDs attached to any message in this task (flat list). */
+  taskImageIds: Annotation<string[] | null>({
+    reducer: (_prev, next) => next,
+    default: () => null,
+  }),
 });
 
 export type GraphState = typeof GraphStateAnnotation.State;

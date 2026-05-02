@@ -24,6 +24,7 @@ export interface TaskOutput {
   pendingToolCall?: PendingToolCall;
   toolResult?: unknown;
   toolExecutedAt?: string;
+  generatedImageIds?: string[];
   eeatPending?: {
     questions: { question: string; hint?: string; optional?: boolean }[];
     askedAt: string;
