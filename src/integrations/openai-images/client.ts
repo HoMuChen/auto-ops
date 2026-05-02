@@ -24,12 +24,12 @@ export class OpenAIImagesClient {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-image-2-2026-04-21',
+        model: 'gpt-image-2',
         prompt: opts.prompt,
         n: 1,
         size: opts.size ?? '1024x1024',
         quality: opts.quality ?? 'medium',
-        // gpt-image-2-2026-04-21 always returns b64_json by default; response_format is not accepted
+        // gpt-image-2 always returns b64_json by default; response_format is not accepted
       }),
     });
     return this.parseImageResponse(res);
@@ -41,7 +41,7 @@ export class OpenAIImagesClient {
     size?: '1024x1024';
   }): Promise<Buffer> {
     const form = new FormData();
-    form.append('model', 'gpt-image-2-2026-04-21');
+    form.append('model', 'gpt-image-2');
     form.append(
       'image',
       new Blob([opts.imageBuffer], { type: 'image/png' }) as unknown as File,

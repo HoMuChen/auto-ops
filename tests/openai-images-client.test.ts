@@ -23,7 +23,7 @@ describe('OpenAIImagesClient', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ Authorization: 'Bearer sk-test' }),
-        body: expect.stringContaining('"model":"gpt-image-2-2026-04-21"'),
+        body: expect.stringContaining('"model":"gpt-image-2"'),
       }),
     );
     expect(buf).toBeInstanceOf(Buffer);

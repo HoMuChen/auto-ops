@@ -56,7 +56,7 @@ const envSchema = z.object({
    */
   CLOUDFLARE_R2_PUBLIC_BASE_URL: z.string().url().optional(),
 
-  /** OpenAI API key — used for gpt-image-2-2026-04-21 image generation and editing. */
+  /** OpenAI API key — used for gpt-image-2 image generation and editing. */
   OPENAI_API_KEY: z.string().min(1).optional(),
 
   LANGCHAIN_TRACING_V2: z.coerce.boolean().default(false),
