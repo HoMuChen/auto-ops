@@ -45,8 +45,6 @@ const envSchema = z.object({
   WORKER_MAX_CONCURRENCY: z.coerce.number().int().positive().default(4),
 
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
-  CLOUDFLARE_IMAGES_TOKEN: z.string().optional(),
-  CLOUDFLARE_IMAGES_HASH: z.string().optional(),
   /** R2 bucket name, e.g. "auto-ops-images". */
   CLOUDFLARE_R2_BUCKET: z.string().optional(),
   CLOUDFLARE_R2_ACCESS_KEY_ID: z.string().optional(),
