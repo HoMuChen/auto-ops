@@ -1,6 +1,6 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { buildModel } from '../../../llm/model-registry.js';
+import { buildAgentMessages } from '../../lib/messages.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -161,21 +161,15 @@ export const seoStrategistAgent: IAgent = {
         .map((a) => `- ${a.id}: ${a.description}`)
         .join('\n');
 
-      const systemMessage = `${ctx.systemPrompt.replace('{MAX_TOPICS}', String(cfg.maxTopics))}
+      // The strategist's prompt has a worker-roster block between the base
+      // prompt and the tenant-constraints block — pre-compose system here and
+      // let buildAgentMessages append the constraints in the standard form.
+      const systemPrompt = `${ctx.systemPrompt.replace('{MAX_TOPICS}', String(cfg.maxTopics))}
 
 Available worker agents (pick one id per topic for the "assignedAgent" field):
-${workerRoster}
+${workerRoster}`;
 
-Tenant constraints:
-- ${constraints.join('\n- ')}`;
-
-      const messages = [
-        new SystemMessage(systemMessage),
-        ...input.messages.map((m) =>
-          m.role === 'user' ? new HumanMessage(m.content) : new HumanMessage(m.content),
-        ),
-      ];
-
+      const messages = buildAgentMessages(systemPrompt, input.messages, constraints);
       const plan = (await model.invoke(messages)) as ContentPlan;
       const capped: ContentTopic[] = plan.topics.slice(0, cfg.maxTopics);
 

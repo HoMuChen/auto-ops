@@ -1,7 +1,7 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { SHOPIFY_TOOL_IDS, buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
+import { buildAgentMessages } from '../../lib/messages.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -135,18 +135,7 @@ export const shopifyOpsAgent: IAgent = {
         `Auto-publish on creation: ${cfg.shopify.autoPublish} (informational — the listing is created as draft/active by the framework, not by you)`,
       ];
 
-      const systemMessage = `${ctx.systemPrompt}
-
-Tenant constraints:
-- ${constraints.join('\n- ')}`;
-
-      const messages = [
-        new SystemMessage(systemMessage),
-        ...input.messages.map((m) =>
-          m.role === 'user' ? new HumanMessage(m.content) : new HumanMessage(m.content),
-        ),
-      ];
-
+      const messages = buildAgentMessages(ctx.systemPrompt, input.messages, constraints);
       const listing = (await model.invoke(messages)) as ProductListing;
 
       // Args mirror the LangChain tool schema in shopify/tools.ts:

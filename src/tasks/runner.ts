@@ -1,6 +1,5 @@
 import { HumanMessage } from '@langchain/core/messages';
 import type { Task } from '../db/schema/index.js';
-import { eventBus } from '../events/event-bus.js';
 import { logger } from '../lib/logger.js';
 import { buildGraph, initialState } from '../orchestrator/graph.js';
 import { appendMessage, listMessages } from './messages.js';
@@ -21,29 +20,22 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
 
   // 4-arg emitLog: agents see only the first 3 (event/message/data) — the
   // graph wrapper auto-fills `speaker`. Framework events here pass speaker
-  // explicitly ('system' / 'supervisor').
-  const emitLog = async (
+  // explicitly ('system' / 'supervisor'). appendTaskLog handles fan-out to
+  // the EventBus, so this is just a positional-args adapter.
+  const emitLog = (
     event: string,
     message: string,
     data?: Record<string, unknown>,
     speaker?: string,
-  ): Promise<void> => {
-    await appendTaskLog({
+  ): Promise<void> =>
+    appendTaskLog({
       tenantId: task.tenantId,
       taskId: task.id,
       event,
       message,
       ...(speaker ? { speaker } : {}),
-      data,
+      ...(data ? { data } : {}),
     });
-    eventBus.publish(task.id, {
-      event,
-      message,
-      speaker,
-      data,
-      at: new Date().toISOString(),
-    });
-  };
 
   try {
     // No "task.started" — pre-agent framework noise; the agent's own first
@@ -153,6 +145,7 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
   } catch (err) {
     log.error({ err }, 'Task execution failed');
     const errMessage = err instanceof Error ? err.message : 'Unknown error';
+    const stack = err instanceof Error ? err.stack : undefined;
     await appendTaskLog({
       tenantId: task.tenantId,
       taskId: task.id,
@@ -160,12 +153,12 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
       event: 'task.failed',
       speaker: 'system',
       message: `出狀況了：${errMessage}`,
-      data: { stack: err instanceof Error ? err.stack : undefined },
+      ...(stack ? { data: { stack } } : {}),
     });
     await updateTaskStatus(task.tenantId, task.id, 'failed', {
       error: {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
+        message: errMessage,
+        ...(stack ? { stack } : {}),
       },
     });
   } finally {

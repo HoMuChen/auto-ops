@@ -3,9 +3,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { tenantCredentials } from '../../db/schema/index.js';
-import { ForbiddenError, NotFoundError } from '../../lib/errors.js';
+import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireTenant } from '../middleware/tenant.js';
+import { requireTenant, tenantOf } from '../middleware/tenant.js';
 
 const ProviderEnum = z.enum(['shopify', 'threads', 'instagram', 'facebook']);
 
@@ -21,7 +21,7 @@ export async function credentialRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireTenant);
 
   app.get('/credentials', { schema: { tags: ['credentials'] } }, async (req) => {
-    if (!req.tenantId) throw new ForbiddenError();
+    const tenantId = tenantOf(req);
     const rows = await db
       .select({
         id: tenantCredentials.id,
@@ -31,7 +31,7 @@ export async function credentialRoutes(app: FastifyInstance): Promise<void> {
         createdAt: tenantCredentials.createdAt,
       })
       .from(tenantCredentials)
-      .where(eq(tenantCredentials.tenantId, req.tenantId));
+      .where(eq(tenantCredentials.tenantId, tenantId));
     return rows;
   });
 
@@ -49,7 +49,7 @@ export async function credentialRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { provider } = req.params as { provider: z.infer<typeof ProviderEnum> };
       const body = req.body as {
         secret: string;
@@ -62,7 +62,7 @@ export async function credentialRoutes(app: FastifyInstance): Promise<void> {
         .from(tenantCredentials)
         .where(
           and(
-            eq(tenantCredentials.tenantId, req.tenantId),
+            eq(tenantCredentials.tenantId, tenantId),
             eq(tenantCredentials.provider, provider),
             body.label ? eq(tenantCredentials.label, body.label) : eq(tenantCredentials.label, ''),
           ),
@@ -84,7 +84,7 @@ export async function credentialRoutes(app: FastifyInstance): Promise<void> {
       const [created] = await db
         .insert(tenantCredentials)
         .values({
-          tenantId: req.tenantId,
+          tenantId,
           provider,
           label: body.label,
           secret: body.secret,
@@ -104,11 +104,11 @@ export async function credentialRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req, reply) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { id } = req.params as { id: string };
       const result = await db
         .delete(tenantCredentials)
-        .where(and(eq(tenantCredentials.id, id), eq(tenantCredentials.tenantId, req.tenantId)))
+        .where(and(eq(tenantCredentials.id, id), eq(tenantCredentials.tenantId, tenantId)))
         .returning({ id: tenantCredentials.id });
       if (result.length === 0) throw new NotFoundError(`Credential ${id}`);
       reply.code(204);

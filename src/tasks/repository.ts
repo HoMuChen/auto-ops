@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { agentRegistry } from '../agents/registry.js';
-import type { SpawnTaskRequest } from '../agents/types.js';
 import { db } from '../db/client.js';
 import { type NewTask, type Task, type TaskStatus, taskLogs, tasks } from '../db/schema/index.js';
+import { eventBus } from '../events/event-bus.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
+import type { TaskOutput } from './output.js';
 import { assertTransition } from './state-machine.js';
 
 export interface CreateTaskInput {
@@ -183,11 +184,7 @@ export async function finalizeStrategyTask(
       throw new Error(`Task ${taskId} is not a strategy task (kind=${parent.kind})`);
     }
 
-    const output = (parent.output ?? {}) as Record<string, unknown> & {
-      spawnTasks?: SpawnTaskRequest[];
-      spawnedAt?: string;
-      spawnedTaskIds?: string[];
-    };
+    const output = (parent.output ?? {}) as TaskOutput;
 
     // Idempotent path: already spawned → just return existing children. Skip
     // the transition check so a retry against an already-done parent is a no-op.
@@ -274,7 +271,12 @@ export async function finalizeStrategyTask(
   return { parent: result.parent, children: result.children };
 }
 
-/** Append a log line; persists for audit and is fanned out via the EventBus. */
+/**
+ * Append a log line: persists for audit AND fans out on the EventBus so live
+ * SSE consumers see it. This is the ONLY supported way to emit a task event —
+ * callers must not call `eventBus.publish` directly, otherwise the timeline
+ * and the live stream drift apart.
+ */
 export async function appendTaskLog(input: {
   tenantId: string;
   taskId: string;
@@ -297,6 +299,13 @@ export async function appendTaskLog(input: {
     message: input.message,
     speaker: input.speaker ?? null,
     data: input.data,
+  });
+  eventBus.publish(input.taskId, {
+    event: input.event,
+    message: input.message,
+    ...(input.speaker ? { speaker: input.speaker } : {}),
+    ...(input.data ? { data: input.data } : {}),
+    at: new Date().toISOString(),
   });
 }
 

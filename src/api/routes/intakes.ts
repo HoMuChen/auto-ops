@@ -9,9 +9,9 @@ import {
   getIntake,
   listIntakes,
 } from '../../intakes/repository.js';
-import { ForbiddenError, IllegalStateError } from '../../lib/errors.js';
+import { IllegalStateError } from '../../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireTenant } from '../middleware/tenant.js';
+import { authedTenantOf, requireTenant, tenantOf } from '../middleware/tenant.js';
 import {
   ErrorEnvelope,
   FinalizeIntakeBody,
@@ -45,9 +45,9 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const q = req.query as { status?: 'open' | 'finalized' | 'abandoned' };
-      return listIntakes(req.tenantId, q);
+      return listIntakes(tenantId, q);
     },
   );
 
@@ -61,9 +61,9 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { intakeId } = req.params as { intakeId: string };
-      return getIntake(req.tenantId, intakeId);
+      return getIntake(tenantId, intakeId);
     },
   );
 
@@ -83,15 +83,15 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req, reply) => {
-      if (!req.tenantId || !req.user) throw new ForbiddenError();
+      const { tenantId, user } = authedTenantOf(req);
       const body = req.body as z.infer<typeof StartIntakeBody>;
 
-      const availableAgents = await loadAvailableAgentsForTenant(req.tenantId);
+      const availableAgents = await loadAvailableAgentsForTenant(tenantId);
       const turn = await runIntakeTurn([], body.message, { availableAgents });
 
       const intake = await createIntake({
-        tenantId: req.tenantId,
-        createdBy: req.user.id,
+        tenantId,
+        createdBy: user.id,
         firstMessage: body.message,
         firstAssistantReply: turn.reply,
         draftTitle: turn.draftTitle,
@@ -124,19 +124,19 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { intakeId } = req.params as { intakeId: string };
       const body = req.body as z.infer<typeof IntakeMessageBody>;
 
-      const intake = await getIntake(req.tenantId, intakeId);
+      const intake = await getIntake(tenantId, intakeId);
       if (intake.status !== 'open') {
         throw new IllegalStateError(`Intake is ${intake.status}, cannot append`);
       }
 
-      const availableAgents = await loadAvailableAgentsForTenant(req.tenantId);
+      const availableAgents = await loadAvailableAgentsForTenant(tenantId);
       const turn = await runIntakeTurn(intake.messages, body.message, { availableAgents });
 
-      const updated = await appendTurn(req.tenantId, intakeId, {
+      const updated = await appendTurn(tenantId, intakeId, {
         userMessage: body.message,
         assistantReply: turn.reply,
         draftBrief: turn.draftBrief,
@@ -172,13 +172,13 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId || !req.user) throw new ForbiddenError();
+      const { tenantId, user } = authedTenantOf(req);
       const { intakeId } = req.params as { intakeId: string };
       const body = (req.body ?? {}) as z.infer<typeof FinalizeIntakeBody>;
 
-      return finalizeIntake(req.tenantId, intakeId, {
+      return finalizeIntake(tenantId, intakeId, {
         ...body,
-        createdBy: req.user.id,
+        createdBy: user.id,
       });
     },
   );
@@ -193,9 +193,9 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { intakeId } = req.params as { intakeId: string };
-      return abandonIntake(req.tenantId, intakeId);
+      return abandonIntake(tenantId, intakeId);
     },
   );
 }

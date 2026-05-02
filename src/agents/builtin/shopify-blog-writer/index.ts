@@ -1,7 +1,7 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
+import { buildAgentMessages } from '../../lib/messages.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -170,18 +170,7 @@ export const shopifyBlogWriterAgent: IAgent = {
       }
       constraints.push(`Writer fluent in: ${cfg.targetLanguages.join(', ')}`);
 
-      const systemMessage =
-        constraints.length > 0
-          ? `${ctx.systemPrompt}\n\nTenant constraints:\n- ${constraints.join('\n- ')}`
-          : ctx.systemPrompt;
-
-      const messages = [
-        new SystemMessage(systemMessage),
-        ...input.messages.map((m) =>
-          m.role === 'user' ? new HumanMessage(m.content) : new HumanMessage(m.content),
-        ),
-      ];
-
+      const messages = buildAgentMessages(ctx.systemPrompt, input.messages, constraints);
       const article = (await model.invoke(messages)) as ArticleDraft;
 
       const preview = renderArticleMarkdown(article, cfg);

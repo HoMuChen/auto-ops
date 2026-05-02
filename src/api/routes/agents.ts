@@ -3,9 +3,8 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { agentRegistry } from '../../agents/registry.js';
 import type { AgentManifest } from '../../agents/types.js';
-import { ForbiddenError } from '../../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireTenant } from '../middleware/tenant.js';
+import { requireTenant, tenantOf } from '../middleware/tenant.js';
 
 /**
  * Agents API surface.
@@ -45,8 +44,7 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireTenant);
 
   app.get('/agents', { schema: { tags: ['agents'] } }, async (req) => {
-    if (!req.tenantId) throw new ForbiddenError();
-    const tenantId = req.tenantId;
+    const tenantId = tenantOf(req);
     const manifests = agentRegistry.manifests();
 
     const statuses = await Promise.all(
@@ -74,9 +72,9 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { agentId } = req.params as { agentId: string };
-      const status = await agentRegistry.getActivationStatus(req.tenantId, agentId);
+      const status = await agentRegistry.getActivationStatus(tenantId, agentId);
 
       return {
         ...manifestPayload(status.agent.manifest),
@@ -100,11 +98,11 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { agentId } = req.params as { agentId: string };
       const body = req.body as z.infer<typeof ActivateBody>;
       return agentRegistry.activate({
-        tenantId: req.tenantId,
+        tenantId,
         agentId,
         config: body.config ?? {},
         promptOverride: body.promptOverride ?? null,
@@ -122,9 +120,9 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req, reply) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { agentId } = req.params as { agentId: string };
-      await agentRegistry.deactivate(req.tenantId, agentId);
+      await agentRegistry.deactivate(tenantId, agentId);
       reply.code(204);
       return null;
     },

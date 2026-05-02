@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { streamTaskLogs } from '../../events/sse.js';
-import { ForbiddenError, IllegalStateError } from '../../lib/errors.js';
+import { IllegalStateError } from '../../lib/errors.js';
 import { executeApprovedToolCall } from '../../orchestrator/tool-executor.js';
 import { appendMessage, listMessages } from '../../tasks/messages.js';
+import { readTaskOutput } from '../../tasks/output.js';
 import {
   createTask,
   finalizeStrategyTask,
@@ -13,7 +14,7 @@ import {
   updateTaskStatus,
 } from '../../tasks/repository.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireTenant } from '../middleware/tenant.js';
+import { authedTenantOf, requireTenant, tenantOf } from '../middleware/tenant.js';
 import {
   ApproveBody,
   CreateTaskBody,
@@ -37,9 +38,9 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const q = req.query as z.infer<typeof PaginationQuery>;
-      return listTasks(req.tenantId, q);
+      return listTasks(tenantId, q);
     },
   );
 
@@ -65,27 +66,27 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req, reply) => {
-      if (!req.tenantId || !req.user) throw new ForbiddenError();
+      const { tenantId, user } = authedTenantOf(req);
       const body = req.body as z.infer<typeof CreateTaskBody>;
 
       const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : undefined;
 
       const task = await createTask({
-        tenantId: req.tenantId,
+        tenantId,
         title: body.brief.slice(0, 120),
         description: body.brief,
         assignedAgent: body.preferredAgent,
         input: { brief: body.brief, ...(body.params ?? {}) },
         scheduledAt,
-        createdBy: req.user.id,
+        createdBy: user.id,
       });
 
       await appendMessage({
-        tenantId: req.tenantId,
+        tenantId,
         taskId: task.id,
         role: 'user',
         content: body.brief,
-        createdBy: req.user.id,
+        createdBy: user.id,
       });
 
       reply.code(201);
@@ -103,9 +104,9 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { taskId } = req.params as { taskId: string };
-      return getTask(req.tenantId, taskId);
+      return getTask(tenantId, taskId);
     },
   );
 
@@ -118,9 +119,9 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { taskId } = req.params as { taskId: string };
-      return listMessages(req.tenantId, taskId);
+      return listMessages(tenantId, taskId);
     },
   );
 
@@ -134,12 +135,12 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { taskId } = req.params as { taskId: string };
       const since = (req.query as { since?: string }).since
         ? new Date((req.query as { since?: string }).since!)
         : undefined;
-      return listTaskLogs(req.tenantId, taskId, { since });
+      return listTaskLogs(tenantId, taskId, { since });
     },
   );
 
@@ -166,10 +167,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { taskId } = req.params as { taskId: string };
       const body = (req.body ?? {}) as z.infer<typeof ApproveBody>;
-      const task = await getTask(req.tenantId, taskId);
+      const task = await getTask(tenantId, taskId);
       if (task.status !== 'waiting') {
         throw new IllegalStateError(`Task is in '${task.status}' state, not 'waiting'`);
       }
@@ -182,15 +183,15 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       //   3. plain text-only task → just transition to done
       if (body?.finalize) {
         if (task.kind === 'strategy') {
-          const { parent } = await finalizeStrategyTask(req.tenantId, taskId);
+          const { parent } = await finalizeStrategyTask(tenantId, taskId);
           return parent;
         }
-        if (task.output && (task.output as { pendingToolCall?: unknown }).pendingToolCall) {
-          return executeApprovedToolCall(req.tenantId, taskId);
+        if (readTaskOutput(task).pendingToolCall) {
+          return executeApprovedToolCall(tenantId, taskId);
         }
-        return updateTaskStatus(req.tenantId, taskId, 'done');
+        return updateTaskStatus(tenantId, taskId, 'done');
       }
-      return updateTaskStatus(req.tenantId, taskId, 'todo');
+      return updateTaskStatus(tenantId, taskId, 'todo');
     },
   );
 
@@ -205,21 +206,21 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId || !req.user) throw new ForbiddenError();
+      const { tenantId, user } = authedTenantOf(req);
       const { taskId } = req.params as { taskId: string };
       const body = req.body as z.infer<typeof FeedbackBody>;
-      const task = await getTask(req.tenantId, taskId);
+      const task = await getTask(tenantId, taskId);
       if (task.status !== 'waiting') {
         throw new IllegalStateError(`Task is in '${task.status}' state, not 'waiting'`);
       }
       await appendMessage({
-        tenantId: req.tenantId,
+        tenantId,
         taskId,
         role: 'user',
         content: body.feedback,
-        createdBy: req.user.id,
+        createdBy: user.id,
       });
-      return updateTaskStatus(req.tenantId, taskId, 'todo');
+      return updateTaskStatus(tenantId, taskId, 'todo');
     },
   );
 
@@ -233,9 +234,9 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-      if (!req.tenantId) throw new ForbiddenError();
+      const tenantId = tenantOf(req);
       const { taskId } = req.params as { taskId: string };
-      return updateTaskStatus(req.tenantId, taskId, 'failed', {
+      return updateTaskStatus(tenantId, taskId, 'failed', {
         error: { message: 'Discarded by user' },
       });
     },

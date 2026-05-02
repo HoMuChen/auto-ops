@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import { agentRegistry } from '../agents/registry.js';
-import type { AgentBuildContext, PendingToolCall } from '../agents/types.js';
+import type { AgentBuildContext } from '../agents/types.js';
 import { db } from '../db/client.js';
 import { type Task, tasks } from '../db/schema/index.js';
-import { eventBus } from '../events/event-bus.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { readTaskOutput } from '../tasks/output.js';
 import { appendTaskLog, getTask, updateTaskStatus } from '../tasks/repository.js';
 
 /**
@@ -29,12 +29,7 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
   const log = logger.child({ taskId, tenantId, op: 'tool-executor' });
 
   const task = await getTask(tenantId, taskId);
-
-  const output = (task.output ?? {}) as Record<string, unknown> & {
-    pendingToolCall?: PendingToolCall;
-    toolResult?: unknown;
-    toolExecutedAt?: string;
-  };
+  const output = readTaskOutput(task);
 
   if (!output.pendingToolCall) {
     throw new ConflictError(`Task ${taskId} has no pendingToolCall to execute`);
@@ -62,19 +57,11 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
   const pending = output.pendingToolCall;
   const agent = agentRegistry.get(task.assignedAgent);
 
-  // Emit logs through the same channel the runner uses so the SSE stream and
-  // task_logs stay coherent across a (LLM run → HITL → tool fire) lifecycle.
   // Tool execution is the agent acting on the boss's approval — speaker is
   // the agent that prepared the call, not 'system'.
   const speaker = agent.manifest.id;
-  const emitLog = async (
-    event: string,
-    message: string,
-    data?: Record<string, unknown>,
-  ): Promise<void> => {
-    await appendTaskLog({ tenantId, taskId, event, message, speaker, data });
-    eventBus.publish(taskId, { event, message, speaker, data, at: new Date().toISOString() });
-  };
+  const emitLog = (event: string, message: string, data?: Record<string, unknown>): Promise<void> =>
+    appendTaskLog({ tenantId, taskId, event, message, speaker, ...(data ? { data } : {}) });
 
   await emitLog('tool.started', '收到指示，我來執行', {
     toolId: pending.id,
@@ -155,12 +142,6 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
     event: 'task.completed',
     speaker: 'system',
     message: '任務完成 ✓',
-  });
-  eventBus.publish(taskId, {
-    event: 'task.completed',
-    message: '任務完成 ✓',
-    speaker: 'system',
-    at: new Date().toISOString(),
   });
 
   return updated;
