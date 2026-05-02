@@ -58,7 +58,7 @@ const configSchema = z.object({
     .describe('Primary language used in product listings'),
   images: z
     .object({
-      autoGenerate: z.boolean().default(true).describe(
+      autoGenerate: z.boolean().default(false).describe(
         'If true, agent generates product images when none are in the task',
       ),
       style: z.string().nullish().describe(
@@ -174,11 +174,12 @@ export const shopifyOpsAgent: IAgent = {
       const listing = (await model.invoke(messages)) as ProductListing;
 
       // Resolve images: use uploaded ones if provided, else generate if configured.
-      let imageIds: string[] = [];
+      const imageUrls: string[] = [];
       const inputImageIds = (input.params as { imageIds?: string[] }).imageIds ?? [];
 
-      if (inputImageIds.length > 0) {
-        imageIds = inputImageIds;
+      if (inputImageIds.length > 0 && input.imageResolver) {
+        // Boss uploaded images — resolve UUIDs to delivery URLs.
+        imageUrls.push(...(await input.imageResolver(inputImageIds)));
       } else if (cfg.images.autoGenerate && imageTools.length > 0) {
         const genTool = imageTools.find((t) => t.id === 'images.generate');
         if (genTool) {
@@ -186,13 +187,10 @@ export const shopifyOpsAgent: IAgent = {
           const imgResult = (await genTool.tool.invoke({
             prompt: `${listing.title}. ${styleHint}`,
           })) as { id: string; url: string };
-          imageIds = [imgResult.id];
+          // URL is returned directly from the image tool — no resolver needed.
+          imageUrls.push(imgResult.url);
         }
       }
-
-      // Resolve UUIDs to URLs for Shopify (Shopify needs URLs not internal IDs).
-      const imageUrls =
-        imageIds.length > 0 && input.imageResolver ? await input.imageResolver(imageIds) : [];
 
       const pendingToolCall = {
         id: 'shopify.create_product',

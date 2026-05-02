@@ -300,3 +300,82 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     expect(task.error?.message).toMatch(/doesnt-exist/);
   });
 });
+
+describe('Shopify Blog Writer — cover image generation in Stage 2', () => {
+  it('generates a cover image and includes coverImageUrl in pendingToolCall', async () => {
+    const { tenantId, userId, email } = await seedTenantWithOwner({ plan: 'basic' });
+    const jwt = await mintJwt({ userId, email });
+
+    await db.insert(tenantCredentials).values({
+      tenantId,
+      provider: 'shopify',
+      secret: 'shpat_blog_token',
+      metadata: { storeUrl: 'blog-shop.myshopify.com' },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/v1/agents/shopify-blog-writer/activate',
+      headers: authHeaders(jwt, tenantId),
+      payload: {
+        config: {
+          targetLanguages: ['zh-TW'],
+          publishToShopify: true,
+          generateCoverImage: true,
+          coverImageStyle: 'editorial blog cover',
+        },
+      },
+    });
+
+    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
+    scriptStructured({
+      title: '夏日穿搭指南',
+      bodyHtml: '<p>輕鬆穿出夏日風格</p>',
+      summaryHtml: '夏日穿搭指南',
+      tags: ['夏季', '穿搭'],
+      language: 'zh-TW',
+      author: 'Auto',
+      progressNote: '草稿完成了',
+    });
+
+    // fetchMock handles: 1) OpenAI image generation, 2) CF upload
+    const fakeImageB64 = Buffer.from('coverimg').toString('base64');
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ b64_json: fakeImageB64 }] }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          result: { id: 'cf-cover', variants: ['https://imagedelivery.net/HASH/cf-cover/public'] },
+        }),
+      } as unknown as Response);
+
+    const create = await app.inject({
+      method: 'POST',
+      url: '/v1/tasks',
+      headers: authHeaders(jwt, tenantId),
+      payload: { brief: '寫一篇夏日穿搭文章' },
+    });
+    expect(create.statusCode).toBe(201);
+    const taskId = create.json().id as string;
+
+    await drainNextTask();
+
+    const task = await getTask(tenantId, taskId);
+    expect(task.status).toBe('waiting');
+    expect(task.output).toMatchObject({
+      pendingToolCall: {
+        id: 'shopify.publish_article',
+        args: expect.objectContaining({
+          title: '夏日穿搭指南',
+          coverImageUrl: expect.stringContaining('imagedelivery.net'),
+        }),
+      },
+    });
+  });
+});

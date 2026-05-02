@@ -88,7 +88,7 @@ const configSchema = z.object({
       geo: z.boolean().default(false),
     })
     .default({}),
-  generateCoverImage: z.boolean().default(true).describe(
+  generateCoverImage: z.boolean().default(false).describe(
     'If true, agent generates a cover image for the article before approval.',
   ),
   coverImageStyle: z.string().nullish().describe(

@@ -223,3 +223,80 @@ describe('Shopify Ops end-to-end (text only, no images)', () => {
     expect(task.error?.message).toMatch(/Shopify API 422/);
   });
 });
+
+describe('Shopify Ops — image generation on auto-generate', () => {
+  it('generates product image when cfg.images.autoGenerate=true (default), includes images in pendingToolCall', async () => {
+    const { tenantId, userId, email } = await seedTenantWithOwner({ plan: 'basic' });
+    const jwt = await mintJwt({ userId, email });
+
+    await app.inject({
+      method: 'PUT',
+      url: '/v1/credentials/shopify',
+      headers: authHeaders(jwt, tenantId),
+      payload: { secret: 'shpat_test_token', metadata: { storeUrl: 'demo-shop.myshopify.com' } },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/v1/agents/shopify-ops/activate',
+      headers: authHeaders(jwt, tenantId),
+      payload: {
+        config: {
+          shopify: { defaultVendor: 'Acme', autoPublish: false },
+          defaultLanguage: 'zh-TW',
+          images: { autoGenerate: true, style: 'white background' },
+        },
+      },
+    });
+
+    scriptStructured({ nextAgent: 'shopify-ops', clarification: null, done: false });
+    scriptStructured({
+      title: 'Canvas Sneakers',
+      bodyHtml: '<p>Clean canvas sneakers for everyday wear.</p>',
+      tags: ['shoes', 'canvas'],
+      vendor: 'Acme Shoes',
+      progressNote: 'Listing 整理好了',
+    });
+
+    // fetchMock handles: 1) OpenAI image generation, 2) CF upload
+    const fakeImageB64 = Buffer.from('fakeimg').toString('base64');
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ b64_json: fakeImageB64 }] }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          result: { id: 'cf-prod-img', variants: ['https://imagedelivery.net/HASH/cf-prod-img/public'] },
+        }),
+      } as unknown as Response);
+
+    const create = await app.inject({
+      method: 'POST',
+      url: '/v1/tasks',
+      headers: authHeaders(jwt, tenantId),
+      payload: { brief: 'List canvas sneakers on Shopify' },
+    });
+    expect(create.statusCode).toBe(201);
+    const taskId = create.json().id as string;
+
+    await drainNextTask();
+
+    const task = await getTask(tenantId, taskId);
+    expect(task.status).toBe('waiting');
+    expect(task.output).toMatchObject({
+      pendingToolCall: {
+        id: 'shopify.create_product',
+        args: expect.objectContaining({
+          title: 'Canvas Sneakers',
+          images: expect.arrayContaining([
+            expect.objectContaining({ url: expect.stringContaining('imagedelivery.net') }),
+          ]),
+        }),
+      },
+    });
+  });
+});
