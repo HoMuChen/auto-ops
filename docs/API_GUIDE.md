@@ -148,10 +148,11 @@ x-tenant-id: <UUID>
                                                     ↓ 拿到 tenant.id
 
 [列可聘員工]                    GET /v1/agents      回 [seo-strategist, shopify-blog-writer,
-  顯示卡片：                                          shopify-ops, ...]
+  顯示卡片：                                          product-strategist, shopify-publisher, ...]
   - ✓ Shopify Blog Writer (ready)                            每個含 ready / credentials
-  - ✓ SEO Strategist (ready, pro+)                  checklist / configSchema
-  - ✗ Shopify Ops (need creds)
+  - ✓ SEO Strategist (ready)                        checklist / configSchema
+  - ✗ Product Content Strategist (need shopify-publisher enabled)
+  - ✗ Shopify Publisher (need creds)
                                                     ↓ 老闆點 Shopify Blog Writer
 
 [啟用 Shopify Blog Writer]               POST /v1/agents/    回 { enabled:true, config }
@@ -284,8 +285,27 @@ x-tenant-id: <UUID>
     "credentials": [{"provider":"shopify","bound":false,"description":"..."}]
   },
   {
-    "id": "shopify-ops",
-    "toolIds": ["shopify.create_product", "shopify.update_product"],
+    "id": "product-strategist",
+    "name": "AI Product Content Strategist",
+    "description": "Generates platform-agnostic product copy and images from a brief, then spawns publisher agents to distribute to enabled platforms.",
+    "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.2 },
+    "toolIds": ["images.generate", "images.edit"],
+    "requiredCredentials": [],
+    "configSchema": {
+      /* defaultLanguage(zh-TW|en|ja), defaultVendor,
+         images: { autoGenerate(default:true), style },
+         skills: { seoFundamentals(default:true) } */
+    },
+    "metadata": { "kind": "strategy" },
+    "enabled": false,
+    "ready": true,   ← 不需要 creds；但需要至少一個 publisher agent 同時啟用
+    "credentials": []
+  },
+  {
+    "id": "shopify-publisher",
+    "name": "Shopify Product Publisher",
+    "description": "Publishes a ready-made ProductContent package to the tenant Shopify store.",
+    "toolIds": ["shopify.create_product"],
     "requiredCredentials": [
       {
         "provider": "shopify",
@@ -294,7 +314,10 @@ x-tenant-id: <UUID>
         "bound": false
       }
     ],
-    "configSchema": { /* ... */ },
+    "configSchema": {
+      /* shopify: { credentialLabel, autoPublish(default:false) } */
+    },
+    "metadata": { "kind": "publisher" },
     "ready": false,  ← creds 未綁所以 false
     "credentials": [{"provider":"shopify","bound":false,"description":"..."}]
   }
@@ -307,14 +330,30 @@ x-tenant-id: <UUID>
 #### `POST /v1/agents/:agentId/activate`
 驗證 creds 都備好 + config 通過 manifest.configSchema → 啟用。所有 agent 對所有 tenant 可見，沒有 plan-tier 限制。
 ```json
-// Request
+// shopify-blog-writer 範例
 {
   "config": {
-    "shopify": { "defaultVendor": "Acme", "autoPublish": false },
-    "defaultLanguage": "zh-TW"
+    "targetLanguages": ["zh-TW"],
+    "brandTone": "professional"
   },
   "promptOverride": null,        // 可選
   "toolWhitelist": null          // 可選；填了會限制 agent 只能用列表內的 tool
+}
+
+// product-strategist 範例
+{
+  "config": {
+    "defaultLanguage": "zh-TW",
+    "defaultVendor": "Acme",
+    "images": { "autoGenerate": true, "style": "clean white background, product photography" }
+  }
+}
+
+// shopify-publisher 範例
+{
+  "config": {
+    "shopify": { "autoPublish": false }
+  }
 }
 
 // Response 200
@@ -685,7 +724,7 @@ LLM 後**不會**直接打 API；它會把「想呼叫的 tool + 參數」放到
 
 目前帶 `pendingToolCall` 的 agent：
 - `shopify-blog-writer` → `shopify.publish_article`（發部落格文章，**MVP 主流程**）
-- `shopify-ops` → `shopify.create_product`（上架商品）
+- `shopify-publisher` → `shopify.create_product`（上架商品；由 `product-strategist` 產生的子任務呼叫）
 
 ### 範例：shopify-blog-writer 發部落格
 
@@ -779,13 +818,47 @@ UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](toolRes
 > shopify-blog-writer **必須**綁 Shopify credentials 才能 activate（即使 `publishToShopify=false`），
 > 因為框架不知道 user 之後會不會切回 publish。Activation 時若沒 creds 會回 409。
 
-### 範例：shopify-ops 建商品
+### 範例：shopify-publisher 上架商品
 
-`output.listing` + `pendingToolCall.id = "shopify.create_product"`，approve 後：
+`shopify-publisher` 是 `product-strategist` 的執行子任務，**本身不呼叫 LLM**。它從 `task.input.params.content`（`ProductContent` 物件）讀商品資料，直接映射成 `shopify.create_product` 的參數。
+
+#### `waiting` 狀態的 `output` 形狀
+
+```json
+{
+  "id": "child-task-uuid",
+  "kind": "execution",
+  "status": "waiting",
+  "assignedAgent": "shopify-publisher",
+  "output": {
+    "content": {
+      "title": "Linen Oversized Shirt",
+      "bodyHtml": "<p>Premium linen.</p>",
+      "tags": ["linen", "summer"],
+      "vendor": "Acme",
+      "language": "zh-TW",
+      "imageUrls": ["https://assets.example.com/img-1.png"],
+      "progressNote": "商品文案好了，老闆看一下"
+    },
+    "pendingToolCall": {
+      "id": "shopify.create_product",
+      "args": {
+        "title": "Linen Oversized Shirt",
+        "bodyHtml": "<p>Premium linen.</p>",
+        "tags": ["linen", "summer"],
+        "vendor": "Acme",
+        "images": [{ "url": "https://assets.example.com/img-1.png" }]
+      }
+    }
+  }
+}
+```
+
+`finalize:true` approve 後：
 ```json
 "toolResult": {
   "productId": 9876543210,
-  "handle": "linen-summer-shirt",
+  "handle": "linen-oversized-shirt",
   "adminUrl": "https://demo-shop.myshopify.com/admin/products/9876543210",
   "status": "draft"
 }
@@ -807,6 +880,109 @@ Shopify 回 4xx/5xx → executor 捕捉 → 寫 `task.error.message`、status=`f
 
 - 第二次呼叫 approve(finalize=true)：executor 看到 `output.toolExecutedAt` 已戳就直接回現狀 task，**不會重複呼叫 Shopify**
 - 但若第一次呼叫已轉成 `done`，state machine 會擋下 done → done 的 transition；這時 approve 會回 422（safe to ignore on UI side — 已成功）
+
+---
+
+## 6.y product-strategist → shopify-publisher 商品上架流程
+
+### 概念
+
+商品上架拆成兩個角色：
+
+| Agent | 種類 | LLM | 職責 |
+|---|---|---|---|
+| `product-strategist` | strategy | ✓ | 看商品 brief → 產出 `ProductContent`（標題、HTML 描述、標籤、廠商、圖片） → 交由人審 → spawn publisher 子任務 |
+| `shopify-publisher` | execution | ✗ | 讀 `task.input.params.content` → 直接映射 `shopify.create_product` 參數 → HITL 等核准 |
+
+**啟用順序：** 兩個 agent 必須對同一個 tenant **同時啟用**，`product-strategist` 才能在執行時找到 publisher。
+
+```
+POST /v1/agents/product-strategist/activate  { config: { defaultLanguage, defaultVendor } }
+POST /v1/agents/shopify-publisher/activate   { config: { shopify: { autoPublish: false } } }
+```
+
+`shopify-publisher` 需要先綁 Shopify credential（`PUT /v1/credentials/shopify`），否則 activate 回 409。
+
+### 完整流程
+
+```
+user POST /v1/tasks { brief: "上架這件亞麻衫" }
+   ↓ worker 撿走 → supervisor 路由 → product-strategist
+   ↓ LLM 產 ProductContent + 圖片（R2）
+   → 父任務 status='waiting', kind='strategy'
+     output.spawnTasks = [{ assignedAgent: 'shopify-publisher', input: { content: {...} } }]
+
+user POST /v1/tasks/:stratTaskId/approve { finalize: true }
+   ↓ 框架原子建出 shopify-publisher 子任務（status='todo'）
+   → 父任務 status='done'
+
+worker 撿走子任務（pinnedAgent='shopify-publisher'，跳過 supervisor LLM 路由）
+   ↓ shopify-publisher 讀 task.input.params.content，映射 pendingToolCall
+   → 子任務 status='waiting'
+     output.pendingToolCall = { id: 'shopify.create_product', args: {...} }
+
+user POST /v1/tasks/:pubTaskId/approve { finalize: true }
+   ↓ 框架呼叫 shopify.create_product → 寫入 output.toolResult
+   → 子任務 status='done'
+```
+
+### strategy 父任務的 `output` 形狀（waiting 時）
+
+```json
+{
+  "id": "parent-uuid",
+  "kind": "strategy",
+  "status": "waiting",
+  "assignedAgent": "product-strategist",
+  "output": {
+    "content": {
+      "title": "Linen Oversized Shirt",
+      "bodyHtml": "<p>Premium linen.</p>",
+      "tags": ["linen", "summer"],
+      "vendor": "Acme",
+      "language": "zh-TW",
+      "imageUrls": ["https://assets.example.com/img-1.png"],
+      "progressNote": "商品文案好了，老闆看一下"
+    },
+    "spawnTasks": [
+      {
+        "title": "Linen Oversized Shirt → Shopify Product Publisher",
+        "assignedAgent": "shopify-publisher",
+        "input": {
+          "content": { /* ProductContent 同上 */ }
+        }
+      }
+    ]
+  }
+}
+```
+
+UI 應該渲染：
+- 標題 + Vendor / Tags / 圖片張數
+- HTML 描述預覽
+- 「即將建立 1 張子卡：shopify-publisher」
+- CTA：[Approve & Spawn] (`finalize:true`) / [Feedback]（要求修改文案）
+
+### product-strategist 啟用設定
+
+```json
+{
+  "config": {
+    "defaultLanguage": "zh-TW",          // zh-TW | en | ja
+    "defaultVendor": "Acme",             // 選填；brief 沒提到廠商時用這個
+    "images": {
+      "autoGenerate": true,              // true → 若沒有上傳圖片，自動用 OpenAI 產圖
+      "style": "clean white background, product photography"
+    },
+    "skills": {
+      "seoFundamentals": true            // 注入 SEO 基本原則 skill pack
+    }
+  }
+}
+```
+
+> 圖片生成需要同時設定 Cloudflare R2（`CLOUDFLARE_*` env）+ OpenAI key（`OPENAI_API_KEY`）。
+> 若 env 缺一，`autoGenerate` 自動降級為「不產圖」而不是報錯。
 
 ---
 
@@ -1015,6 +1191,21 @@ interface PendingToolCall {
   args: Record<string, unknown>;       // matches the tool's input schema
 }
 
+/**
+ * Platform-agnostic product content produced by product-strategist and
+ * forwarded to shopify-publisher (and future publishers) via task.input.params.content.
+ */
+interface ProductContent {
+  title: string;
+  bodyHtml: string;
+  tags: string[];
+  vendor: string;
+  productType?: string;
+  language: string;
+  imageUrls: string[];          // CF R2 public URLs — already uploaded
+  progressNote: string;         // first-person progress note shown on kanban timeline
+}
+
 /** What you get back in `output.toolResult` after shopify.create_product fires. */
 interface ShopifyCreateProductResult {
   productId: number;
@@ -1099,8 +1290,9 @@ interface AgentStatus {
 | 沒 rate limit | 任意 client 短時間內可灌 N 次 POST /v1/tasks；UI 自己擋 |
 | 沒 RLS 兜底 | 不影響 UI；純粹是後端安全防線 |
 | `parentTaskId=null` query 還沒解析 | 列「頂層任務」目前要 client-side filter `parentTaskId === null` |
-| 沒 Cloudflare Images / 圖片產出 | strategy/writer 目前只產文字 + 部落格發文，文章內沒附圖；圖片整合在 roadmap |
+| shopify-blog-writer 文章無附圖 | 圖片整合尚未接到 blog writer；`product-strategist` 有圖片生成（需設 R2 + OpenAI env） |
 | shopify-blog-writer 必綁 Shopify creds | 即使打算只用 `publishToShopify=false` 純草稿，activate 仍要 creds；roadmap 改為動態 required |
+| product-strategist 需同時啟用 publisher | 若 tenant 啟用了 `product-strategist` 但沒啟用任何 `kind=publisher` agent，worker 跑到 invoke 時會 throw；UI 應提示用戶同時啟用 `shopify-publisher` |
 
 ---
 
