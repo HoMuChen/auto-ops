@@ -79,10 +79,16 @@ export class ShopifyAdminClient {
     tags?: string[];
     product_type?: string;
     status?: 'active' | 'draft' | 'archived';
+    images?: { url: string }[];
   }): Promise<{ product: { id: number; handle: string } }> {
+    const { images, ...rest } = input;
+    const product = {
+      ...rest,
+      ...(images?.length ? { images: images.map((img) => ({ src: img.url })) } : {}),
+    };
     return this.request('products.json', {
       method: 'POST',
-      body: JSON.stringify({ product: input }),
+      body: JSON.stringify({ product }),
     });
   }
 

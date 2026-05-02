@@ -55,7 +55,7 @@ export async function buildShopifyTools(
   } = options;
 
   const createProduct = tool(
-    async (input: { title: string; bodyHtml?: string; tags?: string[]; vendor?: string }) => {
+    async (input: { title: string; bodyHtml?: string; tags?: string[]; vendor?: string; images?: { url: string }[] }) => {
       const client = await ShopifyAdminClient.forTenant(tenantId, credentialLabel);
       const result = await client.createProduct({
         title: input.title,
@@ -63,6 +63,7 @@ export async function buildShopifyTools(
         tags: input.tags,
         vendor: input.vendor ?? defaultVendor,
         status: autoPublish ? 'active' : 'draft',
+        images: input.images,
       });
       // Returning the raw object lets the post-approval executor stash
       // structured fields (productId, handle, adminUrl) on task.output without
@@ -83,6 +84,8 @@ export async function buildShopifyTools(
         bodyHtml: z.string().optional(),
         tags: z.array(z.string()).optional(),
         vendor: z.string().optional(),
+        images: z.array(z.object({ url: z.string().url() })).optional()
+          .describe('Optional product images. Each entry has a url pointing to an accessible image.'),
       }),
     },
   );
