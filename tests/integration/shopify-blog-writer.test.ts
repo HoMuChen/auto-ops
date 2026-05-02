@@ -7,6 +7,22 @@ import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
+// Mock S3 SDK so R2 uploads don't hit real infrastructure.
+vi.mock('@aws-sdk/client-s3', () => ({
+  S3Client: vi.fn(() => ({ send: vi.fn(async () => ({})) })),
+  PutObjectCommand: vi.fn(),
+}));
+
+// Dummy R2 env vars so `r2Ready = true` in blog-writer build().
+process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account';
+process.env.CLOUDFLARE_R2_BUCKET = 'test-bucket';
+process.env.CLOUDFLARE_R2_ACCESS_KEY_ID = 'test-key';
+process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY = 'test-secret';
+process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL = 'https://assets.example.com';
+process.env.OPENAI_API_KEY = 'sk-test';
+const { clearEnvCache } = await import('../../src/config/env.js');
+clearEnvCache();
+
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
@@ -339,21 +355,13 @@ describe('Shopify Blog Writer — cover image generation in Stage 2', () => {
     });
 
     // fetchMock handles: 1) OpenAI image generation, 2) CF upload
+    // fetchMock handles OpenAI image generation only; R2 upload goes through S3 SDK (mocked above).
     const fakeImageB64 = Buffer.from('coverimg').toString('base64');
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ data: [{ b64_json: fakeImageB64 }] }),
-      } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          success: true,
-          result: { id: 'cf-cover', variants: ['https://imagedelivery.net/HASH/cf-cover/public'] },
-        }),
-      } as unknown as Response);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ b64_json: fakeImageB64 }] }),
+    } as unknown as Response);
 
     const create = await app.inject({
       method: 'POST',
@@ -373,7 +381,7 @@ describe('Shopify Blog Writer — cover image generation in Stage 2', () => {
         id: 'shopify.publish_article',
         args: expect.objectContaining({
           title: '夏日穿搭指南',
-          coverImageUrl: expect.stringContaining('imagedelivery.net'),
+          coverImageUrl: expect.stringContaining('assets.example.com'),
         }),
       },
     });

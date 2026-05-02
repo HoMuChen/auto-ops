@@ -191,15 +191,24 @@ export const shopifyBlogWriterAgent: IAgent = {
     const cfg = configSchema.parse(ctx.agentConfig ?? {}) as SeoWriterConfig;
 
     const accountId = env.CLOUDFLARE_ACCOUNT_ID;
-    const cfToken = env.CLOUDFLARE_IMAGES_TOKEN;
-    const accountHash = env.CLOUDFLARE_IMAGES_HASH;
+    const r2AccessKey = env.CLOUDFLARE_R2_ACCESS_KEY_ID;
+    const r2SecretKey = env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+    const r2Bucket = env.CLOUDFLARE_R2_BUCKET;
+    const r2PublicBaseUrl = env.CLOUDFLARE_R2_PUBLIC_BASE_URL;
     const openaiKey = env.OPENAI_API_KEY;
 
+    const r2Ready = accountId && r2AccessKey && r2SecretKey && r2Bucket && r2PublicBaseUrl;
     const imageTools =
-      accountId && cfToken && accountHash && openaiKey
+      r2Ready && openaiKey
         ? buildImageTools(ctx.tenantId, {
             openaiClient: new OpenAIImagesClient({ apiKey: openaiKey }),
-            cfClient: new CloudflareImagesClient({ accountId, token: cfToken, accountHash }),
+            cfClient: new CloudflareImagesClient({
+              accountId,
+              accessKeyId: r2AccessKey,
+              secretAccessKey: r2SecretKey,
+              bucket: r2Bucket,
+              publicBaseUrl: r2PublicBaseUrl,
+            }),
             insertImage,
             taskId: ctx.taskId,
           })

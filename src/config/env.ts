@@ -46,12 +46,17 @@ const envSchema = z.object({
 
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_IMAGES_TOKEN: z.string().optional(),
-  /**
-   * CF Images account hash — appears in image delivery URLs:
-   * https://imagedelivery.net/{CLOUDFLARE_IMAGES_HASH}/{imageId}/{variant}
-   * Read from the `result.variants[0]` URL of any CF Images upload response.
-   */
   CLOUDFLARE_IMAGES_HASH: z.string().optional(),
+  /** R2 bucket name, e.g. "auto-ops-images". */
+  CLOUDFLARE_R2_BUCKET: z.string().optional(),
+  CLOUDFLARE_R2_ACCESS_KEY_ID: z.string().optional(),
+  CLOUDFLARE_R2_SECRET_ACCESS_KEY: z.string().optional(),
+  /**
+   * Public base URL for R2 objects, e.g. https://assets.yourdomain.com
+   * Changing this env var affects new uploads only; existing DB rows keep
+   * their snapshot URL. Run a DB UPDATE if migrating domains.
+   */
+  CLOUDFLARE_R2_PUBLIC_BASE_URL: z.string().url().optional(),
 
   /** OpenAI API key — used for gpt-image-1 image generation and editing. */
   OPENAI_API_KEY: z.string().min(1).optional(),
@@ -85,3 +90,8 @@ export const env = new Proxy({} as Env, {
     return loadEnv()[key as keyof Env];
   },
 });
+
+/** Reset the env cache — for tests that set process.env before a suite runs. */
+export function clearEnvCache(): void {
+  cached = null;
+}

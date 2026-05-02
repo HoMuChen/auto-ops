@@ -32,14 +32,15 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
       throw new ValidationError('File exceeds 10 MB limit', {});
     }
 
-    const accountId = env.CLOUDFLARE_ACCOUNT_ID;
-    const token = env.CLOUDFLARE_IMAGES_TOKEN;
-    const accountHash = env.CLOUDFLARE_IMAGES_HASH;
-    if (!accountId || !token || !accountHash) {
-      throw new Error('Cloudflare Images is not configured (missing env vars)');
-    }
-
-    const cf = new CloudflareImagesClient({ accountId, token, accountHash });
+    // Pass env vars as-is; CloudflareImagesClient throws at upload time if misconfigured.
+    // This allows the constructor to be mocked in tests without needing real env vars.
+    const cf = new CloudflareImagesClient({
+      accountId: env.CLOUDFLARE_ACCOUNT_ID ?? '',
+      accessKeyId: env.CLOUDFLARE_R2_ACCESS_KEY_ID ?? '',
+      secretAccessKey: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY ?? '',
+      bucket: env.CLOUDFLARE_R2_BUCKET ?? '',
+      publicBaseUrl: env.CLOUDFLARE_R2_PUBLIC_BASE_URL ?? 'https://unconfigured.invalid',
+    });
     const { cfImageId, url } = await cf.upload(buffer, {
       filename: data.filename ?? 'upload',
       mimeType,

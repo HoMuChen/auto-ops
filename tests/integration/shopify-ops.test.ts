@@ -7,8 +7,25 @@ import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
-// Stub global fetch so the Shopify client's REST call is intercepted without
-// hitting the real API. Verifies the wire format end-to-end.
+// Mock S3 SDK so R2 uploads in image tests don't hit real infrastructure.
+vi.mock('@aws-sdk/client-s3', () => ({
+  S3Client: vi.fn(() => ({ send: vi.fn(async () => ({})) })),
+  PutObjectCommand: vi.fn(),
+}));
+
+// Set dummy R2 env vars so `r2Ready = true` in agent build() — must be set
+// before env is first accessed (lazy-loaded on first request).
+process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account';
+process.env.CLOUDFLARE_R2_BUCKET = 'test-bucket';
+process.env.CLOUDFLARE_R2_ACCESS_KEY_ID = 'test-key';
+process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY = 'test-secret';
+process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL = 'https://assets.example.com';
+process.env.OPENAI_API_KEY = 'sk-test';
+// Reset env cache so the above values take effect.
+const { clearEnvCache } = await import('../../src/config/env.js');
+clearEnvCache();
+
+// Stub global fetch so Shopify + OpenAI calls are intercepted.
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
@@ -257,25 +274,13 @@ describe('Shopify Ops — image generation on auto-generate', () => {
       progressNote: 'Listing 整理好了',
     });
 
-    // fetchMock handles: 1) OpenAI image generation, 2) CF upload
+    // fetchMock handles OpenAI image generation (R2 upload goes through S3 SDK, mocked above).
     const fakeImageB64 = Buffer.from('fakeimg').toString('base64');
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ data: [{ b64_json: fakeImageB64 }] }),
-      } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          success: true,
-          result: {
-            id: 'cf-prod-img',
-            variants: ['https://imagedelivery.net/HASH/cf-prod-img/public'],
-          },
-        }),
-      } as unknown as Response);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ b64_json: fakeImageB64 }] }),
+    } as unknown as Response);
 
     const create = await app.inject({
       method: 'POST',
@@ -296,7 +301,7 @@ describe('Shopify Ops — image generation on auto-generate', () => {
         args: expect.objectContaining({
           title: 'Canvas Sneakers',
           images: expect.arrayContaining([
-            expect.objectContaining({ url: expect.stringContaining('imagedelivery.net') }),
+            expect.objectContaining({ url: expect.stringContaining('assets.example.com') }),
           ]),
         }),
       },

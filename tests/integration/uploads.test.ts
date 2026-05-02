@@ -8,6 +8,17 @@ vi.mock('../../src/llm/model-registry.js', async () => {
   return llmMockModule();
 });
 
+// Mock CloudflareImagesClient so upload tests don't need real R2 credentials.
+// The mock always succeeds and returns a deterministic key/url.
+vi.mock('../../src/integrations/cloudflare/images-client.js', () => ({
+  CloudflareImagesClient: vi.fn().mockImplementation(() => ({
+    upload: vi.fn(async (_buffer: Buffer, meta: { filename: string; mimeType: string }) => ({
+      cfImageId: `mock-key-${meta.filename}`,
+      url: `https://assets.example.com/mock-key-${meta.filename}`,
+    })),
+  })),
+}));
+
 const { createTestApp } = await import('./helpers/app.js');
 
 let app: FastifyInstance;
@@ -22,7 +33,6 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await truncateAll();
-  vi.unstubAllGlobals();
 });
 
 async function seedTenantWithToken() {
@@ -50,18 +60,6 @@ describe('POST /v1/uploads', () => {
   it('uploads image, inserts tenant_images row, returns id+url', async () => {
     const { tenantId, token } = await seedTenantWithToken();
 
-    const fakeFetch = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            result: { id: 'cf-test', variants: ['https://imagedelivery.net/HASH/cf-test/public'] },
-            success: true,
-          }),
-          { status: 200 },
-        ),
-    );
-    vi.stubGlobal('fetch', fakeFetch);
-
     const form = new FormData();
     form.append('file', new Blob([Buffer.from('imgdata')], { type: 'image/jpeg' }), 'product.jpg');
 
@@ -75,23 +73,11 @@ describe('POST /v1/uploads', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ id: string; url: string }>();
     expect(body.id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(body.url).toContain('imagedelivery.net');
+    expect(body.url).toContain('assets.example.com');
   });
 
   it('uploaded image id resolves to correct url', async () => {
     const { tenantId, token } = await seedTenantWithToken();
-
-    const fakeFetch = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            result: { id: 'cf-test', variants: ['https://imagedelivery.net/HASH/cf-test/public'] },
-            success: true,
-          }),
-          { status: 200 },
-        ),
-    );
-    vi.stubGlobal('fetch', fakeFetch);
 
     const form = new FormData();
     form.append('file', new Blob([Buffer.from('imgdata')], { type: 'image/jpeg' }), 'product.jpg');
@@ -105,9 +91,8 @@ describe('POST /v1/uploads', () => {
 
     const { db } = await import('../../src/db/client.js');
     const { tenantImages } = await import('../../src/db/schema/index.js');
-    const { eq } = await import('drizzle-orm');
-    const rows = await db.select().from(tenantImages).where(eq(tenantImages.cfImageId, 'cf-test'));
+    const rows = await db.select().from(tenantImages);
     expect(rows[0]?.sourceType).toBe('uploaded');
-    expect(rows[0]?.url).toContain('imagedelivery.net');
+    expect(rows[0]?.url).toContain('assets.example.com');
   });
 });

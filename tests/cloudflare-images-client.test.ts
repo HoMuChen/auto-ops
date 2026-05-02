@@ -1,57 +1,57 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CloudflareImagesClient } from '../src/integrations/cloudflare/images-client.js';
 
+const BASE_OPTS = {
+  accountId: 'acct',
+  accessKeyId: 'key',
+  secretAccessKey: 'secret',
+  bucket: 'test-bucket',
+  publicBaseUrl: 'https://assets.example.com',
+};
+
 describe('CloudflareImagesClient', () => {
-  it('uploads buffer and parses cfImageId + url from response', async () => {
-    const fakeFetch = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            result: {
-              id: 'cf-img-123',
-              variants: ['https://imagedelivery.net/HASH/cf-img-123/public'],
-            },
-            success: true,
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
-    );
-    const client = new CloudflareImagesClient({
-      accountId: 'acct',
-      token: 'tok',
-      accountHash: 'HASH',
-      fetchImpl: fakeFetch as unknown as typeof fetch,
-    });
+  it('uploads buffer via injected putObject and returns key + url', async () => {
+    const putObject = vi.fn(async () => {});
+    const client = new CloudflareImagesClient({ ...BASE_OPTS, putObject });
+
     const result = await client.upload(Buffer.from('imgdata'), {
       filename: 'product.jpg',
       mimeType: 'image/jpeg',
     });
-    expect(fakeFetch).toHaveBeenCalledWith(
-      'https://api.cloudflare.com/client/v4/accounts/acct/images/v1',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
-      }),
-    );
-    expect(result.cfImageId).toBe('cf-img-123');
-    expect(result.url).toBe('https://imagedelivery.net/HASH/cf-img-123/public');
+
+    expect(putObject).toHaveBeenCalledTimes(1);
+    const call = putObject.mock.calls[0];
+    const [key, body, mimeType] = call as unknown as [string, Buffer, string];
+    expect(key).toMatch(/^[0-9a-f-]{36}\.jpg$/);
+    expect(body.toString()).toBe('imgdata');
+    expect(mimeType).toBe('image/jpeg');
+    expect(result.cfImageId).toBe(key);
+    expect(result.url).toBe(`https://assets.example.com/${key}`);
   });
 
-  it('throws on CF API error', async () => {
-    const fakeFetch = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ success: false, errors: [{ message: 'quota exceeded' }] }), {
-          status: 400,
-        }),
-    );
+  it('strips trailing slash from publicBaseUrl', async () => {
+    const putObject = vi.fn(async () => {});
     const client = new CloudflareImagesClient({
-      accountId: 'a',
-      token: 't',
-      accountHash: 'h',
-      fetchImpl: fakeFetch as unknown as typeof fetch,
+      ...BASE_OPTS,
+      publicBaseUrl: 'https://assets.example.com/',
+      putObject,
     });
+    const result = await client.upload(Buffer.from('x'), {
+      filename: 'x.png',
+      mimeType: 'image/png',
+    });
+    // URL should not have double slash between domain and path
+    expect(result.url).not.toMatch(/example\.com\/\//);
+    expect(result.url).toMatch(/^https:\/\/assets\.example\.com\/[^/]/);
+  });
+
+  it('propagates putObject errors', async () => {
+    const putObject = vi.fn(async () => {
+      throw new Error('R2 quota exceeded');
+    });
+    const client = new CloudflareImagesClient({ ...BASE_OPTS, putObject });
     await expect(
       client.upload(Buffer.from('x'), { filename: 'x.jpg', mimeType: 'image/jpeg' }),
-    ).rejects.toThrow(/quota exceeded/);
+    ).rejects.toThrow(/R2 quota exceeded/);
   });
 });
