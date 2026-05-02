@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { streamTaskLogs } from '../../events/sse.js';
+import { streamTaskLogs, streamTenantLogs } from '../../events/sse.js';
 import { IllegalStateError } from '../../lib/errors.js';
 import { executeApprovedToolCall } from '../../orchestrator/tool-executor.js';
 import { appendMessage, listMessages } from '../../tasks/messages.js';
@@ -146,7 +146,7 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
-   * SSE endpoint for live log streaming.
+   * SSE endpoint for live log streaming of a single task.
    * Note: not type-validated by the schema-driven response handler;
    * the handler writes the SSE stream directly.
    */
@@ -154,6 +154,17 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     '/tasks/:taskId/stream',
     async (req, reply) => {
       await streamTaskLogs(req, reply);
+    },
+  );
+
+  /**
+   * SSE endpoint for tenant-wide log streaming across all tasks.
+   * Each event includes `taskId` so the client can route logs to the correct card.
+   */
+  app.get<{ Querystring: { since?: string } }>(
+    '/stream',
+    async (req, reply) => {
+      await streamTenantLogs(req, reply);
     },
   );
 

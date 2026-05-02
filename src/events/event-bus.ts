@@ -7,6 +7,8 @@ export interface TaskLogEvent {
   speaker?: string;
   data?: Record<string, unknown>;
   at: string;
+  /** Present on tenant-level stream events so the client knows which task this belongs to. */
+  taskId?: string;
 }
 
 /**
@@ -29,12 +31,20 @@ class EventBus {
     this.emitter.emit(`task:${taskId}`, event);
   }
 
+  publishToTenant(tenantId: string, taskId: string, event: TaskLogEvent): void {
+    this.emitter.emit(`tenant:${tenantId}`, { ...event, taskId });
+  }
+
   subscribe(taskId: string, listener: (event: TaskLogEvent) => void): () => void {
     const channel = `task:${taskId}`;
     this.emitter.on(channel, listener);
-    return () => {
-      this.emitter.off(channel, listener);
-    };
+    return () => this.emitter.off(channel, listener);
+  }
+
+  subscribeToTenant(tenantId: string, listener: (event: TaskLogEvent) => void): () => void {
+    const channel = `tenant:${tenantId}`;
+    this.emitter.on(channel, listener);
+    return () => this.emitter.off(channel, listener);
   }
 }
 

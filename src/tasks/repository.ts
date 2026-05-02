@@ -300,13 +300,50 @@ export async function appendTaskLog(input: {
     speaker: input.speaker ?? null,
     data: input.data,
   });
-  eventBus.publish(input.taskId, {
+  const logEvent = {
     event: input.event,
     message: input.message,
     ...(input.speaker ? { speaker: input.speaker } : {}),
     ...(input.data ? { data: input.data } : {}),
     at: new Date().toISOString(),
-  });
+  };
+  eventBus.publish(input.taskId, logEvent);
+  eventBus.publishToTenant(input.tenantId, input.taskId, logEvent);
+}
+
+export async function listTenantLogs(
+  tenantId: string,
+  opts?: { since?: Date; limit?: number },
+): Promise<
+  {
+    id: string;
+    taskId: string;
+    createdAt: Date;
+    level: string;
+    event: string;
+    speaker: string | null;
+    message: string;
+    data: Record<string, unknown> | null;
+  }[]
+> {
+  const conditions = [eq(taskLogs.tenantId, tenantId)];
+  if (opts?.since) conditions.push(sql`${taskLogs.createdAt} > ${opts.since}`);
+
+  return db
+    .select({
+      id: taskLogs.id,
+      taskId: taskLogs.taskId,
+      createdAt: taskLogs.createdAt,
+      level: taskLogs.level,
+      event: taskLogs.event,
+      speaker: taskLogs.speaker,
+      message: taskLogs.message,
+      data: taskLogs.data,
+    })
+    .from(taskLogs)
+    .where(and(...conditions))
+    .orderBy(asc(taskLogs.createdAt))
+    .limit(opts?.limit ?? 500);
 }
 
 export async function listTaskLogs(
