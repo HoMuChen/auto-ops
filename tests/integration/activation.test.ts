@@ -24,20 +24,20 @@ beforeEach(async () => {
 });
 
 describe('Agent activation flow', () => {
-  it('shopify-ops is not ready until the Shopify credential is bound', async () => {
+  it('shopify-publisher is not ready until the Shopify credential is bound', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
 
-    // Inspect ops agent — should report a missing Shopify credential.
+    // Inspect publisher agent — should report a missing Shopify credential.
     let detail = await app
       .inject({
         method: 'GET',
-        url: '/v1/agents/shopify-ops',
+        url: '/v1/agents/shopify-publisher',
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());
 
-    expect(detail.id).toBe('shopify-ops');
+    expect(detail.id).toBe('shopify-publisher');
     expect(detail.enabled).toBe(false);
     expect(detail.ready).toBe(false);
     expect(detail.credentials).toEqual([
@@ -47,7 +47,7 @@ describe('Agent activation flow', () => {
     // Activating now should fail with 409 + a "missing credentials" detail.
     const earlyActivate = await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-ops/activate',
+      url: '/v1/agents/shopify-publisher/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: {} },
     });
@@ -70,7 +70,7 @@ describe('Agent activation flow', () => {
     detail = await app
       .inject({
         method: 'GET',
-        url: '/v1/agents/shopify-ops',
+        url: '/v1/agents/shopify-publisher',
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());
@@ -80,12 +80,11 @@ describe('Agent activation flow', () => {
     // Activate writes the agent_configs row.
     const activate = await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-ops/activate',
+      url: '/v1/agents/shopify-publisher/activate',
       headers: authHeaders(jwt, tenantId),
       payload: {
         config: {
-          shopify: { defaultVendor: 'Acme', autoPublish: true },
-          defaultLanguage: 'en',
+          shopify: { autoPublish: true },
         },
       },
     });
@@ -93,8 +92,7 @@ describe('Agent activation flow', () => {
     expect(activate.json()).toMatchObject({
       enabled: true,
       config: {
-        shopify: expect.objectContaining({ defaultVendor: 'Acme', autoPublish: true }),
-        defaultLanguage: 'en',
+        shopify: expect.objectContaining({ autoPublish: true }),
       },
     });
 
@@ -102,13 +100,13 @@ describe('Agent activation flow', () => {
     detail = await app
       .inject({
         method: 'GET',
-        url: '/v1/agents/shopify-ops',
+        url: '/v1/agents/shopify-publisher',
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());
     expect(detail.enabled).toBe(true);
     expect(detail.config).toMatchObject({
-      shopify: expect.objectContaining({ defaultVendor: 'Acme', autoPublish: true }),
+      shopify: expect.objectContaining({ autoPublish: true }),
     });
   });
 
@@ -126,18 +124,18 @@ describe('Agent activation flow', () => {
 
     const bad = await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-ops/activate',
+      url: '/v1/agents/shopify-publisher/activate',
       headers: authHeaders(jwt, tenantId),
       payload: {
-        // defaultLanguage must be one of zh-TW | en | ja
-        config: { defaultLanguage: 'zz' },
+        // autoPublish must be boolean, not a string
+        config: { shopify: { autoPublish: 'yes' } },
       },
     });
     expect(bad.statusCode).toBe(400);
     const body = bad.json();
     expect(body.error.code).toBe('validation_error');
-    // Zod-formatted details should mention defaultLanguage.
-    expect(JSON.stringify(body.error.details)).toMatch(/defaultLanguage/);
+    // Zod-formatted details should mention the shopify field.
+    expect(JSON.stringify(body.error.details)).toMatch(/shopify/);
   });
 
   it('shopify-blog-writer requires Shopify credentials (it publishes blog articles on approve)', async () => {
