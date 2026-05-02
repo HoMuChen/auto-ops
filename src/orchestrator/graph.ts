@@ -2,6 +2,7 @@ import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import { END, START, StateGraph } from '@langchain/langgraph';
 import { agentRegistry } from '../agents/registry.js';
 import type { AgentBuildContext } from '../agents/types.js';
+import { getImagesByIds } from '../integrations/cloudflare/images-repository.js';
 import { getCheckpointer } from './checkpointer.js';
 import { buildRuntimeContext } from './runtime-context.js';
 import { type GraphState, GraphStateAnnotation } from './state.js';
@@ -79,13 +80,26 @@ export async function buildGraph(opts: BuildGraphOptions) {
       };
       const runnable = await agent.build(ctx);
 
+      const imageResolver = state.taskImageIds?.length
+        ? async (ids: string[]) => {
+            const imgs = await getImagesByIds(opts.tenantId, ids);
+            return imgs.map((i) => i.url);
+          }
+        : undefined;
+
+      const agentMessages = state.messages.map((m, idx) => ({
+        role: m.getType() === 'human' ? 'user' : m.getType() === 'ai' ? 'assistant' : 'system',
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        // Attach all task imageIds to the first human message so the agent sees all uploads.
+        imageIds:
+          state.taskImageIds && idx === 0 ? state.taskImageIds : undefined,
+      })) as { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; imageIds?: string[] }[];
+
       const result = await runnable.invoke({
-        messages: state.messages.map((m) => ({
-          role: m.getType() === 'human' ? 'user' : m.getType() === 'ai' ? 'assistant' : 'system',
-          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-        })) as { role: 'user' | 'assistant' | 'system' | 'tool'; content: string }[],
+        messages: agentMessages,
         params: state.params,
         taskOutput: state.currentTaskOutput ?? undefined,
+        imageResolver,
       });
 
       return {
@@ -125,6 +139,7 @@ export function initialState(input: {
   params: Record<string, unknown>;
   /** Set for execution children spawned with an explicit owner — bypasses the supervisor LLM. */
   pinnedAgent?: string | null;
+  taskImageIds?: string[] | null;
 }): Partial<GraphState> {
   return {
     tenantId: input.tenantId,
@@ -135,5 +150,6 @@ export function initialState(input: {
     pinnedAgent: input.pinnedAgent ?? null,
     awaitingApproval: false,
     lastOutput: null,
+    taskImageIds: input.taskImageIds ?? null,
   };
 }

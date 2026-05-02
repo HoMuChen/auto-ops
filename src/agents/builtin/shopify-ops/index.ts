@@ -135,7 +135,7 @@ export const shopifyOpsAgent: IAgent = {
         `Auto-publish on creation: ${cfg.shopify.autoPublish} (informational — the listing is created as draft/active by the framework, not by you)`,
       ];
 
-      const messages = await buildAgentMessages(ctx.systemPrompt, input.messages, constraints);
+      const messages = await buildAgentMessages(ctx.systemPrompt, input.messages, constraints, input.imageResolver);
       const listing = (await model.invoke(messages)) as ProductListing;
 
       // Args mirror the LangChain tool schema in shopify/tools.ts:

@@ -228,7 +228,7 @@ export const shopifyBlogWriterAgent: IAgent = {
           EeatQuestionsSchema,
           { name: 'eeat_questions' },
         );
-        const messages = await buildAgentMessages(systemWithResearch, input.messages, constraints);
+        const messages = await buildAgentMessages(systemWithResearch, input.messages, constraints, input.imageResolver);
         const q = (await questionModel.invoke(messages)) as EeatQuestions;
         await ctx.emitLog('agent.questions.asked', q.progressNote, {
           count: q.questions.length,
@@ -245,7 +245,7 @@ export const shopifyBlogWriterAgent: IAgent = {
       const articleModel = buildModel(ctx.modelConfig).withStructuredOutput(ArticleSchema, {
         name: 'seo_blog_article',
       });
-      const messages = await buildAgentMessages(systemWithResearch, input.messages, constraints);
+      const messages = await buildAgentMessages(systemWithResearch, input.messages, constraints, input.imageResolver);
       const article = (await articleModel.invoke(messages)) as ArticleDraft;
 
       const preview = renderArticleMarkdown(article, cfg);

@@ -59,6 +59,9 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
       const brief =
         history.find((m) => m.role === 'user')?.content ??
         (typeof task.input?.brief === 'string' ? task.input.brief : task.title);
+      const taskImageIds = history.flatMap(
+        (m) => (m.data as { imageIds?: string[] } | null)?.imageIds ?? [],
+      );
       invokeInput = {
         ...initialState({
           tenantId: task.tenantId,
@@ -68,6 +71,7 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
           // Execution children carry an explicit owner; pinning bypasses the
           // supervisor LLM on the first hop. Strategy parents leave this null.
           pinnedAgent: task.assignedAgent,
+          taskImageIds: taskImageIds.length > 0 ? taskImageIds : null,
         }),
         currentTaskOutput: (task.output ?? null) as Record<string, unknown> | null,
       };
@@ -75,9 +79,13 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
       // Resumed run: pull any new user messages since last checkpoint and inject.
       const history = await listMessages(task.tenantId, task.id);
       const latestUser = history.filter((m) => m.role === 'user').slice(-1)[0];
+      const taskImageIds = history.flatMap(
+        (m) => (m.data as { imageIds?: string[] } | null)?.imageIds ?? [],
+      );
       invokeInput = {
         messages: latestUser ? [new HumanMessage(latestUser.content)] : [],
         currentTaskOutput: (task.output ?? null) as Record<string, unknown> | null,
+        taskImageIds: taskImageIds.length > 0 ? taskImageIds : null,
         // Reset the HITL gate so the supervisor doesn't short-circuit on the
         // next invocation. Re-pin the agent (stamped by the previous run) so the
         // supervisor skips its LLM call and routes directly back to the same agent.

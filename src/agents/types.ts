@@ -138,6 +138,8 @@ export interface AgentInput {
   params: Record<string, unknown>;
   /** The task's persisted output, if the worker is resuming after a HITL gate. */
   taskOutput?: Record<string, unknown>;
+  /** Resolves image UUIDs to delivery URLs for vision-capable agents. */
+  imageResolver?: (imageIds: string[]) => Promise<string[]>;
 }
 
 /**
