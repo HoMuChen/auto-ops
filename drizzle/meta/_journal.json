@@ -22,6 +22,13 @@
       "when": 1777651632577,
       "tag": "0002_curved_black_crow",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777689055281,
+      "tag": "0003_low_abomination",
+      "breakpoints": true
     }
   ]
 }
