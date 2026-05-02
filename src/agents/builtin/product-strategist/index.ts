@@ -64,6 +64,13 @@ const ProductListingSchema = z.object({
   tags: z.array(z.string().min(1)).min(1).max(20).describe('3–8 keyword tags.'),
   vendor: z.string().min(1).describe('Brand/vendor name.'),
   productType: z.string().optional().describe('Product category — leave blank if unsure.'),
+  summary: z
+    .string()
+    .max(500)
+    .optional()
+    .describe(
+      '給老闆看的一段話，用 zh-TW，說明這個商品是什麼、亮點在哪裡、適合誰。語氣像品牌文案，不超過 3 句話。省略則框架自動生成。',
+    ),
   progressNote: z
     .string()
     .min(10)
@@ -185,14 +192,16 @@ export const productStrategistAgent: IAgent = {
         input: { content },
       }));
 
-      const summary = [
+      const imageBlock = imageUrls.map((url) => `![商品圖片](${url})`).join('\n');
+
+      const message = [
         `# ${listing.title}`,
         '',
-        `**Vendor:** ${listing.vendor}`,
-        `**Tags:** ${listing.tags.join(', ')}`,
-        `**Images:** ${imageUrls.length > 0 ? `${imageUrls.length} 張` : '無'}`,
+        listing.summary ??
+          `**Vendor:** ${listing.vendor}　**Tags:** ${listing.tags.join(', ')}`,
         '',
-        `_Approve to spawn ${spawnTasks.length} publisher task(s): ${publishers.map((p) => p.name).join(', ')}_`,
+        ...(imageBlock ? [imageBlock, ''] : []),
+        `_準備送審上架 → ${publishers.map((p) => p.name).join(', ')}_`,
         '',
         '---',
         '',
@@ -206,7 +215,7 @@ export const productStrategistAgent: IAgent = {
       });
 
       return {
-        message: summary,
+        message,
         awaitingApproval: true,
         payload: { content },
         spawnTasks,
