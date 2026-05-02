@@ -46,6 +46,15 @@ const envSchema = z.object({
 
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_IMAGES_TOKEN: z.string().optional(),
+  /**
+   * CF Images account hash — appears in image delivery URLs:
+   * https://imagedelivery.net/{CLOUDFLARE_IMAGES_HASH}/{imageId}/{variant}
+   * Read from the `result.variants[0]` URL of any CF Images upload response.
+   */
+  CLOUDFLARE_IMAGES_HASH: z.string().optional(),
+
+  /** OpenAI API key — used for gpt-image-1 image generation and editing. */
+  OPENAI_API_KEY: z.string().min(1).optional(),
 
   LANGCHAIN_TRACING_V2: z.coerce.boolean().default(false),
   LANGCHAIN_API_KEY: z.string().optional(),
