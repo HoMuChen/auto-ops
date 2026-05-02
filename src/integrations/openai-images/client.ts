@@ -15,7 +15,7 @@ export class OpenAIImagesClient {
   async generate(opts: {
     prompt: string;
     size?: '1024x1024' | '1792x1024' | '1024x1792';
-    quality?: 'standard' | 'hd';
+    quality?: 'low' | 'medium' | 'high' | 'auto';
   }): Promise<Buffer> {
     const res = await this.fetchImpl('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -24,12 +24,12 @@ export class OpenAIImagesClient {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-image-1',
+        model: 'gpt-image-2-2026-04-21',
         prompt: opts.prompt,
         n: 1,
         size: opts.size ?? '1024x1024',
-        quality: opts.quality ?? 'standard',
-        response_format: 'b64_json',
+        quality: opts.quality ?? 'medium',
+        // gpt-image-2-2026-04-21 always returns b64_json by default; response_format is not accepted
       }),
     });
     return this.parseImageResponse(res);
@@ -41,7 +41,7 @@ export class OpenAIImagesClient {
     size?: '1024x1024';
   }): Promise<Buffer> {
     const form = new FormData();
-    form.append('model', 'gpt-image-1');
+    form.append('model', 'gpt-image-2-2026-04-21');
     form.append(
       'image',
       new Blob([opts.imageBuffer], { type: 'image/png' }) as unknown as File,
@@ -50,7 +50,6 @@ export class OpenAIImagesClient {
     form.append('prompt', opts.prompt);
     form.append('n', '1');
     form.append('size', opts.size ?? '1024x1024');
-    form.append('response_format', 'b64_json');
 
     const res = await this.fetchImpl('https://api.openai.com/v1/images/edits', {
       method: 'POST',

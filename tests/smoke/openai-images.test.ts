@@ -17,7 +17,7 @@ describe.skipIf(!env.OPENAI_API_KEY)('OpenAI Images smoke test', () => {
     const buffer = await client.generate({
       prompt: 'A plain white product photography background, studio lighting, minimal',
       size: '1024x1024',
-      quality: 'standard',
+      quality: 'medium',
     });
 
     console.log('Generated image size:', buffer.byteLength, 'bytes');

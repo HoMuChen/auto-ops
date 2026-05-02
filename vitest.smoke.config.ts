@@ -1,4 +1,8 @@
+import { config as loadDotenv } from 'dotenv';
 import { defineConfig } from 'vitest/config';
+
+// Load .env so smoke tests get real credentials without requiring manual export.
+loadDotenv();
 
 /**
  * Smoke test config — hits real OpenRouter. Costs money, slow, never run in
