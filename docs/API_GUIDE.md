@@ -425,9 +425,10 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 // Request
 {
   "brief": "幫我規劃夏季女裝的 SEO 並發布",
-  "preferredAgent": "shopify-blog-writer",                 // 可選；不給就讓 Supervisor 路由
+  "preferredAgent": "shopify-blog-writer",         // 可選；不給就讓 Supervisor 路由
   "params": { "language": "zh-TW" },              // 可選；任意 KV 給 agent 參考
-  "scheduledAt": "2026-05-02T08:00:00Z"           // 可選；未來時間 → 排程
+  "scheduledAt": "2026-05-02T08:00:00Z",          // 可選；未來時間 → 排程
+  "imageIds": ["uuid-from-uploads", "..."]         // 可選；先 POST /v1/uploads 拿 id
 }
 
 // Response 201 — task 物件
@@ -438,6 +439,11 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
   ...
 }
 ```
+
+**帶圖片的流程：**
+1. 先 `POST /v1/uploads`（multipart）→ 拿到 `{ id, url }`
+2. 把 `id` 放進 `imageIds` 陣列一起送 `POST /v1/tasks`
+3. 後端把圖片 IDs 存進第一條 user message；worker 跑任務時把圖片解析成 delivery URL 傳給支援 vision 的 agent
 
 **之後：**
 - worker（後端）會在 `WORKER_POLL_INTERVAL_MS`（dev=2s）內撿走
@@ -466,7 +472,10 @@ open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
 開新對話。第一句話 + intake agent 的第一個回覆會在同一筆 INSERT 寫入。
 ```json
 // Request
-{ "message": "幫我寫篇 SEO 文章" }
+{
+  "message": "幫我寫篇 SEO 文章",
+  "imageIds": ["uuid-from-uploads"]   // 可選；先 POST /v1/uploads 拿 id
+}
 
 // Response 201
 {
@@ -474,7 +483,7 @@ open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
     "id": "uuid",
     "status": "open",
     "messages": [
-      { "role": "user", "content": "幫我寫篇 SEO 文章", "createdAt": "2026-05-01T..." },
+      { "role": "user", "content": "幫我寫篇 SEO 文章", "imageIds": ["uuid"], "createdAt": "2026-05-01T..." },
       { "role": "assistant", "content": "了解，老闆要寫幾篇？目標客群是哪一塊？", "createdAt": "2026-05-01T..." }
     ],
     "draftTitle": "SEO 文章撰寫",
@@ -494,7 +503,10 @@ open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
 接續對話一輪。state 必須是 `open`，否則 422。
 ```json
 // Request
-{ "message": "一篇就好，目標客群 25-35 歲女性" }
+{
+  "message": "一篇就好，目標客群 25-35 歲女性",
+  "imageIds": ["uuid-from-uploads"]   // 可選；附圖給這一輪
+}
 
 // Response 200 — 同 POST /v1/intakes 的 shape
 { "intake": { ... }, "reply": "...", "readyToFinalize": true, "missingInfo": [] }
@@ -538,6 +550,8 @@ open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
 | 404 | `not_found` | intakeId 不存在 / 不屬於該 tenant |
 
 `task.input.intakeId` 會回填 intake id — 之後若想做「從 task 反查當初的對話脈絡」按鈕，這就是連結。
+
+**圖片如何流進 task：** intake 對話裡所有 user message 的 `imageIds` 在 finalize 時會自動合併，寫進 spawned task 的第一條 message。worker 拿到任務時就能把圖片解析成 delivery URL 傳給 agent — 不需要在 `/finalize` 再傳一次。
 
 #### `POST /v1/intakes/:intakeId/abandon`
 丟掉對話。state 必須是 `open`，否則 422。回 200 + intake row（status='abandoned'）。
@@ -1290,7 +1304,7 @@ interface AgentStatus {
 | 沒 rate limit | 任意 client 短時間內可灌 N 次 POST /v1/tasks；UI 自己擋 |
 | 沒 RLS 兜底 | 不影響 UI；純粹是後端安全防線 |
 | `parentTaskId=null` query 還沒解析 | 列「頂層任務」目前要 client-side filter `parentTaskId === null` |
-| shopify-blog-writer 文章無附圖 | 圖片整合尚未接到 blog writer；`product-strategist` 有圖片生成（需設 R2 + OpenAI env） |
+| shopify-blog-writer 文章無附圖 | 文章本身不夾圖；`product-strategist` 支援圖片生成（需 R2 + OpenAI env），blog writer 尚未接 |
 | shopify-blog-writer 必綁 Shopify creds | 即使打算只用 `publishToShopify=false` 純草稿，activate 仍要 creds；roadmap 改為動態 required |
 | product-strategist 需同時啟用 publisher | 若 tenant 啟用了 `product-strategist` 但沒啟用任何 `kind=publisher` agent，worker 跑到 invoke 時會 throw；UI 應提示用戶同時啟用 `shopify-publisher` |
 
