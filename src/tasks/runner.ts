@@ -82,9 +82,7 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
         // next invocation. Re-pin the agent (stamped by the previous run) so the
         // supervisor skips its LLM call and routes directly back to the same agent.
         awaitingApproval: false,
-        ...(task.assignedAgent
-          ? { pinnedAgent: task.assignedAgent, lastOutput: null }
-          : {}),
+        ...(task.assignedAgent ? { pinnedAgent: task.assignedAgent, lastOutput: null } : {}),
       };
     }
 

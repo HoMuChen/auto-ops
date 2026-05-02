@@ -146,7 +146,9 @@ describe('Strategy → Spawn → Execution flow', () => {
       expect(child.status).toBe('todo');
       expect(child.input).toHaveProperty('brief');
       expect(child.input).toHaveProperty('research');
-      expect((child.input as { research?: { targetWordCount?: number } }).research?.targetWordCount).toBeGreaterThan(0);
+      expect(
+        (child.input as { research?: { targetWordCount?: number } }).research?.targetWordCount,
+      ).toBeGreaterThan(0);
     }
 
     // ── Phase 3: idempotent re-approve (network retry) ─────────────────────

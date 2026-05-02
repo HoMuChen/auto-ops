@@ -63,7 +63,12 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
         return new Response(
           JSON.stringify({
             organic: [
-              { title: 'Linen shirts for summer', link: 'https://a.example.com', snippet: 'Guide', position: 1 },
+              {
+                title: 'Linen shirts for summer',
+                link: 'https://a.example.com',
+                snippet: 'Guide',
+                position: 1,
+              },
             ],
             peopleAlsoAsk: [{ question: 'Is linen good for summer?' }],
             relatedSearches: [{ query: 'linen vs cotton summer' }],
@@ -79,7 +84,9 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
       }
       if (urlStr.includes('myshopify.com') && urlStr.includes('articles.json')) {
         return new Response(
-          JSON.stringify({ article: { id: 9001, handle: 'linen-summer-guide', blog_id: 200, published_at: null } }),
+          JSON.stringify({
+            article: { id: 9001, handle: 'linen-summer-guide', blog_id: 200, published_at: null },
+          }),
           { status: 201, headers: { 'content-type': 'application/json' } },
         );
       }
@@ -127,7 +134,11 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     expect(parent.status).toBe('waiting');
     expect(parent.kind).toBe('strategy');
     expect(parent.output).toMatchObject({
-      plan: { topics: expect.arrayContaining([expect.objectContaining({ primaryKeyword: 'linen shirt summer' })]) },
+      plan: {
+        topics: expect.arrayContaining([
+          expect.objectContaining({ primaryKeyword: 'linen shirt summer' }),
+        ]),
+      },
     });
 
     // ── Phase 2: finalize → spawn 1 writer child ──────────────────────────────
@@ -141,10 +152,12 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
 
     const children = await listTasks(tenantId, { parentTaskId: parentId });
     expect(children).toHaveLength(1);
-    const childId = children[0].id;
+    const firstChild = children[0];
+    if (!firstChild) throw new Error('Expected at least one child task');
+    const childId = firstChild.id;
 
     // Child carries full research block including eeatHook
-    expect(children[0].input).toMatchObject({
+    expect(firstChild.input).toMatchObject({
       research: {
         searchIntent: 'commercial',
         eeatHook: expect.stringContaining('washing'),
@@ -161,7 +174,7 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
           optional: false,
         },
         {
-          question: 'How did it feel in Taiwan\'s 35°C humid summer?',
+          question: "How did it feel in Taiwan's 35°C humid summer?",
           optional: true,
         },
       ],
@@ -175,7 +188,9 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     expect(child.status).toBe('waiting');
     expect(child.output).toMatchObject({
       eeatPending: {
-        questions: expect.arrayContaining([expect.objectContaining({ question: expect.any(String) })]),
+        questions: expect.arrayContaining([
+          expect.objectContaining({ question: expect.any(String) }),
+        ]),
         askedAt: expect.any(String),
       },
     });
@@ -196,7 +211,8 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     // ── Phase 5: Writer Stage 2 — draft article ───────────────────────────────
     scriptStructured({
       title: 'Linen Shirts: The Ultimate Summer Guide (Tested in Taiwan Heat)',
-      bodyHtml: '<h2>Why Linen?</h2><p>After 10 washes with zero pilling, and wearing it in 35°C Taipei humidity — yes, linen delivers.</p>',
+      bodyHtml:
+        '<h2>Why Linen?</h2><p>After 10 washes with zero pilling, and wearing it in 35°C Taipei humidity — yes, linen delivers.</p>',
       summaryHtml: 'A first-hand guide to linen shirts for humid summer climates.',
       tags: ['linen', 'summer', 'fabric guide'],
       language: 'en',
@@ -231,13 +247,13 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     });
 
     // Verify message thread: brief → EEAT questions (assistant) → boss answers → draft → done
-    const messages = await app
+    const messages = (await app
       .inject({
         method: 'GET',
         url: `/v1/tasks/${childId}/messages`,
         headers: authHeaders(jwt, tenantId),
       })
-      .then((r) => r.json()) as { role: string; content: string }[];
+      .then((r) => r.json())) as { role: string; content: string }[];
 
     const roles = messages.map((m) => m.role);
     expect(roles).toEqual(expect.arrayContaining(['user', 'assistant', 'user', 'assistant']));

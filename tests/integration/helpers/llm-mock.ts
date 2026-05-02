@@ -86,7 +86,9 @@ class FakeChatModel {
    */
   bindTools(_tools: unknown[]) {
     return {
-      invoke: async (_messages: unknown): Promise<{
+      invoke: async (
+        _messages: unknown,
+      ): Promise<{
         content: string;
         tool_calls?: { name: string; args: Record<string, unknown>; id: string }[];
       }> => {

@@ -1,14 +1,19 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages';
+import {
+  type AIMessage,
+  type BaseMessage,
+  HumanMessage,
+  ToolMessage,
+} from '@langchain/core/messages';
 import { z } from 'zod';
 import { env } from '../../../config/env.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
-import { loadPacks } from '../../lib/packs.js';
 import { buildAgentMessages } from '../../lib/messages.js';
+import { loadPacks } from '../../lib/packs.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -213,9 +218,11 @@ export const seoStrategistAgent: IAgent = {
           })
         : [];
 
-      const toolModel = buildModel(ctx.modelConfig).bindTools(
-        serperTools.map((t) => t.tool),
-      );
+      const toolModel = (
+        buildModel(ctx.modelConfig) as unknown as {
+          bindTools: (tools: unknown[]) => { invoke: (msgs: BaseMessage[]) => Promise<AIMessage> };
+        }
+      ).bindTools(serperTools.map((t) => t.tool));
       const collected: BaseMessage[] = [
         ...buildAgentMessages(systemPrompt, input.messages, constraints),
       ];

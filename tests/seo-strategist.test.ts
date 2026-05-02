@@ -168,7 +168,7 @@ describe('seoStrategistAgent.build → invoke', () => {
           language: 'zh-TW',
           writerBrief: 'something long enough to satisfy the schema minimum length.',
           assignedAgent: 'nonexistent-writer',
-          searchIntent: 'informational',
+          searchIntent: 'commercial',
           paaQuestions: [],
           relatedSearches: [],
           competitorTopAngles: [],
@@ -210,9 +210,8 @@ describe('seoStrategistAgent.build → invoke', () => {
     // buildAgentMessages is called with the enriched systemPrompt; check it was passed
     // to both the tool-call model (bindTools) and the plan model (withStructuredOutput).
     // We verify by inspecting what was passed to planPassInvokeMock.
-    const lastCallArgs = planPassInvokeMock.mock.calls.at(-1)?.[0] as
-      | { content?: string }[]
-      | undefined;
+    const calls = planPassInvokeMock.mock.calls as unknown[][];
+    const lastCallArgs = calls[calls.length - 1]?.[0] as { content?: string }[] | undefined;
     const systemMsg = lastCallArgs?.find((m) => 'content' in m);
     expect(JSON.stringify(systemMsg)).toContain('SEO Fundamentals');
   });

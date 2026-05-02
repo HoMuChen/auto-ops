@@ -40,6 +40,7 @@ describe('runSupervisor — HITL gate handling (C1)', () => {
       pinnedAgent: null,
       lastOutput: null,
       awaitingApproval: true,
+      currentTaskOutput: null,
     };
 
     const result = await runSupervisor(state);
@@ -61,6 +62,7 @@ describe('runSupervisor — pinned-agent shortcut (execution children)', () => {
       pinnedAgent: 'shopify-blog-writer',
       lastOutput: null,
       awaitingApproval: false,
+      currentTaskOutput: null,
     };
 
     const result = await runSupervisor(state);
@@ -111,6 +113,7 @@ describe('runSupervisor — clarification path persists through lastOutput', () 
       pinnedAgent: null,
       lastOutput: null,
       awaitingApproval: false,
+      currentTaskOutput: null,
     };
 
     const result = await runSupervisor(state);
@@ -164,6 +167,7 @@ describe('runSupervisor — runtime context injected into system message', () =>
       pinnedAgent: null,
       lastOutput: null,
       awaitingApproval: false,
+      currentTaskOutput: null,
     });
 
     expect(invokeMock).toHaveBeenCalledOnce();

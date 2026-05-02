@@ -3,9 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
-import { loadPacks } from '../../lib/packs.js';
 import { buildAgentMessages } from '../../lib/messages.js';
-import type { TopicResearch } from '../seo-strategist/index.js';
+import { loadPacks } from '../../lib/packs.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -14,6 +13,7 @@ import type {
   IAgent,
   PendingToolCall,
 } from '../../types.js';
+import type { TopicResearch } from '../seo-strategist/index.js';
 
 const DEFAULT_PROMPT = `You are an Shopify Blog Writer AI employee for an e-commerce business.
 Your job: produce ONE polished, multilingual blog article from a single brief
@@ -289,7 +289,7 @@ function renderQuestionsMarkdown(questions: EeatQuestion[]): string {
     '## EEAT Experience Questions',
     '',
     'Before I draft the article, could you share a bit about your first-hand experience? ' +
-      'This helps ground the content in real expertise that competitors can\'t easily replicate.',
+      "This helps ground the content in real expertise that competitors can't easily replicate.",
     '',
     ...questions.map(
       (q, i) =>

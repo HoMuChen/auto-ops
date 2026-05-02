@@ -134,7 +134,8 @@ describe('Shopify Blog Writer EEAT two-stage flow', () => {
     // Script Stage 2 article
     scriptStructured({
       title: '亞麻襯衫夏天穿著指南：親身體驗告訴你為什麼值得',
-      bodyHtml: '<h2>為什麼亞麻是夏天最好的材質</h2><p>洗了 10 次不起球，穿在台北 35 度感覺涼到不像麻。</p>',
+      bodyHtml:
+        '<h2>為什麼亞麻是夏天最好的材質</h2><p>洗了 10 次不起球，穿在台北 35 度感覺涼到不像麻。</p>',
       summaryHtml: '完整亞麻襯衫選購與保養指南，附親身使用心得。',
       tags: ['亞麻', '夏季穿搭', '永續材質'],
       language: 'zh-TW',
