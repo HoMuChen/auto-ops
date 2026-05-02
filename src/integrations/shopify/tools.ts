@@ -118,6 +118,7 @@ export async function buildShopifyTools(
       summaryHtml?: string;
       tags?: string[];
       author?: string;
+      coverImageUrl?: string;
     }) => {
       const client = await ShopifyAdminClient.forTenant(tenantId, credentialLabel);
 
@@ -145,6 +146,7 @@ export async function buildShopifyTools(
         ...(input.tags ? { tags: input.tags } : {}),
         author: input.author ?? defaultAuthor ?? 'Auto-Ops',
         published: publishArticleImmediately ?? false,
+        ...(input.coverImageUrl ? { image: { src: input.coverImageUrl } } : {}),
       });
 
       return {
@@ -167,6 +169,8 @@ export async function buildShopifyTools(
         summaryHtml: z.string().optional(),
         tags: z.array(z.string()).optional(),
         author: z.string().optional(),
+        coverImageUrl: z.string().url().optional()
+          .describe('Optional cover image URL. Attached as the article image in Shopify.'),
       }),
     },
   );

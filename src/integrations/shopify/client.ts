@@ -126,6 +126,7 @@ export class ShopifyAdminClient {
       author?: string;
       published?: boolean;
       published_at?: string;
+      image?: { src: string };
     },
   ): Promise<{
     article: { id: number; handle: string; blog_id: number; published_at: string | null };
