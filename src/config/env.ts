@@ -50,6 +50,9 @@ const envSchema = z.object({
   LANGCHAIN_TRACING_V2: z.coerce.boolean().default(false),
   LANGCHAIN_API_KEY: z.string().optional(),
   LANGCHAIN_PROJECT: z.string().default('auto-ops'),
+
+  /** Serper.dev SERP API key. Optional — client throws at first call if missing. */
+  SERPER_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
