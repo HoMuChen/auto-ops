@@ -6,6 +6,7 @@ import {
   type NewTaskIntake,
   type Task,
   type TaskIntake,
+  messages,
   taskIntakes,
   tasks,
 } from '../db/schema/index.js';
@@ -16,6 +17,8 @@ export interface CreateIntakeInput {
   createdBy?: string;
   /** First user message (the boss's initial ask). */
   firstMessage: string;
+  /** Image UUIDs attached to the first user message. */
+  firstMessageImageIds?: string[];
   /** First assistant reply produced by the intake agent for this turn. */
   firstAssistantReply: string;
   draftTitle?: string | null;
@@ -33,6 +36,7 @@ export async function createIntake(input: CreateIntakeInput): Promise<TaskIntake
     role: 'user',
     content: input.firstMessage,
     createdAt: now.toISOString(),
+    ...(input.firstMessageImageIds?.length ? { imageIds: input.firstMessageImageIds } : {}),
   };
   const assistantMsg: IntakeMessage = {
     role: 'assistant',
@@ -87,6 +91,7 @@ export async function appendTurn(
   intakeId: string,
   patch: {
     userMessage: string;
+    imageIds?: string[];
     assistantReply: string;
     draftBrief?: string | null;
     draftTitle?: string | null;
@@ -101,6 +106,7 @@ export async function appendTurn(
     role: 'user',
     content: patch.userMessage,
     createdAt: now.toISOString(),
+    ...(patch.imageIds?.length ? { imageIds: patch.imageIds } : {}),
   };
   const assistantMsg: IntakeMessage = {
     role: 'assistant',
@@ -188,6 +194,21 @@ export async function finalizeIntake(
       })
       .returning();
     if (!task) throw new Error('Failed to spawn task from intake');
+
+    // Seed the task's first user message so the runner has a message history
+    // (consistent with tasks created via POST /v1/tasks). Carry any image IDs
+    // that were attached to user turns during the intake conversation.
+    const intakeImageIds = intake.messages
+      .filter((m) => m.role === 'user')
+      .flatMap((m) => m.imageIds ?? []);
+    await tx.insert(messages).values({
+      tenantId,
+      taskId: task.id,
+      role: 'user',
+      content: brief,
+      ...(intakeImageIds.length ? { data: { imageIds: intakeImageIds } } : {}),
+      createdBy: override?.createdBy ?? intake.createdBy ?? undefined,
+    });
 
     const [updated] = await tx
       .update(taskIntakes)

@@ -93,6 +93,7 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
         tenantId,
         createdBy: user.id,
         firstMessage: body.message,
+        firstMessageImageIds: body.imageIds,
         firstAssistantReply: turn.reply,
         draftTitle: turn.draftTitle,
         draftBrief: turn.draftBrief,
@@ -138,6 +139,7 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
 
       const updated = await appendTurn(tenantId, intakeId, {
         userMessage: body.message,
+        imageIds: body.imageIds,
         assistantReply: turn.reply,
         draftBrief: turn.draftBrief,
         draftTitle: turn.draftTitle,

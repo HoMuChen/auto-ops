@@ -86,6 +86,7 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
         taskId: task.id,
         role: 'user',
         content: body.brief,
+        ...(body.imageIds?.length ? { data: { imageIds: body.imageIds } } : {}),
         createdBy: user.id,
       });
 

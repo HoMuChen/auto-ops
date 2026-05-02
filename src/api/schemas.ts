@@ -40,6 +40,8 @@ export const CreateTaskBody = z.object({
   preferredAgent: z.string().optional(),
   params: z.record(z.unknown()).optional(),
   scheduledAt: z.string().datetime().optional(),
+  /** UUIDs returned by POST /v1/uploads — attached to the first user message. */
+  imageIds: z.array(z.string().uuid()).optional(),
 });
 export type CreateTaskBody = z.infer<typeof CreateTaskBody>;
 
@@ -112,11 +114,15 @@ export const IntakeSchema = z.object({
 
 export const StartIntakeBody = z.object({
   message: z.string().min(1, 'first message is required'),
+  /** UUIDs returned by POST /v1/uploads — stored on the first intake message. */
+  imageIds: z.array(z.string().uuid()).optional(),
 });
 export type StartIntakeBody = z.infer<typeof StartIntakeBody>;
 
 export const IntakeMessageBody = z.object({
   message: z.string().min(1),
+  /** UUIDs returned by POST /v1/uploads — stored on this intake message turn. */
+  imageIds: z.array(z.string().uuid()).optional(),
 });
 export type IntakeMessageBody = z.infer<typeof IntakeMessageBody>;
 
