@@ -1,7 +1,11 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
+import { loadPacks } from '../../lib/packs.js';
 import { buildAgentMessages } from '../../lib/messages.js';
+import type { TopicResearch } from '../seo-strategist/index.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -24,7 +28,10 @@ Requirements:
   and the blog index card.
 - Tags: 3–8 short lower-case keywords.
 - Honor any tone/keyword/forbidden-phrase constraints in the brief.
-- Stay focused on the single topic — do NOT propose other articles.`;
+- Stay focused on the single topic — do NOT propose other articles.
+
+When you have EEAT research hooks from the strategist, ask the boss 2–3
+concrete experience questions BEFORE drafting. Use the eeatHook to focus them.`;
 
 const configSchema = z.object({
   targetLanguages: z
@@ -42,7 +49,6 @@ const configSchema = z.object({
     .default([])
     .describe('Keywords the agent should weave in when natural'),
 
-  // Publishing config — controls what happens on approve(finalize=true).
   publishToShopify: z
     .boolean()
     .default(true)
@@ -68,14 +74,19 @@ const configSchema = z.object({
     .string()
     .nullish()
     .describe('Which Shopify credential row to use when the tenant has multiple stores.'),
+
+  skills: z
+    .object({
+      seoFundamentals: z.boolean().default(true),
+      eeat: z.boolean().default(true),
+      aiSeo: z.boolean().default(false),
+      geo: z.boolean().default(false),
+    })
+    .default({}),
 });
 
 type SeoWriterConfig = z.infer<typeof configSchema>;
 
-/**
- * Structured article the LLM produces. Maps onto Shopify's Admin REST
- * `POST /blogs/:id/articles.json` body (the framework adds the rest).
- */
 const ArticleSchema = z.object({
   title: z.string().min(1).max(140).describe('Article title shown on the blog and in feeds.'),
   bodyHtml: z
@@ -108,6 +119,41 @@ const ArticleSchema = z.object({
 
 type ArticleDraft = z.infer<typeof ArticleSchema>;
 
+const EeatQuestionsSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        question: z.string().min(5).describe('Concrete experience question to the boss.'),
+        hint: z.string().optional().describe('Optional hint shown under the question.'),
+        optional: z.boolean().optional().describe('If true, boss may skip without blocking.'),
+      }),
+    )
+    .min(1)
+    .max(5),
+  progressNote: z.string().min(10).max(200),
+});
+
+type EeatQuestions = z.infer<typeof EeatQuestionsSchema>;
+type EeatQuestion = EeatQuestions['questions'][number];
+
+/**
+ * Stage 1 fires when the task has research from the strategist (eeatHook present)
+ * AND the boss hasn't yet answered the EEAT questions (eeatPending not set).
+ * Stage 2 fires for all other cases (direct tasks, or after EEAT answers received).
+ */
+function shouldDoStage1(
+  taskOutput: Record<string, unknown> | undefined,
+  params: Record<string, unknown>,
+  messages: AgentInput['messages'],
+): boolean {
+  const research = (params as { research?: TopicResearch }).research;
+  if (!research?.eeatHook) return false;
+  const pending = (taskOutput as { eeatPending?: unknown } | undefined)?.eeatPending;
+  if (!pending) return true;
+  if (messages[messages.length - 1]?.role === 'user') return false;
+  throw new Error('eeatPending set but last message is not from user — double-execution guard');
+}
+
 export const shopifyBlogWriterAgent: IAgent = {
   manifest: {
     id: 'shopify-blog-writer',
@@ -117,13 +163,7 @@ export const shopifyBlogWriterAgent: IAgent = {
       'publishes it to the tenant Shopify blog after human approval.',
     defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.4 },
     defaultPrompt: DEFAULT_PROMPT,
-    // The publish tool needs Shopify creds; surfaced as a static tool id so
-    // the activation UI can preview the capability.
     toolIds: ['shopify.publish_article'],
-    // Listed even though it's only required when publishToShopify=true (the
-    // default). The activation gate will block until creds are bound; users
-    // who don't want publishing should disable publishToShopify in the agent
-    // config — see runtime check in build().
     requiredCredentials: [
       {
         provider: 'shopify',
@@ -136,23 +176,18 @@ export const shopifyBlogWriterAgent: IAgent = {
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
     const cfg = configSchema.parse(ctx.agentConfig ?? {}) as SeoWriterConfig;
-    const model = buildModel(ctx.modelConfig).withStructuredOutput(ArticleSchema, {
-      name: 'seo_blog_article',
-    });
 
-    // Tools are built unconditionally — the closure captures tenantId/config
-    // but doesn't fetch Shopify credentials until the tool is actually invoked
-    // (after HITL approval). Building is therefore credential-free.
     const tools = await buildShopifyTools(ctx.tenantId, {
       ...(cfg.credentialLabel ? { credentialLabel: cfg.credentialLabel } : {}),
       ...(cfg.blogHandle ? { blogHandle: cfg.blogHandle } : {}),
       ...(cfg.defaultAuthor ? { defaultAuthor: cfg.defaultAuthor } : {}),
       publishArticleImmediately: cfg.publishImmediately,
     });
-
-    // Whitelist this agent only to publish_article — create_product belongs
-    // to shopify-ops, not the writer.
     const filteredTools = tools.filter((t) => t.id === 'shopify.publish_article');
+
+    const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
+    const packsBlock = await loadPacks(packsDir, cfg.skills);
+    const systemPrompt = packsBlock ? `${packsBlock}\n\n${ctx.systemPrompt}` : ctx.systemPrompt;
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
       await ctx.emitLog('agent.started', '開始寫稿了，給我一點時間', {
@@ -170,14 +205,51 @@ export const shopifyBlogWriterAgent: IAgent = {
       }
       constraints.push(`Writer fluent in: ${cfg.targetLanguages.join(', ')}`);
 
-      const messages = buildAgentMessages(ctx.systemPrompt, input.messages, constraints);
-      const article = (await model.invoke(messages)) as ArticleDraft;
+      // Build research section if task came from the Strategist
+      const research = (input.params as { research?: TopicResearch }).research;
+      const researchSection = research
+        ? [
+            'Research from the strategist:',
+            `- Search intent: ${research.searchIntent}`,
+            `- People Also Ask: ${research.paaQuestions.join(' / ')}`,
+            `- Related searches: ${research.relatedSearches.join(' / ')}`,
+            `- Competitor top angles: ${research.competitorTopAngles.join(' / ')}`,
+            `- Competitor gaps: ${research.competitorGaps.join(' / ')}`,
+            `- Target word count: ${research.targetWordCount}`,
+            `- EEAT hook: ${research.eeatHook}`,
+          ].join('\n')
+        : '';
+      const systemWithResearch = researchSection
+        ? `${systemPrompt}\n\n${researchSection}`
+        : systemPrompt;
+
+      if (shouldDoStage1(input.taskOutput, input.params, input.messages)) {
+        const questionModel = buildModel(ctx.modelConfig).withStructuredOutput(
+          EeatQuestionsSchema,
+          { name: 'eeat_questions' },
+        );
+        const messages = buildAgentMessages(systemWithResearch, input.messages, constraints);
+        const q = (await questionModel.invoke(messages)) as EeatQuestions;
+        await ctx.emitLog('agent.questions.asked', q.progressNote, {
+          count: q.questions.length,
+        });
+        return {
+          message: renderQuestionsMarkdown(q.questions),
+          awaitingApproval: true,
+          payload: {
+            eeatPending: { questions: q.questions, askedAt: new Date().toISOString() },
+          },
+        };
+      }
+
+      const articleModel = buildModel(ctx.modelConfig).withStructuredOutput(ArticleSchema, {
+        name: 'seo_blog_article',
+      });
+      const messages = buildAgentMessages(systemWithResearch, input.messages, constraints);
+      const article = (await articleModel.invoke(messages)) as ArticleDraft;
 
       const preview = renderArticleMarkdown(article, cfg);
 
-      // The LLM is told (via the schema describe) to fill `progressNote` as a
-      // first-person update to the boss. Use it directly as the timeline log
-      // so each progress update has the model's own context-aware narration.
       await ctx.emitLog('agent.draft.ready', article.progressNote, {
         title: article.title,
         language: article.language,
@@ -191,10 +263,6 @@ export const shopifyBlogWriterAgent: IAgent = {
         payload: { article, language: article.language, publishToShopify: cfg.publishToShopify },
       };
 
-      // Only attach a pending tool call when publishing is enabled. With
-      // publishToShopify=false the task just transitions to done on approve
-      // (writer-as-drafter mode) — useful for tenants without Shopify or for
-      // one-off content the user will export elsewhere.
       if (cfg.publishToShopify) {
         const pendingToolCall: PendingToolCall = {
           id: 'shopify.publish_article',
@@ -215,6 +283,24 @@ export const shopifyBlogWriterAgent: IAgent = {
     return { tools: filteredTools, invoke };
   },
 };
+
+function renderQuestionsMarkdown(questions: EeatQuestion[]): string {
+  return [
+    '## EEAT Experience Questions',
+    '',
+    'Before I draft the article, could you share a bit about your first-hand experience? ' +
+      'This helps ground the content in real expertise that competitors can\'t easily replicate.',
+    '',
+    ...questions.map(
+      (q, i) =>
+        `**${i + 1}. ${q.question}**${q.optional ? ' _(optional)_' : ''}${
+          q.hint ? `\n   _${q.hint}_` : ''
+        }`,
+    ),
+    '',
+    "_Reply with your answers (skip optional ones if short on time). I'll draft the full article once you reply._",
+  ].join('\n');
+}
 
 function renderArticleMarkdown(article: ArticleDraft, cfg: SeoWriterConfig): string {
   const publishLine = cfg.publishToShopify

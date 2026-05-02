@@ -73,7 +73,7 @@ describe('Strategy → Spawn → Execution flow', () => {
           competitorTopAngles: ['fabric guides'],
           competitorGaps: ['no Taiwan-specific humidity advice'],
           targetWordCount: 1200,
-          eeatHook: 'Boss should share own washing/wearing experience in tropical humidity',
+          eeatHook: '',
         },
         {
           title: 'Sustainable summer fabrics buyer guide',
@@ -87,7 +87,7 @@ describe('Strategy → Spawn → Execution flow', () => {
           competitorTopAngles: ['comparison tables'],
           competitorGaps: ['no first-hand washing data'],
           targetWordCount: 1500,
-          eeatHook: 'Boss should mention sourcing relationships and certifications',
+          eeatHook: '',
         },
       ],
     });

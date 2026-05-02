@@ -85,6 +85,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
           content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
         })) as { role: 'user' | 'assistant' | 'system' | 'tool'; content: string }[],
         params: state.params,
+        taskOutput: state.currentTaskOutput ?? undefined,
       });
 
       return {

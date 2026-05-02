@@ -136,6 +136,8 @@ export interface AgentInput {
   messages: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string }[];
   /** Free-form params from the task input. */
   params: Record<string, unknown>;
+  /** The task's persisted output, if the worker is resuming after a HITL gate. */
+  taskOutput?: Record<string, unknown>;
 }
 
 /**

@@ -24,6 +24,10 @@ export interface TaskOutput {
   pendingToolCall?: PendingToolCall;
   toolResult?: unknown;
   toolExecutedAt?: string;
+  eeatPending?: {
+    questions: { question: string; hint?: string; optional?: boolean }[];
+    askedAt: string;
+  };
   /** Agent payload keys (article, listing, plan, language…). */
   [key: string]: unknown;
 }

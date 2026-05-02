@@ -62,6 +62,15 @@ export const GraphStateAnnotation = Annotation.Root({
     reducer: (_curr, next) => next,
     default: () => false,
   }),
+
+  /**
+   * Latest persisted task.output — threaded from the runner so agents can
+   * read prior HITL output (e.g. eeatPending) without touching the DB.
+   */
+  currentTaskOutput: Annotation<Record<string, unknown> | null>({
+    reducer: (_curr, next) => next,
+    default: () => null,
+  }),
 });
 
 export type GraphState = typeof GraphStateAnnotation.State;

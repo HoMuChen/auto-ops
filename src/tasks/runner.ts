@@ -59,20 +59,33 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
       const brief =
         history.find((m) => m.role === 'user')?.content ??
         (typeof task.input?.brief === 'string' ? task.input.brief : task.title);
-      invokeInput = initialState({
-        tenantId: task.tenantId,
-        taskId: task.id,
-        brief,
-        params: (task.input as Record<string, unknown>) ?? {},
-        // Execution children carry an explicit owner; pinning bypasses the
-        // supervisor LLM on the first hop. Strategy parents leave this null.
-        pinnedAgent: task.assignedAgent,
-      });
+      invokeInput = {
+        ...initialState({
+          tenantId: task.tenantId,
+          taskId: task.id,
+          brief,
+          params: (task.input as Record<string, unknown>) ?? {},
+          // Execution children carry an explicit owner; pinning bypasses the
+          // supervisor LLM on the first hop. Strategy parents leave this null.
+          pinnedAgent: task.assignedAgent,
+        }),
+        currentTaskOutput: (task.output ?? null) as Record<string, unknown> | null,
+      };
     } else {
       // Resumed run: pull any new user messages since last checkpoint and inject.
       const history = await listMessages(task.tenantId, task.id);
       const latestUser = history.filter((m) => m.role === 'user').slice(-1)[0];
-      invokeInput = latestUser ? { messages: [new HumanMessage(latestUser.content)] } : null;
+      invokeInput = {
+        messages: latestUser ? [new HumanMessage(latestUser.content)] : [],
+        currentTaskOutput: (task.output ?? null) as Record<string, unknown> | null,
+        // Reset the HITL gate so the supervisor doesn't short-circuit on the
+        // next invocation. Re-pin the agent (stamped by the previous run) so the
+        // supervisor skips its LLM call and routes directly back to the same agent.
+        awaitingApproval: false,
+        ...(task.assignedAgent
+          ? { pinnedAgent: task.assignedAgent, lastOutput: null }
+          : {}),
+      };
     }
 
     const finalState = await graph.invoke(invokeInput as never, config);
