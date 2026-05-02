@@ -54,6 +54,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
         id: a.manifest.id,
         name: a.manifest.name,
         description: a.manifest.description,
+        metadata: a.manifest.metadata,
       }));
 
     graph.addNode(manifest.id, async (state: GraphState) => {

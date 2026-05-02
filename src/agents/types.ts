@@ -78,6 +78,8 @@ export interface PeerAgentDescriptor {
   id: string;
   name: string;
   description: string;
+  /** Forwarded from the peer's manifest.metadata — lets strategy agents filter by kind. */
+  metadata?: Record<string, unknown>;
 }
 
 /** Context passed when building an agent's runnable node. */
