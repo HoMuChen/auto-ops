@@ -7,6 +7,7 @@ import type { SubscriptionPlan, UserRole } from '../../../src/db/schema/index.js
  * App-level tables we created. Truncated CASCADE so FK chains clear in any order.
  */
 const APP_TABLES = [
+  'serp_cache',
   'tenant_credentials',
   'agent_configs',
   'messages',
