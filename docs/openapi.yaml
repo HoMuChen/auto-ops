@@ -1,0 +1,1978 @@
+openapi: 3.0.3
+info:
+  title: auto-ops API
+  version: 0.1.0
+  description: AI e-commerce auto-operation platform
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas: {}
+paths:
+  /health:
+    get:
+      tags:
+      - system
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - ok
+                  uptime:
+                    type: number
+                required:
+                - status
+                - uptime
+                additionalProperties: false
+  /v1/me:
+    get:
+      tags:
+      - system
+      responses:
+        '200':
+          description: Default Response
+  /v1/tenants:
+    post:
+      tags:
+      - tenants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                slug:
+                  type: string
+                  minLength: 2
+                  maxLength: 60
+                  pattern: ^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$
+                plan:
+                  type: string
+                  enum:
+                  - basic
+                  - pro
+                  - flagship
+                  default: basic
+              required:
+              - name
+              - slug
+              additionalProperties: false
+      responses:
+        '200':
+          description: Default Response
+  /v1/tasks:
+    get:
+      tags:
+      - tasks
+      parameters:
+      - schema:
+          type: string
+          enum:
+          - todo
+          - in_progress
+          - waiting
+          - done
+          - failed
+        in: query
+        name: status
+        required: false
+      - schema:
+          type: string
+          format: uuid
+        in: query
+        name: parentTaskId
+        required: false
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    tenantId:
+                      type: string
+                      format: uuid
+                    parentTaskId:
+                      type: string
+                      format: uuid
+                      nullable: true
+                    title:
+                      type: string
+                    description:
+                      type: string
+                      nullable: true
+                    kind:
+                      type: string
+                      enum:
+                      - strategy
+                      - execution
+                    assignedAgent:
+                      type: string
+                      nullable: true
+                    status:
+                      type: string
+                      enum:
+                      - todo
+                      - in_progress
+                      - waiting
+                      - done
+                      - failed
+                    input:
+                      type: object
+                      additionalProperties: {}
+                    output:
+                      type: object
+                      additionalProperties: {}
+                      nullable: true
+                    error:
+                      type: object
+                      properties:
+                        message:
+                          type: string
+                        stack:
+                          type: string
+                      required:
+                      - message
+                      additionalProperties: false
+                      nullable: true
+                    scheduledAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    createdAt:
+                      type: string
+                      format: date-time
+                    updatedAt:
+                      type: string
+                      format: date-time
+                    completedAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                  required:
+                  - id
+                  - tenantId
+                  - parentTaskId
+                  - title
+                  - description
+                  - kind
+                  - assignedAgent
+                  - status
+                  - input
+                  - output
+                  - scheduledAt
+                  - createdAt
+                  - updatedAt
+                  - completedAt
+                  additionalProperties: false
+        '401':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+        '403':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+    post:
+      tags:
+      - tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brief:
+                  type: string
+                  minLength: 1
+                preferredAgent:
+                  type: string
+                params:
+                  type: object
+                  additionalProperties: {}
+                scheduledAt:
+                  type: string
+                  format: date-time
+                imageIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+              required:
+              - brief
+              additionalProperties: false
+      responses:
+        '201':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  tenantId:
+                    type: string
+                    format: uuid
+                  parentTaskId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  title:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  kind:
+                    type: string
+                    enum:
+                    - strategy
+                    - execution
+                  assignedAgent:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - todo
+                    - in_progress
+                    - waiting
+                    - done
+                    - failed
+                  input:
+                    type: object
+                    additionalProperties: {}
+                  output:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      stack:
+                        type: string
+                    required:
+                    - message
+                    additionalProperties: false
+                    nullable: true
+                  scheduledAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                required:
+                - id
+                - tenantId
+                - parentTaskId
+                - title
+                - description
+                - kind
+                - assignedAgent
+                - status
+                - input
+                - output
+                - scheduledAt
+                - createdAt
+                - updatedAt
+                - completedAt
+                additionalProperties: false
+        '400':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+        '401':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+        '403':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+  /v1/tasks/{taskId}:
+    get:
+      tags:
+      - tasks
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: taskId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  tenantId:
+                    type: string
+                    format: uuid
+                  parentTaskId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  title:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  kind:
+                    type: string
+                    enum:
+                    - strategy
+                    - execution
+                  assignedAgent:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - todo
+                    - in_progress
+                    - waiting
+                    - done
+                    - failed
+                  input:
+                    type: object
+                    additionalProperties: {}
+                  output:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      stack:
+                        type: string
+                    required:
+                    - message
+                    additionalProperties: false
+                    nullable: true
+                  scheduledAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                required:
+                - id
+                - tenantId
+                - parentTaskId
+                - title
+                - description
+                - kind
+                - assignedAgent
+                - status
+                - input
+                - output
+                - scheduledAt
+                - createdAt
+                - updatedAt
+                - completedAt
+                additionalProperties: false
+        '404':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+  /v1/tasks/{taskId}/messages:
+    get:
+      tags:
+      - tasks
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: taskId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+  /v1/tasks/{taskId}/logs:
+    get:
+      tags:
+      - tasks
+      parameters:
+      - schema:
+          type: string
+          format: date-time
+        in: query
+        name: since
+        required: false
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: taskId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+  /v1/tasks/{taskId}/stream:
+    get:
+      parameters:
+      - schema:
+          type: string
+        in: path
+        name: taskId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+  /v1/tasks/{taskId}/approve:
+    post:
+      tags:
+      - tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - not: {}
+              - type: object
+                properties:
+                  finalize:
+                    type: boolean
+                    default: false
+                additionalProperties: false
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: taskId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  tenantId:
+                    type: string
+                    format: uuid
+                  parentTaskId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  title:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  kind:
+                    type: string
+                    enum:
+                    - strategy
+                    - execution
+                  assignedAgent:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - todo
+                    - in_progress
+                    - waiting
+                    - done
+                    - failed
+                  input:
+                    type: object
+                    additionalProperties: {}
+                  output:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      stack:
+                        type: string
+                    required:
+                    - message
+                    additionalProperties: false
+                    nullable: true
+                  scheduledAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                required:
+                - id
+                - tenantId
+                - parentTaskId
+                - title
+                - description
+                - kind
+                - assignedAgent
+                - status
+                - input
+                - output
+                - scheduledAt
+                - createdAt
+                - updatedAt
+                - completedAt
+                additionalProperties: false
+        '422':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+  /v1/tasks/{taskId}/feedback:
+    post:
+      tags:
+      - tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                feedback:
+                  type: string
+                  minLength: 1
+              required:
+              - feedback
+              additionalProperties: false
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: taskId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  tenantId:
+                    type: string
+                    format: uuid
+                  parentTaskId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  title:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  kind:
+                    type: string
+                    enum:
+                    - strategy
+                    - execution
+                  assignedAgent:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - todo
+                    - in_progress
+                    - waiting
+                    - done
+                    - failed
+                  input:
+                    type: object
+                    additionalProperties: {}
+                  output:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      stack:
+                        type: string
+                    required:
+                    - message
+                    additionalProperties: false
+                    nullable: true
+                  scheduledAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                required:
+                - id
+                - tenantId
+                - parentTaskId
+                - title
+                - description
+                - kind
+                - assignedAgent
+                - status
+                - input
+                - output
+                - scheduledAt
+                - createdAt
+                - updatedAt
+                - completedAt
+                additionalProperties: false
+  /v1/tasks/{taskId}/discard:
+    post:
+      tags:
+      - tasks
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: taskId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  tenantId:
+                    type: string
+                    format: uuid
+                  parentTaskId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  title:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  kind:
+                    type: string
+                    enum:
+                    - strategy
+                    - execution
+                  assignedAgent:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - todo
+                    - in_progress
+                    - waiting
+                    - done
+                    - failed
+                  input:
+                    type: object
+                    additionalProperties: {}
+                  output:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      stack:
+                        type: string
+                    required:
+                    - message
+                    additionalProperties: false
+                    nullable: true
+                  scheduledAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                required:
+                - id
+                - tenantId
+                - parentTaskId
+                - title
+                - description
+                - kind
+                - assignedAgent
+                - status
+                - input
+                - output
+                - scheduledAt
+                - createdAt
+                - updatedAt
+                - completedAt
+                additionalProperties: false
+  /v1/intakes:
+    get:
+      tags:
+      - intakes
+      parameters:
+      - schema:
+          type: string
+          enum:
+          - open
+          - finalized
+          - abandoned
+        in: query
+        name: status
+        required: false
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    tenantId:
+                      type: string
+                      format: uuid
+                    createdBy:
+                      type: string
+                      format: uuid
+                      nullable: true
+                    status:
+                      type: string
+                      enum:
+                      - open
+                      - finalized
+                      - abandoned
+                    messages:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          role:
+                            type: string
+                            enum:
+                            - user
+                            - assistant
+                          content:
+                            type: string
+                          createdAt:
+                            type: string
+                            format: date-time
+                        required:
+                        - role
+                        - content
+                        - createdAt
+                        additionalProperties: false
+                    draftTitle:
+                      type: string
+                      nullable: true
+                    draftBrief:
+                      type: string
+                      nullable: true
+                    finalizedTaskId:
+                      type: string
+                      format: uuid
+                      nullable: true
+                    finalizedAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    createdAt:
+                      type: string
+                      format: date-time
+                    updatedAt:
+                      type: string
+                      format: date-time
+                  required:
+                  - id
+                  - tenantId
+                  - createdBy
+                  - status
+                  - messages
+                  - draftTitle
+                  - draftBrief
+                  - finalizedTaskId
+                  - finalizedAt
+                  - createdAt
+                  - updatedAt
+                  additionalProperties: false
+        '401':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+        '403':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+    post:
+      tags:
+      - intakes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  minLength: 1
+                imageIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+              required:
+              - message
+              additionalProperties: false
+      responses:
+        '201':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  intake:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      tenantId:
+                        type: string
+                        format: uuid
+                      createdBy:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      status:
+                        type: string
+                        enum:
+                        - open
+                        - finalized
+                        - abandoned
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                              enum:
+                              - user
+                              - assistant
+                            content:
+                              type: string
+                            createdAt:
+                              type: string
+                              format: date-time
+                          required:
+                          - role
+                          - content
+                          - createdAt
+                          additionalProperties: false
+                      draftTitle:
+                        type: string
+                        nullable: true
+                      draftBrief:
+                        type: string
+                        nullable: true
+                      finalizedTaskId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      finalizedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+                    required:
+                    - id
+                    - tenantId
+                    - createdBy
+                    - status
+                    - messages
+                    - draftTitle
+                    - draftBrief
+                    - finalizedTaskId
+                    - finalizedAt
+                    - createdAt
+                    - updatedAt
+                    additionalProperties: false
+                  reply:
+                    type: string
+                  readyToFinalize:
+                    type: boolean
+                  missingInfo:
+                    type: array
+                    items:
+                      type: string
+                required:
+                - intake
+                - reply
+                - readyToFinalize
+                - missingInfo
+                additionalProperties: false
+        '400':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+  /v1/intakes/{intakeId}:
+    get:
+      tags:
+      - intakes
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: intakeId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  tenantId:
+                    type: string
+                    format: uuid
+                  createdBy:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - open
+                    - finalized
+                    - abandoned
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        role:
+                          type: string
+                          enum:
+                          - user
+                          - assistant
+                        content:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                      required:
+                      - role
+                      - content
+                      - createdAt
+                      additionalProperties: false
+                  draftTitle:
+                    type: string
+                    nullable: true
+                  draftBrief:
+                    type: string
+                    nullable: true
+                  finalizedTaskId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  finalizedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                required:
+                - id
+                - tenantId
+                - createdBy
+                - status
+                - messages
+                - draftTitle
+                - draftBrief
+                - finalizedTaskId
+                - finalizedAt
+                - createdAt
+                - updatedAt
+                additionalProperties: false
+        '404':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+  /v1/intakes/{intakeId}/messages:
+    post:
+      tags:
+      - intakes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  minLength: 1
+                imageIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+              required:
+              - message
+              additionalProperties: false
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: intakeId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  intake:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      tenantId:
+                        type: string
+                        format: uuid
+                      createdBy:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      status:
+                        type: string
+                        enum:
+                        - open
+                        - finalized
+                        - abandoned
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                              enum:
+                              - user
+                              - assistant
+                            content:
+                              type: string
+                            createdAt:
+                              type: string
+                              format: date-time
+                          required:
+                          - role
+                          - content
+                          - createdAt
+                          additionalProperties: false
+                      draftTitle:
+                        type: string
+                        nullable: true
+                      draftBrief:
+                        type: string
+                        nullable: true
+                      finalizedTaskId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      finalizedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+                    required:
+                    - id
+                    - tenantId
+                    - createdBy
+                    - status
+                    - messages
+                    - draftTitle
+                    - draftBrief
+                    - finalizedTaskId
+                    - finalizedAt
+                    - createdAt
+                    - updatedAt
+                    additionalProperties: false
+                  reply:
+                    type: string
+                  readyToFinalize:
+                    type: boolean
+                  missingInfo:
+                    type: array
+                    items:
+                      type: string
+                required:
+                - intake
+                - reply
+                - readyToFinalize
+                - missingInfo
+                additionalProperties: false
+        '422':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+  /v1/intakes/{intakeId}/finalize:
+    post:
+      tags:
+      - intakes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - not: {}
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    minLength: 1
+                    maxLength: 120
+                  brief:
+                    type: string
+                    minLength: 1
+                  preferredAgent:
+                    type: string
+                additionalProperties: false
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: intakeId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  intake:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      tenantId:
+                        type: string
+                        format: uuid
+                      createdBy:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      status:
+                        type: string
+                        enum:
+                        - open
+                        - finalized
+                        - abandoned
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                              enum:
+                              - user
+                              - assistant
+                            content:
+                              type: string
+                            createdAt:
+                              type: string
+                              format: date-time
+                          required:
+                          - role
+                          - content
+                          - createdAt
+                          additionalProperties: false
+                      draftTitle:
+                        type: string
+                        nullable: true
+                      draftBrief:
+                        type: string
+                        nullable: true
+                      finalizedTaskId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      finalizedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+                    required:
+                    - id
+                    - tenantId
+                    - createdBy
+                    - status
+                    - messages
+                    - draftTitle
+                    - draftBrief
+                    - finalizedTaskId
+                    - finalizedAt
+                    - createdAt
+                    - updatedAt
+                    additionalProperties: false
+                  task:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      tenantId:
+                        type: string
+                        format: uuid
+                      parentTaskId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      title:
+                        type: string
+                      description:
+                        type: string
+                        nullable: true
+                      kind:
+                        type: string
+                        enum:
+                        - strategy
+                        - execution
+                      assignedAgent:
+                        type: string
+                        nullable: true
+                      status:
+                        type: string
+                        enum:
+                        - todo
+                        - in_progress
+                        - waiting
+                        - done
+                        - failed
+                      input:
+                        type: object
+                        additionalProperties: {}
+                      output:
+                        type: object
+                        additionalProperties: {}
+                        nullable: true
+                      error:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                          stack:
+                            type: string
+                        required:
+                        - message
+                        additionalProperties: false
+                        nullable: true
+                      scheduledAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+                      completedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                    required:
+                    - id
+                    - tenantId
+                    - parentTaskId
+                    - title
+                    - description
+                    - kind
+                    - assignedAgent
+                    - status
+                    - input
+                    - output
+                    - scheduledAt
+                    - createdAt
+                    - updatedAt
+                    - completedAt
+                    additionalProperties: false
+                required:
+                - intake
+                - task
+                additionalProperties: false
+        '404':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+        '422':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+  /v1/intakes/{intakeId}/abandon:
+    post:
+      tags:
+      - intakes
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: intakeId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  tenantId:
+                    type: string
+                    format: uuid
+                  createdBy:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - open
+                    - finalized
+                    - abandoned
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        role:
+                          type: string
+                          enum:
+                          - user
+                          - assistant
+                        content:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                      required:
+                      - role
+                      - content
+                      - createdAt
+                      additionalProperties: false
+                  draftTitle:
+                    type: string
+                    nullable: true
+                  draftBrief:
+                    type: string
+                    nullable: true
+                  finalizedTaskId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  finalizedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                required:
+                - id
+                - tenantId
+                - createdBy
+                - status
+                - messages
+                - draftTitle
+                - draftBrief
+                - finalizedTaskId
+                - finalizedAt
+                - createdAt
+                - updatedAt
+                additionalProperties: false
+        '422':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+  /v1/agents:
+    get:
+      tags:
+      - agents
+      responses:
+        '200':
+          description: Default Response
+  /v1/agents/{agentId}:
+    get:
+      tags:
+      - agents
+      parameters:
+      - schema:
+          type: string
+        in: path
+        name: agentId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+  /v1/agents/{agentId}/activate:
+    post:
+      tags:
+      - agents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  default: {}
+                promptOverride:
+                  type: string
+                  nullable: true
+                toolWhitelist:
+                  type: array
+                  items:
+                    type: string
+                  nullable: true
+              additionalProperties: false
+      parameters:
+      - schema:
+          type: string
+        in: path
+        name: agentId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+  /v1/agents/{agentId}/deactivate:
+    post:
+      tags:
+      - agents
+      parameters:
+      - schema:
+          type: string
+        in: path
+        name: agentId
+        required: true
+      responses:
+        '200':
+          description: Default Response
+  /v1/credentials:
+    get:
+      tags:
+      - credentials
+      responses:
+        '200':
+          description: Default Response
+  /v1/credentials/{provider}:
+    put:
+      tags:
+      - credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secret:
+                  type: string
+                  minLength: 1
+                label:
+                  type: string
+                metadata:
+                  type: object
+                  additionalProperties: {}
+                  default: {}
+              required:
+              - secret
+              additionalProperties: false
+      parameters:
+      - schema:
+          type: string
+          enum:
+          - shopify
+          - threads
+          - instagram
+          - facebook
+        in: path
+        name: provider
+        required: true
+      responses:
+        '200':
+          description: Default Response
+  /v1/credentials/{id}:
+    delete:
+      tags:
+      - credentials
+      parameters:
+      - schema:
+          type: string
+          format: uuid
+        in: path
+        name: id
+        required: true
+      responses:
+        '200':
+          description: Default Response
+  /v1/uploads:
+    post:
+      tags:
+      - uploads
+      responses:
+        '200':
+          description: Default Response
+servers:
+- url: /
+security:
+- bearer: []
+
