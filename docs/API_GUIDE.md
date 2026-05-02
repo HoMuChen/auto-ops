@@ -590,7 +590,10 @@ open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
 原子 log 列表。每個 log 含 `event` (e.g. `agent.draft.ready`)、`message`、`data`。
 
 #### `GET /v1/tasks/:taskId/stream`  ← **SSE**
-即時 log。詳見下節。
+單一任務即時 log。詳見下節。
+
+#### `GET /v1/stream`  ← **SSE（tenant-wide）**
+整個 tenant 所有任務的即時 log，合流在同一個 stream。每條事件多一個 `taskId` 欄位，讓前端知道這條 log 屬於哪張看板卡片。詳見下節。
 
 #### `POST /v1/tasks/:taskId/approve`
 HITL 核准。
@@ -622,8 +625,14 @@ HITL 修改要求。會 append 一條 user message 到對話 thread，task → t
 
 ### SSE (Server-Sent Events) — Log 即時跳動
 
-**Endpoint:** `GET /v1/tasks/:taskId/stream`
-**Headers:**
+兩個 SSE endpoint，協定完全相同，差別只在範圍：
+
+| Endpoint | 範圍 | 用途 |
+|---|---|---|
+| `GET /v1/tasks/:taskId/stream` | 單一任務 | 任務 detail 頁的即時 log |
+| `GET /v1/stream` | 整個 tenant 所有任務 | 看板首頁的即時活動 feed |
+
+**Headers（兩個 endpoint 相同）：**
 ```
 Authorization: Bearer <JWT>
 x-tenant-id: <UUID>
@@ -631,16 +640,27 @@ Accept: text/event-stream
 Last-Event-ID: <ISO timestamp>   ← 重連時帶，server 從此時間點之後 replay
 ```
 
+**Query string：**
+- `?since=<ISO>` — 指定 replay 起點（等同 `Last-Event-ID`，二擇一）
+
 **協定：**
-- Connect 時先 replay 該 task 從 `?since=ISO`（或 `Last-Event-ID`）以後的歷史 log
+- Connect 時先 replay 歷史 log（從 `?since=` 或 `Last-Event-ID`，預設最近 500 筆）
 - 之後即時推送
 - 每 15 秒一個 `: keep-alive` heartbeat 防 proxy 斷線
 
-**事件格式：**
+**事件格式 — per-task stream：**
 ```
 id: 2026-05-01T00:00:00.123Z
 event: agent.draft.ready
-data: {"event":"agent.draft.ready","message":"SEO draft ready, awaiting approval","data":{"length":1234},"at":"2026-05-01T00:00:00.123Z"}
+data: {"event":"agent.draft.ready","message":"草稿完成","speaker":"shopify-blog-writer","at":"2026-05-01T00:00:00.123Z"}
+
+```
+
+**事件格式 — tenant-wide stream（多一個 `taskId`）：**
+```
+id: 2026-05-01T00:00:00.123Z
+event: agent.draft.ready
+data: {"taskId":"abc-123","event":"agent.draft.ready","message":"草稿完成","speaker":"shopify-blog-writer","at":"2026-05-01T00:00:00.123Z"}
 
 ```
 
@@ -652,7 +672,7 @@ data: {"event":"agent.draft.ready","message":"SEO draft ready, awaiting approval
 | `agent.questions.asked` | Blog Writer Stage 1：EEAT 問題產生（task → waiting，`output.eeatPending` 已設） |
 | `agent.draft.ready` | Shopify Blog Writer Stage 2：草稿完成（task → waiting，`output.pendingToolCall` 已設） |
 | `agent.plan.ready` | SEO Strategist 計畫完成（父任務 → waiting） |
-| `agent.listing.ready` | Shopify listing 草稿完成 |
+| `agent.content.ready` | Product Strategist 商品文案完成（父任務 → waiting） |
 | `task.waiting` | 進入 HITL gate |
 | `task.completed` | done |
 | `task.failed` | 失敗 |
@@ -660,12 +680,23 @@ data: {"event":"agent.draft.ready","message":"SEO draft ready, awaiting approval
 | `tool.completed` | tool 成功，結果在 `task.output.toolResult` |
 | `tool.failed` | tool 失敗，task 轉 failed |
 
-**JS 範例：**
+**JS 範例 — 單一任務：**
 ```js
-const url = new URL('/v1/tasks/abc/stream', API_BASE);
-// EventSource 不支援 custom headers，所以 token 走 query
-// 或用 fetch + ReadableStream 自己 parse SSE。實務上推薦後者：
-const res = await fetch(url, {
+const res = await fetch(`${API_BASE}/v1/tasks/${taskId}/stream`, {
+  headers: {
+    Authorization: `Bearer ${jwt}`,
+    'x-tenant-id': tenantId,
+    Accept: 'text/event-stream',
+  },
+});
+// 用 fetch + ReadableStream parse SSE（EventSource 不支援 custom headers）
+const reader = res.body.getReader();
+// ... TextDecoder + 解 "id:\nevent:\ndata:\n\n" 區塊
+```
+
+**JS 範例 — tenant-wide（看板首頁用）：**
+```js
+const res = await fetch(`${API_BASE}/v1/stream`, {
   headers: {
     Authorization: `Bearer ${jwt}`,
     'x-tenant-id': tenantId,
@@ -673,7 +704,8 @@ const res = await fetch(url, {
   },
 });
 const reader = res.body.getReader();
-// ... 用 TextDecoder + 解 "id:\nevent:\ndata:\n\n" 區塊
+// data.taskId 告訴你這條 log 屬於哪張卡
+// e.g. { taskId: 'abc-123', event: 'agent.content.ready', message: '...', at: '...' }
 ```
 
 ---
