@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 import { agentRegistry } from '../agents/registry.js';
 import { db } from '../db/client.js';
 import { type NewTask, type Task, type TaskStatus, taskLogs, tasks } from '../db/schema/index.js';
@@ -327,7 +327,7 @@ export async function listTenantLogs(
   }[]
 > {
   const conditions = [eq(taskLogs.tenantId, tenantId)];
-  if (opts?.since) conditions.push(sql`${taskLogs.createdAt} > ${opts.since}`);
+  if (opts?.since) conditions.push(gt(taskLogs.createdAt, opts.since));
 
   return db
     .select({
@@ -362,7 +362,7 @@ export async function listTaskLogs(
   }[]
 > {
   const conditions = [eq(taskLogs.tenantId, tenantId), eq(taskLogs.taskId, taskId)];
-  if (opts?.since) conditions.push(sql`${taskLogs.createdAt} > ${opts.since}`);
+  if (opts?.since) conditions.push(gt(taskLogs.createdAt, opts.since));
 
   return db
     .select({
