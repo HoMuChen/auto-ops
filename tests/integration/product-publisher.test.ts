@@ -28,9 +28,17 @@ const { getTask } = await import('../../src/tasks/repository.js');
 
 let app: Awaited<ReturnType<typeof createTestApp>>;
 
-beforeAll(async () => { app = await createTestApp(); });
-afterAll(async () => { await app.close(); });
-beforeEach(async () => { await truncateAll(); clearScript(); fetchMock.mockReset(); });
+beforeAll(async () => {
+  app = await createTestApp();
+});
+afterAll(async () => {
+  await app.close();
+});
+beforeEach(async () => {
+  await truncateAll();
+  clearScript();
+  fetchMock.mockReset();
+});
 
 describe('product-strategist → shopify-publisher end-to-end', () => {
   it('generates content → approve → spawns publisher → approve → create_product', async () => {
@@ -39,19 +47,22 @@ describe('product-strategist → shopify-publisher end-to-end', () => {
 
     // Bind Shopify credential for the publisher
     await app.inject({
-      method: 'PUT', url: '/v1/credentials/shopify',
+      method: 'PUT',
+      url: '/v1/credentials/shopify',
       headers: authHeaders(jwt, tenantId),
       payload: { secret: 'shpat_test', metadata: { storeUrl: 'demo.myshopify.com' } },
     });
 
     // Activate both agents
     await app.inject({
-      method: 'POST', url: '/v1/agents/product-strategist/activate',
+      method: 'POST',
+      url: '/v1/agents/product-strategist/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: { defaultLanguage: 'zh-TW', defaultVendor: 'Acme' } },
     });
     await app.inject({
-      method: 'POST', url: '/v1/agents/shopify-publisher/activate',
+      method: 'POST',
+      url: '/v1/agents/shopify-publisher/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: {} },
     });
@@ -59,20 +70,25 @@ describe('product-strategist → shopify-publisher end-to-end', () => {
     // Script: supervisor routes → product-strategist, then LLM produces listing
     scriptStructured({ nextAgent: 'product-strategist', clarification: null, done: false });
     scriptStructured({
-      title: 'Linen Shirt', bodyHtml: '<p>Cool.</p>',
-      tags: ['linen'], vendor: 'Acme', progressNote: '商品文案好了',
+      title: 'Linen Shirt',
+      bodyHtml: '<p>Cool.</p>',
+      tags: ['linen'],
+      vendor: 'Acme',
+      progressNote: '商品文案好了',
     });
 
     // OpenAI image generation mock
     const fakeImageB64 = Buffer.from('fakeimg').toString('base64');
     fetchMock.mockResolvedValueOnce({
-      ok: true, status: 200,
+      ok: true,
+      status: 200,
       json: async () => ({ data: [{ b64_json: fakeImageB64 }] }),
     } as unknown as Response);
 
     // Create task
     const create = await app.inject({
-      method: 'POST', url: '/v1/tasks',
+      method: 'POST',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
       payload: { brief: 'List this linen shirt' },
     });
@@ -88,7 +104,8 @@ describe('product-strategist → shopify-publisher end-to-end', () => {
 
     // Approve(finalize) → spawns shopify-publisher child
     const approveStrat = await app.inject({
-      method: 'POST', url: `/v1/tasks/${stratTaskId}/approve`,
+      method: 'POST',
+      url: `/v1/tasks/${stratTaskId}/approve`,
       headers: authHeaders(jwt, tenantId),
       payload: { finalize: true },
     });
@@ -96,7 +113,8 @@ describe('product-strategist → shopify-publisher end-to-end', () => {
 
     // Find the spawned publisher child
     const listTasks = await app.inject({
-      method: 'GET', url: '/v1/tasks',
+      method: 'GET',
+      url: '/v1/tasks',
       headers: authHeaders(jwt, tenantId),
     });
     const allTasks = listTasks.json<{ id: string; assignedAgent: string; status: string }[]>();
@@ -113,13 +131,15 @@ describe('product-strategist → shopify-publisher end-to-end', () => {
 
     // Mock Shopify product creation
     fetchMock.mockResolvedValueOnce({
-      ok: true, status: 201,
+      ok: true,
+      status: 201,
       json: async () => ({ product: { id: 123, title: 'Linen Shirt' } }),
     } as unknown as Response);
 
     // Approve(finalize) → fires shopify.create_product
     const approvePub = await app.inject({
-      method: 'POST', url: `/v1/tasks/${publisherTask!.id}/approve`,
+      method: 'POST',
+      url: `/v1/tasks/${publisherTask!.id}/approve`,
       headers: authHeaders(jwt, tenantId),
       payload: { finalize: true },
     });

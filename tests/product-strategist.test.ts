@@ -8,7 +8,9 @@ vi.mock('../src/integrations/openai-images/tools.js', () => ({
   buildImageTools: vi.fn(() => [
     {
       id: 'images.generate',
-      tool: { invoke: vi.fn(async () => ({ id: 'img-1', url: 'https://media.autoffice.app/img-1.png' })) },
+      tool: {
+        invoke: vi.fn(async () => ({ id: 'img-1', url: 'https://media.autoffice.app/img-1.png' })),
+      },
     },
   ]),
 }));
@@ -23,7 +25,9 @@ vi.mock('../src/integrations/cloudflare/images-repository.js', () => ({
   getImageById: vi.fn(async () => null),
 }));
 
-const { productStrategistAgent } = await import('../src/agents/builtin/product-strategist/index.js');
+const { productStrategistAgent } = await import(
+  '../src/agents/builtin/product-strategist/index.js'
+);
 
 describe('product-strategist', () => {
   it('produces spawnTasks with ProductContent for each available publisher', async () => {
@@ -59,8 +63,8 @@ describe('product-strategist', () => {
 
     expect(output.awaitingApproval).toBe(true);
     expect(output.spawnTasks).toHaveLength(1);
-    expect(output.spawnTasks![0].assignedAgent).toBe('shopify-publisher');
-    expect(output.spawnTasks![0].input.content).toMatchObject({
+    expect(output.spawnTasks![0]!.assignedAgent).toBe('shopify-publisher');
+    expect(output.spawnTasks![0]!.input.content).toMatchObject({
       title: 'Linen Oversized Shirt',
       vendor: 'Acme',
       tags: expect.arrayContaining(['linen']),
@@ -69,7 +73,11 @@ describe('product-strategist', () => {
 
   it('ignores non-publisher peers', async () => {
     scriptStructured({
-      title: 'Shirt', bodyHtml: '<p>.</p>', tags: ['linen'], vendor: 'X', progressNote: 'ok',
+      title: 'Shirt',
+      bodyHtml: '<p>.</p>',
+      tags: ['linen'],
+      vendor: 'X',
+      progressNote: 'ok',
     });
 
     const runnable = await productStrategistAgent.build({

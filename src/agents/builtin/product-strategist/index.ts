@@ -43,12 +43,14 @@ const configSchema = z.object({
   defaultVendor: z.string().nullish().describe('Default vendor name'),
   images: z
     .object({
-      autoGenerate: z.boolean().default(true).describe(
-        'Generate product images when none are uploaded',
-      ),
-      style: z.string().nullish().describe(
-        'Image style hint, e.g. "clean white background, product photography"',
-      ),
+      autoGenerate: z
+        .boolean()
+        .default(true)
+        .describe('Generate product images when none are uploaded'),
+      style: z
+        .string()
+        .nullish()
+        .describe('Image style hint, e.g. "clean white background, product photography"'),
     })
     .default({}),
   skills: z.object({ seoFundamentals: z.boolean().default(true) }).default({}),
@@ -66,9 +68,7 @@ const ProductListingSchema = z.object({
     .string()
     .min(10)
     .max(200)
-    .describe(
-      '一句話對老闆回報你剛完成什麼。用 zh-TW 第一人稱，對話對象是「老闆」。',
-    ),
+    .describe('一句話對老闆回報你剛完成什麼。用 zh-TW 第一人稱，對話對象是「老闆」。'),
 });
 
 type ProductListing = z.infer<typeof ProductListingSchema>;
@@ -94,9 +94,7 @@ export const productStrategistAgent: IAgent = {
       name: 'product_listing',
     });
 
-    const publishers = ctx.availableExecutionAgents.filter(
-      (a) => a.metadata?.kind === 'publisher',
-    );
+    const publishers = ctx.availableExecutionAgents.filter((a) => a.metadata?.kind === 'publisher');
 
     const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
     const packsBlock = await loadPacks(packsDir, cfg.skills);
@@ -192,7 +190,7 @@ export const productStrategistAgent: IAgent = {
         '',
         `**Vendor:** ${listing.vendor}`,
         `**Tags:** ${listing.tags.join(', ')}`,
-        `**Images:** ${imageUrls.length > 0 ? imageUrls.length + ' 張' : '無'}`,
+        `**Images:** ${imageUrls.length > 0 ? `${imageUrls.length} 張` : '無'}`,
         '',
         `_Approve to spawn ${spawnTasks.length} publisher task(s): ${publishers.map((p) => p.name).join(', ')}_`,
         '',

@@ -7,8 +7,8 @@
  *   2. Assert the returned Buffer is a non-empty PNG
  */
 import { describe, expect, it } from 'vitest';
-import { OpenAIImagesClient } from '../../src/integrations/openai-images/client.js';
 import { env } from '../../src/config/env.js';
+import { OpenAIImagesClient } from '../../src/integrations/openai-images/client.js';
 
 describe.skipIf(!env.OPENAI_API_KEY)('OpenAI Images smoke test', () => {
   it('generates a 1024x1024 image and returns a Buffer', async () => {

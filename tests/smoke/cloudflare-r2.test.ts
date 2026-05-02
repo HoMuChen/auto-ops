@@ -9,8 +9,8 @@
  */
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { describe, expect, it } from 'vitest';
-import { CloudflareImagesClient } from '../../src/integrations/cloudflare/images-client.js';
 import { env } from '../../src/config/env.js';
+import { CloudflareImagesClient } from '../../src/integrations/cloudflare/images-client.js';
 
 const REQUIRED = [
   'CLOUDFLARE_ACCOUNT_ID',

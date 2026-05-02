@@ -1,7 +1,7 @@
 import { productStrategistAgent } from './builtin/product-strategist/index.js';
+import { seoStrategistAgent } from './builtin/seo-strategist/index.js';
 import { shopifyBlogWriterAgent } from './builtin/shopify-blog-writer/index.js';
 import { shopifyPublisherAgent } from './builtin/shopify-publisher/index.js';
-import { seoStrategistAgent } from './builtin/seo-strategist/index.js';
 import { agentRegistry } from './registry.js';
 
 export * from './types.js';
