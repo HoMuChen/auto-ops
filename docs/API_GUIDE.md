@@ -171,9 +171,18 @@ x-tenant-id: <UUID>
                                   finalize              ↓ task.status='todo'
 
 [Kanban 顯示卡片進 In Progress]  GET /v1/tasks/:id     polling 或 SSE 看更新
-[Log 即時跳動]                   /stream  (SSE)         接收 agent.draft.ready 等
+[Log 即時跳動]                   /stream  (SSE)         接收 agent.questions.asked 等
 
-[卡片變 Waiting，顯示草稿]       GET /v1/tasks/:id     status='waiting', output 有 draft
+── 若任務由 SEO Strategist 派生（有 research.eeatHook）──────────────────────
+[卡片變 Waiting，顯示 EEAT 問題]  GET /v1/tasks/:id    status='waiting',
+                                                        output.eeatPending 有 questions
+  user 回答問題                  POST /v1/tasks/:id/   回 task (status:'todo')
+                                  feedback {feedback}    ↓ worker 重跑寫稿
+[卡片進 In Progress 再跑一次]    /stream  (SSE)         接收 agent.draft.ready
+── 一般流程（直接寫稿）─────────────────────────────────────────────────────────
+
+[卡片變 Waiting，顯示草稿]       GET /v1/tasks/:id     status='waiting',
+                                                        output.pendingToolCall 已設
   user 點 [Approve]              POST /v1/tasks/:id/   回 task (status:'done')
                                   approve {finalize:true}
 
@@ -239,9 +248,12 @@ x-tenant-id: <UUID>
     "name": "AI SEO Strategist",
     "description": "Plans SEO campaigns: turns a high-level brief into a list of focused article topics, each spawned as an independent execution task for the Shopify Blog Writer.",
     "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.2 },
-    "toolIds": [],
+    "toolIds": ["serper.search"],
     "requiredCredentials": [],
-    "configSchema": { /* JSON Schema — maxTopics, defaultLanguages, brandTone, preferredKeywords */ },
+    "configSchema": {
+      /* maxTopics, defaultLanguages, brandTone, preferredKeywords,
+         skills: { seoFundamentals(default:true), aiSeo(default:true), geo(default:true) } */
+    },
     "metadata": { "kind": "strategy" },
     "enabled": false,
     "ready": true,
@@ -262,7 +274,11 @@ x-tenant-id: <UUID>
         "bound": false
       }
     ],
-    "configSchema": { /* targetLanguages, brandTone, publishToShopify, blogHandle, defaultAuthor, publishImmediately, ... */ },
+    "configSchema": {
+      /* targetLanguages, brandTone, bannedPhrases, preferredKeywords,
+         publishToShopify, blogHandle, defaultAuthor, publishImmediately, credentialLabel,
+         skills: { seoFundamentals(default:true), eeat(default:true), aiSeo(default:false), geo(default:false) } */
+    },
     "enabled": false,
     "ready": false,  ← creds 未綁所以 false
     "credentials": [{"provider":"shopify","bound":false,"description":"..."}]
@@ -580,7 +596,8 @@ data: {"event":"agent.draft.ready","message":"SEO draft ready, awaiting approval
 |---|---|
 | `task.started` | 任務進入 graph |
 | `agent.started` | 某 agent 開始跑 |
-| `agent.draft.ready` | Shopify Blog Writer draft 完成 |
+| `agent.questions.asked` | Blog Writer Stage 1：EEAT 問題產生（task → waiting，`output.eeatPending` 已設） |
+| `agent.draft.ready` | Shopify Blog Writer Stage 2：草稿完成（task → waiting，`output.pendingToolCall` 已設） |
 | `agent.plan.ready` | SEO Strategist 計畫完成（父任務 → waiting） |
 | `agent.listing.ready` | Shopify listing 草稿完成 |
 | `task.waiting` | 進入 HITL gate |
@@ -605,6 +622,58 @@ const res = await fetch(url, {
 const reader = res.body.getReader();
 // ... 用 TextDecoder + 解 "id:\nevent:\ndata:\n\n" 區塊
 ```
+
+---
+
+## 6.v shopify-blog-writer 的三段式流程（EEAT → 草稿 → 發布）
+
+當任務由 SEO Strategist 派生，且 `task.input.research.eeatHook` 不為空時，
+Blog Writer 會走**三段式流程**，否則走兩段式（直接草稿 → 發布）。
+
+```
+三段式（有 eeatHook）：
+  worker 跑 → Stage 1: 產 EEAT 問題 → task waiting (output.eeatPending 已設)
+  user POST /feedback 回答 → task todo
+  worker 跑 → Stage 2: 寫稿 → task waiting (output.pendingToolCall 已設)
+  user POST /approve(finalize:true) → 發 Shopify → task done
+
+兩段式（直接任務、無 eeatHook）：
+  worker 跑 → 寫稿 → task waiting (output.pendingToolCall 已設)
+  user POST /approve(finalize:true) → 發 Shopify → task done
+```
+
+### Stage 1 output 形狀（eeatPending）
+
+```json
+{
+  "id": "task-uuid",
+  "status": "waiting",
+  "assignedAgent": "shopify-blog-writer",
+  "output": {
+    "eeatPending": {
+      "questions": [
+        {
+          "question": "這件亞麻衣料洗了幾次開始起球？",
+          "hint": "具體數字比形容詞更有說服力",
+          "optional": false
+        },
+        {
+          "question": "台北夏天 35 度穿起來感覺如何？",
+          "optional": true
+        }
+      ],
+      "askedAt": "2026-05-02T03:00:00Z"
+    }
+  }
+}
+```
+
+UI 應該渲染：
+- 顯示問題清單（`eeatPending.questions`），`optional: true` 的標示「可選」
+- CTA：[回答問題 / 傳給 Writer] → `POST /feedback` 把老闆的回答傳入
+- 不顯示 [Approve]（這個階段沒有 pendingToolCall）
+
+老闆透過 `/feedback` 傳答案後，task 回到 `todo`，worker 再跑 Stage 2 寫稿。
 
 ---
 
@@ -695,7 +764,14 @@ UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](toolRes
     "publishToShopify": true,            // 預設 true；false 則僅產草稿不發
     "blogHandle": "editorial",           // 不填→第一個 blog（多數店只有一個 "news"）
     "defaultAuthor": "Auto-Ops Bot",     // LLM 沒給 author 時用這個
-    "publishImmediately": false          // false→draft，true→直接 published 上線
+    "publishImmediately": false,         // false→draft，true→直接 published 上線
+
+    "skills": {
+      "seoFundamentals": true,           // SEO 基本原則（預設 true）
+      "eeat": true,                      // EEAT 體驗問答流程（預設 true）
+      "aiSeo": false,                    // AI 搜尋平台最佳化（預設 false）
+      "geo": false                       // GEO 內容結構原則（預設 false）
+    }
   }
 }
 ```
@@ -765,15 +841,38 @@ Shopify 回 4xx/5xx → executor 捕捉 → 寫 `task.error.message`、status=`f
           "title": "夏季穿搭 5 個必備單品",
           "primaryKeyword": "夏季穿搭",
           "language": "zh-TW",
-          "writerBrief": "1500 字 long-form article …"
+          "writerBrief": "1500 字 long-form article …",
+          "searchIntent": "commercial",
+          "paaQuestions": ["Is linen good for summer?", "How to care for linen?"],
+          "relatedSearches": ["linen vs cotton", "best linen shirts 2026"],
+          "competitorTopAngles": ["fabric guides", "comparison listicles"],
+          "competitorGaps": ["no Taiwan humidity specifics"],
+          "targetWordCount": 1200,
+          "eeatHook": "老闆分享亞麻在台灣濕熱夏天的親身洗滌與穿著體驗"
         },
-        { "title": "Sustainable summer fabrics buyer guide", "language": "en", ... }
+        { "title": "Sustainable summer fabrics buyer guide", "language": "en", "searchIntent": "informational", "..." : "..." }
       ]
     },
     "spawnTasks": [
-      { "title": "夏季穿搭 5 個必備單品", "assignedAgent": "shopify-blog-writer",
-        "input": { "brief": "...", "primaryKeyword": "...", "language": "zh-TW" } },
-      { "title": "Sustainable summer fabrics buyer guide", "assignedAgent": "shopify-blog-writer", ... }
+      {
+        "title": "夏季穿搭 5 個必備單品",
+        "assignedAgent": "shopify-blog-writer",
+        "input": {
+          "brief": "...",
+          "primaryKeyword": "夏季穿搭",
+          "language": "zh-TW",
+          "research": {
+            "searchIntent": "commercial",
+            "paaQuestions": ["Is linen good for summer?", "..."],
+            "relatedSearches": ["linen vs cotton", "..."],
+            "competitorTopAngles": ["fabric guides"],
+            "competitorGaps": ["no Taiwan humidity specifics"],
+            "targetWordCount": 1200,
+            "eeatHook": "老闆分享亞麻在台灣濕熱夏天的親身洗滌與穿著體驗"
+          }
+        }
+      },
+      { "title": "Sustainable summer fabrics buyer guide", "assignedAgent": "shopify-blog-writer", "..." : "..." }
     ]
   }
 }
@@ -875,13 +974,39 @@ interface Task {
   // ...
 }
 
+/**
+ * EEAT two-stage gate — set on `output.eeatPending` when shopify-blog-writer
+ * has asked experience questions and is waiting for the boss to reply via /feedback.
+ * Once the boss replies, `eeatPending` stays in output (historical record) but
+ * Stage 2 runs and `output.pendingToolCall` gets set instead.
+ */
+interface EeatPending {
+  questions: {
+    question: string;
+    hint?: string;
+    optional?: boolean;
+  }[];
+  askedAt: string;  // ISO 8601
+}
+
 /** Strategy task output shape — `output.spawnTasks` is what will be spawned on finalize. */
 interface SpawnTaskRequest {
   title: string;
   description?: string;
   assignedAgent: string;
-  input: Record<string, unknown>;
+  input: Record<string, unknown>;  // includes `research: TopicResearch` when from SEO Strategist
   scheduledAt?: string;
+}
+
+/** SERP research block forwarded from SEO Strategist into writer task input. */
+interface TopicResearch {
+  searchIntent: 'informational' | 'commercial' | 'transactional' | 'navigational';
+  paaQuestions: string[];
+  relatedSearches: string[];
+  competitorTopAngles: string[];
+  competitorGaps: string[];
+  targetWordCount: number;
+  eeatHook: string;  // non-empty string triggers Blog Writer EEAT Stage 1
 }
 
 /** Write-tool gate — `output.pendingToolCall` is fired by the framework on finalize. */
