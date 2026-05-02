@@ -42,7 +42,11 @@ export class OpenAIImagesClient {
   }): Promise<Buffer> {
     const form = new FormData();
     form.append('model', 'gpt-image-1');
-    form.append('image', new Blob([opts.imageBuffer], { type: 'image/png' }) as unknown as File, 'image.png');
+    form.append(
+      'image',
+      new Blob([opts.imageBuffer], { type: 'image/png' }) as unknown as File,
+      'image.png',
+    );
     form.append('prompt', opts.prompt);
     form.append('n', '1');
     form.append('size', opts.size ?? '1024x1024');

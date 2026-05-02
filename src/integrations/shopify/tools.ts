@@ -55,7 +55,13 @@ export async function buildShopifyTools(
   } = options;
 
   const createProduct = tool(
-    async (input: { title: string; bodyHtml?: string; tags?: string[]; vendor?: string; images?: { url: string }[] }) => {
+    async (input: {
+      title: string;
+      bodyHtml?: string;
+      tags?: string[];
+      vendor?: string;
+      images?: { url: string }[];
+    }) => {
       const client = await ShopifyAdminClient.forTenant(tenantId, credentialLabel);
       const result = await client.createProduct({
         title: input.title,
@@ -84,8 +90,12 @@ export async function buildShopifyTools(
         bodyHtml: z.string().optional(),
         tags: z.array(z.string()).optional(),
         vendor: z.string().optional(),
-        images: z.array(z.object({ url: z.string().url() })).optional()
-          .describe('Optional product images. Each entry has a url pointing to an accessible image.'),
+        images: z
+          .array(z.object({ url: z.string().url() }))
+          .optional()
+          .describe(
+            'Optional product images. Each entry has a url pointing to an accessible image.',
+          ),
       }),
     },
   );
@@ -169,7 +179,10 @@ export async function buildShopifyTools(
         summaryHtml: z.string().optional(),
         tags: z.array(z.string()).optional(),
         author: z.string().optional(),
-        coverImageUrl: z.string().url().optional()
+        coverImageUrl: z
+          .string()
+          .url()
+          .optional()
           .describe('Optional cover image URL. Attached as the article image in Shopify.'),
       }),
     },

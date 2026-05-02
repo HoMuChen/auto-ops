@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { insertImage, getImageById, getImagesByTaskId } from '../../src/integrations/cloudflare/images-repository.js';
-import { truncateAll, seedTenantWithOwner } from './helpers/db.js';
+import {
+  getImageById,
+  getImagesByTaskId,
+  insertImage,
+} from '../../src/integrations/cloudflare/images-repository.js';
+import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
 
 async function seedTenant() {
   const s = await seedTenantWithOwner();
@@ -34,11 +38,30 @@ describe('images repository', () => {
     const tenant = await seedTenant();
     const { db } = await import('../../src/db/client.js');
     const { tasks } = await import('../../src/db/schema/index.js');
-    const [task] = await db.insert(tasks).values({
-      tenantId: tenant.id, title: 'test', kind: 'execution', status: 'todo', input: {},
-    }).returning();
-    await insertImage({ tenantId: tenant.id, cfImageId: 'img1', url: 'u1', sourceType: 'generated', taskId: task!.id });
-    await insertImage({ tenantId: tenant.id, cfImageId: 'img2', url: 'u2', sourceType: 'generated', taskId: task!.id });
+    const [task] = await db
+      .insert(tasks)
+      .values({
+        tenantId: tenant.id,
+        title: 'test',
+        kind: 'execution',
+        status: 'todo',
+        input: {},
+      })
+      .returning();
+    await insertImage({
+      tenantId: tenant.id,
+      cfImageId: 'img1',
+      url: 'u1',
+      sourceType: 'generated',
+      taskId: task!.id,
+    });
+    await insertImage({
+      tenantId: tenant.id,
+      cfImageId: 'img2',
+      url: 'u2',
+      sourceType: 'generated',
+      taskId: task!.id,
+    });
     const imgs = await getImagesByTaskId(tenant.id, task!.id);
     expect(imgs).toHaveLength(2);
   });

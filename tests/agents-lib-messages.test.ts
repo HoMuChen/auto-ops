@@ -1,6 +1,6 @@
+import type { HumanMessage } from '@langchain/core/messages';
 import { describe, expect, it } from 'vitest';
 import { buildAgentMessages } from '../src/agents/lib/messages.js';
-import { HumanMessage } from '@langchain/core/messages';
 
 describe('buildAgentMessages — vision', () => {
   it('injects image_url blocks for messages with imageIds', async () => {

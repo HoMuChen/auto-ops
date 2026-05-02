@@ -270,7 +270,10 @@ describe('Shopify Ops — image generation on auto-generate', () => {
         status: 200,
         json: async () => ({
           success: true,
-          result: { id: 'cf-prod-img', variants: ['https://imagedelivery.net/HASH/cf-prod-img/public'] },
+          result: {
+            id: 'cf-prod-img',
+            variants: ['https://imagedelivery.net/HASH/cf-prod-img/public'],
+          },
         }),
       } as unknown as Response);
 

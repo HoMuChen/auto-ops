@@ -5,13 +5,17 @@ const fakeImageB64 = Buffer.from('fakeimage').toString('base64');
 
 describe('OpenAIImagesClient', () => {
   it('generate: POSTs to OpenAI and returns Buffer', async () => {
-    const fakeFetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({ data: [{ b64_json: fakeImageB64 }] }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+    const fakeFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ data: [{ b64_json: fakeImageB64 }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
     );
-    const client = new OpenAIImagesClient({ apiKey: 'sk-test', fetchImpl: fakeFetch as unknown as typeof fetch });
+    const client = new OpenAIImagesClient({
+      apiKey: 'sk-test',
+      fetchImpl: fakeFetch as unknown as typeof fetch,
+    });
     const buf = await client.generate({ prompt: 'a linen shirt' });
 
     expect(fakeFetch).toHaveBeenCalledWith(
@@ -27,13 +31,14 @@ describe('OpenAIImagesClient', () => {
   });
 
   it('edit: sends multipart and returns Buffer', async () => {
-    const fakeFetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({ data: [{ b64_json: fakeImageB64 }] }),
-        { status: 200 },
-      ),
+    const fakeFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ data: [{ b64_json: fakeImageB64 }] }), { status: 200 }),
     );
-    const client = new OpenAIImagesClient({ apiKey: 'sk-test', fetchImpl: fakeFetch as unknown as typeof fetch });
+    const client = new OpenAIImagesClient({
+      apiKey: 'sk-test',
+      fetchImpl: fakeFetch as unknown as typeof fetch,
+    });
     const buf = await client.edit({
       imageBuffer: Buffer.from('srcimg'),
       prompt: 'white background',
@@ -45,8 +50,13 @@ describe('OpenAIImagesClient', () => {
   });
 
   it('throws on non-2xx', async () => {
-    const fakeFetch = vi.fn(async () => new Response('{"error":{"message":"invalid key"}}', { status: 401 }));
-    const client = new OpenAIImagesClient({ apiKey: 'bad', fetchImpl: fakeFetch as unknown as typeof fetch });
+    const fakeFetch = vi.fn(
+      async () => new Response('{"error":{"message":"invalid key"}}', { status: 401 }),
+    );
+    const client = new OpenAIImagesClient({
+      apiKey: 'bad',
+      fetchImpl: fakeFetch as unknown as typeof fetch,
+    });
     await expect(client.generate({ prompt: 'x' })).rejects.toThrow(/invalid key/);
   });
 });

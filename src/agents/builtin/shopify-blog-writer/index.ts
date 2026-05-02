@@ -88,12 +88,14 @@ const configSchema = z.object({
       geo: z.boolean().default(false),
     })
     .default({}),
-  generateCoverImage: z.boolean().default(false).describe(
-    'If true, agent generates a cover image for the article before approval.',
-  ),
-  coverImageStyle: z.string().nullish().describe(
-    'Style hint for the cover image, e.g. "editorial, warm tones".',
-  ),
+  generateCoverImage: z
+    .boolean()
+    .default(false)
+    .describe('If true, agent generates a cover image for the article before approval.'),
+  coverImageStyle: z
+    .string()
+    .nullish()
+    .describe('Style hint for the cover image, e.g. "editorial, warm tones".'),
 });
 
 type SeoWriterConfig = z.infer<typeof configSchema>;
@@ -254,7 +256,12 @@ export const shopifyBlogWriterAgent: IAgent = {
           EeatQuestionsSchema,
           { name: 'eeat_questions' },
         );
-        const messages = await buildAgentMessages(systemWithResearch, input.messages, constraints, input.imageResolver);
+        const messages = await buildAgentMessages(
+          systemWithResearch,
+          input.messages,
+          constraints,
+          input.imageResolver,
+        );
         const q = (await questionModel.invoke(messages)) as EeatQuestions;
         await ctx.emitLog('agent.questions.asked', q.progressNote, {
           count: q.questions.length,
@@ -271,7 +278,12 @@ export const shopifyBlogWriterAgent: IAgent = {
       const articleModel = buildModel(ctx.modelConfig).withStructuredOutput(ArticleSchema, {
         name: 'seo_blog_article',
       });
-      const messages = await buildAgentMessages(systemWithResearch, input.messages, constraints, input.imageResolver);
+      const messages = await buildAgentMessages(
+        systemWithResearch,
+        input.messages,
+        constraints,
+        input.imageResolver,
+      );
       const article = (await articleModel.invoke(messages)) as ArticleDraft;
 
       let coverImageUrl: string | undefined;

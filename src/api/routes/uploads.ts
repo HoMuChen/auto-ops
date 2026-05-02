@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { env } from '../../config/env.js';
 import { CloudflareImagesClient } from '../../integrations/cloudflare/images-client.js';
 import { insertImage } from '../../integrations/cloudflare/images-repository.js';
-import { env } from '../../config/env.js';
 import { ValidationError } from '../../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireTenant, tenantOf } from '../middleware/tenant.js';
@@ -21,7 +21,10 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
 
     const mimeType = data.mimetype;
     if (!ALLOWED_MIME.has(mimeType)) {
-      throw new ValidationError(`Unsupported MIME type: ${mimeType}. Allowed: jpeg, png, webp, gif`, {});
+      throw new ValidationError(
+        `Unsupported MIME type: ${mimeType}. Allowed: jpeg, png, webp, gif`,
+        {},
+      );
     }
 
     const buffer = await data.toBuffer();

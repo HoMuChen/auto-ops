@@ -58,12 +58,14 @@ const configSchema = z.object({
     .describe('Primary language used in product listings'),
   images: z
     .object({
-      autoGenerate: z.boolean().default(false).describe(
-        'If true, agent generates product images when none are in the task',
-      ),
-      style: z.string().nullish().describe(
-        'Image style hint, e.g. "clean white background, product photography"',
-      ),
+      autoGenerate: z
+        .boolean()
+        .default(false)
+        .describe('If true, agent generates product images when none are in the task'),
+      style: z
+        .string()
+        .nullish()
+        .describe('Image style hint, e.g. "clean white background, product photography"'),
     })
     .default({}),
 });
@@ -170,7 +172,12 @@ export const shopifyOpsAgent: IAgent = {
         `Auto-publish on creation: ${cfg.shopify.autoPublish} (informational — the listing is created as draft/active by the framework, not by you)`,
       ];
 
-      const messages = await buildAgentMessages(ctx.systemPrompt, input.messages, constraints, input.imageResolver);
+      const messages = await buildAgentMessages(
+        ctx.systemPrompt,
+        input.messages,
+        constraints,
+        input.imageResolver,
+      );
       const listing = (await model.invoke(messages)) as ProductListing;
 
       // Resolve images: use uploaded ones if provided, else generate if configured.

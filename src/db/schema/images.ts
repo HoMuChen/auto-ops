@@ -26,10 +26,7 @@ export const tenantImages = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    tenantCreatedIdx: index('tenant_images_tenant_created_idx').on(
-      table.tenantId,
-      table.createdAt,
-    ),
+    tenantCreatedIdx: index('tenant_images_tenant_created_idx').on(table.tenantId, table.createdAt),
     taskIdx: index('tenant_images_task_idx').on(table.taskId),
     sourceIdx: index('tenant_images_source_idx').on(table.sourceImageId),
   }),

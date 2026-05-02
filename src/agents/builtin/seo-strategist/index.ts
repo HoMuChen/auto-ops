@@ -224,7 +224,12 @@ export const seoStrategistAgent: IAgent = {
         }
       ).bindTools(serperTools.map((t) => t.tool));
       const collected: BaseMessage[] = [
-        ...(await buildAgentMessages(systemPrompt, input.messages, constraints, input.imageResolver)),
+        ...(await buildAgentMessages(
+          systemPrompt,
+          input.messages,
+          constraints,
+          input.imageResolver,
+        )),
       ];
 
       for (let hop = 0; hop < 6; hop++) {

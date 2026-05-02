@@ -91,9 +91,12 @@ export async function buildGraph(opts: BuildGraphOptions) {
         role: m.getType() === 'human' ? 'user' : m.getType() === 'ai' ? 'assistant' : 'system',
         content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
         // Attach all task imageIds to the first human message so the agent sees all uploads.
-        imageIds:
-          state.taskImageIds && idx === 0 ? state.taskImageIds : undefined,
-      })) as { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; imageIds?: string[] }[];
+        imageIds: state.taskImageIds && idx === 0 ? state.taskImageIds : undefined,
+      })) as {
+        role: 'user' | 'assistant' | 'system' | 'tool';
+        content: string;
+        imageIds?: string[];
+      }[];
 
       const result = await runnable.invoke({
         messages: agentMessages,

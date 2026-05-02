@@ -1,10 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../../db/client.js';
-import {
-  type NewTenantImage,
-  type TenantImage,
-  tenantImages,
-} from '../../db/schema/index.js';
+import { type NewTenantImage, type TenantImage, tenantImages } from '../../db/schema/index.js';
 
 export async function insertImage(
   input: Omit<NewTenantImage, 'id' | 'createdAt'>,
@@ -14,10 +10,7 @@ export async function insertImage(
   return row;
 }
 
-export async function getImageById(
-  tenantId: string,
-  id: string,
-): Promise<TenantImage | null> {
+export async function getImageById(tenantId: string, id: string): Promise<TenantImage | null> {
   const [row] = await db
     .select()
     .from(tenantImages)
@@ -26,10 +19,7 @@ export async function getImageById(
   return row ?? null;
 }
 
-export async function getImagesByIds(
-  tenantId: string,
-  ids: string[],
-): Promise<TenantImage[]> {
+export async function getImagesByIds(tenantId: string, ids: string[]): Promise<TenantImage[]> {
   if (ids.length === 0) return [];
   return db
     .select()
@@ -37,10 +27,7 @@ export async function getImagesByIds(
     .where(and(eq(tenantImages.tenantId, tenantId), inArray(tenantImages.id, ids)));
 }
 
-export async function getImagesByTaskId(
-  tenantId: string,
-  taskId: string,
-): Promise<TenantImage[]> {
+export async function getImagesByTaskId(tenantId: string, taskId: string): Promise<TenantImage[]> {
   return db
     .select()
     .from(tenantImages)

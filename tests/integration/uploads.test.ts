@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { mintJwt, authHeaders } from './helpers/auth.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
 
 vi.mock('../../src/llm/model-registry.js', async () => {
@@ -50,14 +50,15 @@ describe('POST /v1/uploads', () => {
   it('uploads image, inserts tenant_images row, returns id+url', async () => {
     const { tenantId, token } = await seedTenantWithToken();
 
-    const fakeFetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          result: { id: 'cf-test', variants: ['https://imagedelivery.net/HASH/cf-test/public'] },
-          success: true,
-        }),
-        { status: 200 },
-      ),
+    const fakeFetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            result: { id: 'cf-test', variants: ['https://imagedelivery.net/HASH/cf-test/public'] },
+            success: true,
+          }),
+          { status: 200 },
+        ),
     );
     vi.stubGlobal('fetch', fakeFetch);
 
@@ -80,14 +81,15 @@ describe('POST /v1/uploads', () => {
   it('uploaded image id resolves to correct url', async () => {
     const { tenantId, token } = await seedTenantWithToken();
 
-    const fakeFetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          result: { id: 'cf-test', variants: ['https://imagedelivery.net/HASH/cf-test/public'] },
-          success: true,
-        }),
-        { status: 200 },
-      ),
+    const fakeFetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            result: { id: 'cf-test', variants: ['https://imagedelivery.net/HASH/cf-test/public'] },
+            success: true,
+          }),
+          { status: 200 },
+        ),
     );
     vi.stubGlobal('fetch', fakeFetch);
 

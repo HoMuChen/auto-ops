@@ -1,8 +1,8 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import type { AgentTool } from '../../agents/types.js';
-import type { CloudflareImagesClient } from '../cloudflare/images-client.js';
 import type { NewTenantImage, TenantImage } from '../../db/schema/index.js';
+import type { CloudflareImagesClient } from '../cloudflare/images-client.js';
 import type { OpenAIImagesClient } from './client.js';
 
 export const IMAGE_TOOL_IDS = ['images.generate', 'images.edit'] as const;
@@ -16,10 +16,7 @@ export interface BuildImageToolsOpts {
   taskId?: string;
 }
 
-export function buildImageTools(
-  tenantId: string,
-  opts: BuildImageToolsOpts,
-): AgentTool[] {
+export function buildImageTools(tenantId: string, opts: BuildImageToolsOpts): AgentTool[] {
   const generateTool = tool(
     async (input: { prompt: string; size?: string; quality?: string }) => {
       const buffer = await opts.openaiClient.generate({
@@ -45,7 +42,8 @@ export function buildImageTools(
     },
     {
       name: 'images_generate',
-      description: 'Generate a new image from a text prompt using AI. Returns the image id and url.',
+      description:
+        'Generate a new image from a text prompt using AI. Returns the image id and url.',
       schema: z.object({
         prompt: z.string().min(5).describe('Detailed description of the image to generate.'),
         size: z.enum(['1024x1024', '1792x1024', '1024x1792']).optional(),
@@ -86,7 +84,8 @@ export function buildImageTools(
     },
     {
       name: 'images_edit',
-      description: 'Edit an existing image using AI. Provide the source image id and a description of the edit.',
+      description:
+        'Edit an existing image using AI. Provide the source image id and a description of the edit.',
       schema: z.object({
         sourceImageId: z.string().describe('ID of the existing tenant image to edit.'),
         prompt: z.string().min(5).describe('Description of how to edit the image.'),

@@ -3,17 +3,18 @@ import { CloudflareImagesClient } from '../src/integrations/cloudflare/images-cl
 
 describe('CloudflareImagesClient', () => {
   it('uploads buffer and parses cfImageId + url from response', async () => {
-    const fakeFetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          result: {
-            id: 'cf-img-123',
-            variants: ['https://imagedelivery.net/HASH/cf-img-123/public'],
-          },
-          success: true,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+    const fakeFetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            result: {
+              id: 'cf-img-123',
+              variants: ['https://imagedelivery.net/HASH/cf-img-123/public'],
+            },
+            success: true,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
     );
     const client = new CloudflareImagesClient({
       accountId: 'acct',
@@ -37,13 +38,16 @@ describe('CloudflareImagesClient', () => {
   });
 
   it('throws on CF API error', async () => {
-    const fakeFetch = vi.fn(async () =>
-      new Response(JSON.stringify({ success: false, errors: [{ message: 'quota exceeded' }] }), {
-        status: 400,
-      }),
+    const fakeFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ success: false, errors: [{ message: 'quota exceeded' }] }), {
+          status: 400,
+        }),
     );
     const client = new CloudflareImagesClient({
-      accountId: 'a', token: 't', accountHash: 'h',
+      accountId: 'a',
+      token: 't',
+      accountHash: 'h',
       fetchImpl: fakeFetch as unknown as typeof fetch,
     });
     await expect(
