@@ -1971,6 +1971,111 @@ paths:
       responses:
         '200':
           description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    description: Image UUID — pass as imageIds entry in task/intake requests
+                  url:
+                    type: string
+                    format: uri
+                    description: Cloudflare R2 public delivery URL
+                required:
+                - id
+                - url
+                additionalProperties: false
+        '400':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+        '401':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+        '403':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      statusCode:
+                        type: number
+                      details: {}
+                    required:
+                    - code
+                    - message
+                    - statusCode
+                    additionalProperties: false
+                required:
+                - error
+                additionalProperties: false
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file — jpeg, png, webp, or gif; max 10 MB
 servers:
 - url: /
 security:
