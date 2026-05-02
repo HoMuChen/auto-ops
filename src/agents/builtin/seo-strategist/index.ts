@@ -131,6 +131,15 @@ const PlanSchema = z.object({
   reasoning: z
     .string()
     .describe('One-paragraph rationale: why this set of topics covers the brief.'),
+  summary: z
+    .string()
+    .min(20)
+    .max(500)
+    .describe(
+      '給老闆看的匯報摘要。說明你做了什麼、參考了什麼素材或資料、有什麼特別考量的地方。' +
+        '老闆靠這段文字決定要不要 Approve，所以要夠詳細但不冗長。' +
+        '用 zh-TW，語氣像員工向老闆口頭匯報，3–5 句話。',
+    ),
   progressNote: z
     .string()
     .min(10)
@@ -290,7 +299,7 @@ export const seoStrategistAgent: IAgent = {
       const summary = [
         `# SEO Content Plan (${capped.length} articles)`,
         '',
-        plan.reasoning,
+        plan.summary,
         '',
         ...capped.map(
           (t: ContentTopic, i: number) =>

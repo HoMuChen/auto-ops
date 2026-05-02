@@ -66,10 +66,12 @@ const ProductListingSchema = z.object({
   productType: z.string().optional().describe('Product category — leave blank if unsure.'),
   summary: z
     .string()
+    .min(20)
     .max(500)
-    .optional()
     .describe(
-      '給老闆看的一段話，用 zh-TW，說明這個商品是什麼、亮點在哪裡、適合誰。語氣像品牌文案，不超過 3 句話。省略則框架自動生成。',
+      '給老闆看的匯報摘要。說明你做了什麼、參考了什麼素材或資料、有什麼特別考量的地方。' +
+        '老闆靠這段文字決定要不要 Approve，所以要夠詳細但不冗長。' +
+        '用 zh-TW，語氣像員工向老闆口頭匯報，3–5 句話。',
     ),
   progressNote: z
     .string()

@@ -118,6 +118,15 @@ const ArticleSchema = z.object({
     .enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko'])
     .describe('The language the article is written in.'),
   author: z.string().optional().describe('Author byline. Leave blank to use the agent default.'),
+  summary: z
+    .string()
+    .min(20)
+    .max(500)
+    .describe(
+      '給老闆看的匯報摘要。說明你做了什麼、參考了什麼素材或資料、有什麼特別考量的地方。' +
+        '老闆靠這段文字決定要不要 Approve，所以要夠詳細但不冗長。' +
+        '用 zh-TW，語氣像員工向老闆口頭匯報，3–5 句話。',
+    ),
   progressNote: z
     .string()
     .min(10)
@@ -143,6 +152,15 @@ const EeatQuestionsSchema = z.object({
     )
     .min(1)
     .max(5),
+  summary: z
+    .string()
+    .min(20)
+    .max(500)
+    .describe(
+      '給老闆看的匯報摘要。說明你做了什麼、參考了什麼素材或資料、有什麼特別考量的地方。' +
+        '老闆靠這段文字決定要不要 Approve，所以要夠詳細但不冗長。' +
+        '用 zh-TW，語氣像員工向老闆口頭匯報，3–5 句話。',
+    ),
   progressNote: z.string().min(10).max(200),
 });
 
@@ -276,7 +294,7 @@ export const shopifyBlogWriterAgent: IAgent = {
           count: q.questions.length,
         });
         return {
-          message: renderQuestionsMarkdown(q.questions),
+          message: renderQuestionsMarkdown(q.questions, q.summary),
           awaitingApproval: true,
           payload: {
             eeatPending: { questions: q.questions, askedAt: new Date().toISOString() },
@@ -344,13 +362,15 @@ export const shopifyBlogWriterAgent: IAgent = {
   },
 };
 
-function renderQuestionsMarkdown(questions: EeatQuestion[]): string {
+function renderQuestionsMarkdown(questions: EeatQuestion[], summary?: string): string {
   return [
     '## EEAT Experience Questions',
     '',
-    'Before I draft the article, could you share a bit about your first-hand experience? ' +
-      "This helps ground the content in real expertise that competitors can't easily replicate.",
-    '',
+    ...(summary ? [summary, ''] : [
+      'Before I draft the article, could you share a bit about your first-hand experience? ' +
+        "This helps ground the content in real expertise that competitors can't easily replicate.",
+      '',
+    ]),
     ...questions.map(
       (q, i) =>
         `**${i + 1}. ${q.question}**${q.optional ? ' _(optional)_' : ''}${
@@ -371,6 +391,8 @@ function renderArticleMarkdown(article: ArticleDraft, cfg: SeoWriterConfig): str
 
   return [
     `# ${article.title}`,
+    '',
+    article.summary,
     '',
     `**Language:** ${article.language} · **Tags:** ${article.tags.join(', ')}${
       article.author ? ` · **Author:** ${article.author}` : ''
