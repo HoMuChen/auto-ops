@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { env } from '../../../config/env.js';
+import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-client.js';
+import { insertImage } from '../../../integrations/cloudflare/images-repository.js';
+import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
+import { buildImageTools } from '../../../integrations/openai-images/tools.js';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
 import { buildAgentMessages } from '../../lib/messages.js';
@@ -83,6 +88,12 @@ const configSchema = z.object({
       geo: z.boolean().default(false),
     })
     .default({}),
+  generateCoverImage: z.boolean().default(true).describe(
+    'If true, agent generates a cover image for the article before approval.',
+  ),
+  coverImageStyle: z.string().nullish().describe(
+    'Style hint for the cover image, e.g. "editorial, warm tones".',
+  ),
 });
 
 type SeoWriterConfig = z.infer<typeof configSchema>;
@@ -177,6 +188,21 @@ export const shopifyBlogWriterAgent: IAgent = {
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
     const cfg = configSchema.parse(ctx.agentConfig ?? {}) as SeoWriterConfig;
 
+    const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+    const cfToken = env.CLOUDFLARE_IMAGES_TOKEN;
+    const accountHash = env.CLOUDFLARE_IMAGES_HASH;
+    const openaiKey = env.OPENAI_API_KEY;
+
+    const imageTools =
+      accountId && cfToken && accountHash && openaiKey
+        ? buildImageTools(ctx.tenantId, {
+            openaiClient: new OpenAIImagesClient({ apiKey: openaiKey }),
+            cfClient: new CloudflareImagesClient({ accountId, token: cfToken, accountHash }),
+            insertImage,
+            taskId: ctx.taskId,
+          })
+        : [];
+
     const tools = await buildShopifyTools(ctx.tenantId, {
       ...(cfg.credentialLabel ? { credentialLabel: cfg.credentialLabel } : {}),
       ...(cfg.blogHandle ? { blogHandle: cfg.blogHandle } : {}),
@@ -248,6 +274,18 @@ export const shopifyBlogWriterAgent: IAgent = {
       const messages = await buildAgentMessages(systemWithResearch, input.messages, constraints, input.imageResolver);
       const article = (await articleModel.invoke(messages)) as ArticleDraft;
 
+      let coverImageUrl: string | undefined;
+      if (cfg.generateCoverImage && imageTools.length > 0) {
+        const genTool = imageTools.find((t) => t.id === 'images.generate');
+        if (genTool) {
+          const style = cfg.coverImageStyle ?? 'editorial blog cover, clean layout';
+          const imgResult = (await genTool.tool.invoke({
+            prompt: `Blog cover image for: "${article.title}". ${style}`,
+          })) as { id: string; url: string };
+          coverImageUrl = imgResult.url;
+        }
+      }
+
       const preview = renderArticleMarkdown(article, cfg);
 
       await ctx.emitLog('agent.draft.ready', article.progressNote, {
@@ -272,6 +310,7 @@ export const shopifyBlogWriterAgent: IAgent = {
             summaryHtml: article.summaryHtml,
             tags: article.tags,
             ...(article.author ? { author: article.author } : {}),
+            ...(coverImageUrl ? { coverImageUrl } : {}),
           },
         };
         result.pendingToolCall = pendingToolCall;
