@@ -22,7 +22,7 @@ export function buildImageTools(tenantId: string, opts: BuildImageToolsOpts): Ag
       const buffer = await opts.openaiClient.generate({
         prompt: input.prompt,
         size: (input.size as '1024x1024') ?? '1024x1024',
-        quality: (input.quality as 'standard') ?? 'standard',
+        quality: (input.quality as 'medium') ?? 'medium',
       });
       const { cfImageId, url } = await opts.cfClient.upload(buffer, {
         filename: 'generated.png',
