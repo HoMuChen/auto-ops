@@ -77,5 +77,6 @@ Tenant credentials live in `tenant_credentials` (currently **plaintext** — pro
 - Real OpenRouter smoke test (all current tests use the FakeChatModel mock)
 - Webhook receivers for Shopify events
 - Rate limiting
+- **SSE EventBus is in-process only** — `src/events/event-bus.ts` uses Node `EventEmitter`; if multiple server processes run, a worker on Process B publishing a log won't reach an SSE client connected to Process A. Fix: replace `EventBus.publish/subscribe` internals with Postgres `LISTEN/NOTIFY` (no infra change needed, interface stays the same).
 
 See `docs/API_GUIDE.md` for the consumer-facing API contract (UI team) and `requirements.md` for the original product spec.
