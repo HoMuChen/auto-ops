@@ -21,7 +21,8 @@ import type { z } from 'zod';
 
 type ScriptedResponse =
   | { kind: 'text'; text: string }
-  | { kind: 'structured'; data: Record<string, unknown> };
+  | { kind: 'structured'; data: Record<string, unknown> }
+  | { kind: 'tool_call'; name: string; args: Record<string, unknown>; id: string };
 
 const queue: ScriptedResponse[] = [];
 
@@ -31,6 +32,15 @@ export function scriptText(text: string): void {
 
 export function scriptStructured(data: Record<string, unknown>): void {
   queue.push({ kind: 'structured', data });
+}
+
+/** Script a tool-call turn for the tool-calling pass of two-pass agents. */
+export function scriptToolCall(
+  name: string,
+  args: Record<string, unknown>,
+  id = 'call_fake',
+): void {
+  queue.push({ kind: 'tool_call', name, args, id });
 }
 
 export function clearScript(): void {
@@ -64,6 +74,28 @@ class FakeChatModel {
           );
         }
         return next.data as T;
+      },
+    };
+  }
+
+  /**
+   * Supports the two-pass tool-calling pattern used by seo-strategist.
+   * If the queue head is a `tool_call` entry, returns it as an AIMessage-like
+   * object with `tool_calls`. Otherwise returns a plain AIMessage with no
+   * tool_calls so the loop exits and moves to pass 2.
+   */
+  bindTools(_tools: unknown[]) {
+    return {
+      invoke: async (_messages: unknown): Promise<{
+        content: string;
+        tool_calls?: { name: string; args: Record<string, unknown>; id: string }[];
+      }> => {
+        const next = queue[0];
+        if (next?.kind === 'tool_call') {
+          queue.shift();
+          return { content: '', tool_calls: [{ name: next.name, args: next.args, id: next.id }] };
+        }
+        return { content: '', tool_calls: [] };
       },
     };
   }

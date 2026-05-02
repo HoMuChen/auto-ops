@@ -1,5 +1,13 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages';
 import { z } from 'zod';
+import { env } from '../../../config/env.js';
+import { SerpCache } from '../../../integrations/serper/cache.js';
+import { SerperClient } from '../../../integrations/serper/client.js';
+import { buildSerperTools } from '../../../integrations/serper/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
+import { loadPacks } from '../../lib/packs.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import type {
   AgentBuildContext,
@@ -35,10 +43,25 @@ Constraints:
   ISO 8601 with timezone (e.g. "2026-05-04T09:00:00Z"). When no cadence is
   mentioned, leave scheduledAt unset so the article runs immediately.
 
+Workflow:
+1. Identify 1–3 seed keyword clusters from the brief.
+2. Call serper_search for each seed (and for any sub-cluster you want to validate).
+3. Use the SERP results — top 10 titles, peopleAlsoAsk, relatedSearches — to:
+   - Decide each topic's searchIntent.
+   - Set paaQuestions = the most relevant 3–8 PAA items per topic.
+   - Set relatedSearches = adjacent long-tail queries to weave in.
+   - Set competitorTopAngles = patterns in the top 10 (e.g. "listicle of 7",
+     "comparison guide", "tutorial").
+   - Set competitorGaps = angles the top 10 ignore (the differentiation hook).
+   - Set targetWordCount = roughly the median word count visible in top 10
+     snippets (estimate; default 1200 if uncertain).
+   - Set eeatHook = a 1-sentence note for the writer on which experience
+     dimension matters most for this topic.
+4. Only after research, build the structured plan.
+
 When ready, return the plan as the structured output requested. The plan will be
 shown to the user for approval before any child article task is created.`;
 
-/** User-facing activation config — controls planning aggressiveness and defaults. */
 const configSchema = z.object({
   maxTopics: z
     .number()
@@ -60,9 +83,44 @@ const configSchema = z.object({
     .array(z.string())
     .default([])
     .describe('Keyword cluster the strategist should prioritise when planning topics'),
+  skills: z
+    .object({
+      seoFundamentals: z.boolean().default(true),
+      aiSeo: z.boolean().default(true),
+      geo: z.boolean().default(true),
+    })
+    .default({}),
 });
 
 type SeoStrategistConfig = z.infer<typeof configSchema>;
+
+const TopicSchema = z.object({
+  title: z.string().min(1).describe('Article working title — also used as the kanban card.'),
+  primaryKeyword: z.string().describe('The single primary keyword the article should rank for.'),
+  language: z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']),
+  writerBrief: z
+    .string()
+    .min(20)
+    .describe('Self-contained brief the writer agent receives as task.input.brief.'),
+  assignedAgent: z
+    .string()
+    .describe(
+      'Id of the worker agent that should produce this article. Must be one of the ids ' +
+        'listed in "Available worker agents" in the system prompt.',
+    ),
+  scheduledAt: z
+    .string()
+    .datetime()
+    .optional()
+    .describe('Optional ISO timestamp if the article should be scheduled.'),
+  searchIntent: z.enum(['informational', 'commercial', 'transactional', 'navigational']),
+  paaQuestions: z.array(z.string()).max(8),
+  relatedSearches: z.array(z.string()).max(10),
+  competitorTopAngles: z.array(z.string()).max(5),
+  competitorGaps: z.array(z.string()).max(5),
+  targetWordCount: z.number().int().min(400).max(4000),
+  eeatHook: z.string().min(20).max(300),
+});
 
 const PlanSchema = z.object({
   reasoning: z
@@ -78,36 +136,22 @@ const PlanSchema = z.object({
         '用 zh-TW 第一人稱，對話對象是「老闆」。' +
         '這段會直接顯示在看板的進度時間軸上。',
     ),
-  topics: z
-    .array(
-      z.object({
-        title: z.string().min(1).describe('Article working title — also used as the kanban card.'),
-        primaryKeyword: z
-          .string()
-          .describe('The single primary keyword the article should rank for.'),
-        language: z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']),
-        writerBrief: z
-          .string()
-          .min(20)
-          .describe('Self-contained brief the writer agent receives as task.input.brief.'),
-        assignedAgent: z
-          .string()
-          .describe(
-            'Id of the worker agent that should produce this article. Must be one of the ids ' +
-              'listed in "Available worker agents" in the system prompt.',
-          ),
-        scheduledAt: z
-          .string()
-          .datetime()
-          .optional()
-          .describe('Optional ISO timestamp if the article should be scheduled.'),
-      }),
-    )
-    .min(1),
+  topics: z.array(TopicSchema).min(1),
 });
 
 type ContentPlan = z.infer<typeof PlanSchema>;
 type ContentTopic = ContentPlan['topics'][number];
+
+export type TopicResearch = Pick<
+  ContentTopic,
+  | 'searchIntent'
+  | 'paaQuestions'
+  | 'relatedSearches'
+  | 'competitorTopAngles'
+  | 'competitorGaps'
+  | 'targetWordCount'
+  | 'eeatHook'
+>;
 
 export const seoStrategistAgent: IAgent = {
   manifest: {
@@ -116,31 +160,26 @@ export const seoStrategistAgent: IAgent = {
     description:
       'Plans SEO campaigns: turns a high-level brief into a list of focused article topics, ' +
       'each spawned as an independent execution task for the Shopify Blog Writer.',
-    // Strategy is high-stakes routing logic — use Opus, low temperature so the
-    // structured plan is consistent across runs of the same brief.
     defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.2 },
     defaultPrompt: DEFAULT_PROMPT,
-    toolIds: [],
+    toolIds: ['serper.search'],
     requiredCredentials: [],
     configSchema,
     metadata: { kind: 'strategy' },
   },
 
-  build(ctx: AgentBuildContext): AgentRunnable {
+  async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
     const cfg = configSchema.parse(ctx.agentConfig ?? {}) as SeoStrategistConfig;
-    const model = buildModel(ctx.modelConfig).withStructuredOutput(PlanSchema, {
-      name: 'seo_content_plan',
-    });
 
-    // Whitelist of worker ids the LLM may pick from. Built once per build.
-    const validWorkerIds = new Set(ctx.availableExecutionAgents.map((a) => a.id));
-    if (validWorkerIds.size === 0) {
-      // Fail fast at build time rather than producing a plan that would be
-      // rejected at finalize time. Surfaces config drift early.
+    if (ctx.availableExecutionAgents.length === 0) {
       throw new Error(
         'seo-strategist requires at least one peer worker agent to be enabled for the tenant',
       );
     }
+    const validWorkerIds = new Set(ctx.availableExecutionAgents.map((a) => a.id));
+
+    const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
+    const packsBlock = await loadPacks(packsDir, cfg.skills);
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
       await ctx.emitLog('agent.started', '收到 brief，我來規劃幾個主題給老闆挑', {
@@ -161,22 +200,51 @@ export const seoStrategistAgent: IAgent = {
         .map((a) => `- ${a.id}: ${a.description}`)
         .join('\n');
 
-      // The strategist's prompt has a worker-roster block between the base
-      // prompt and the tenant-constraints block — pre-compose system here and
-      // let buildAgentMessages append the constraints in the standard form.
-      const systemPrompt = `${ctx.systemPrompt.replace('{MAX_TOPICS}', String(cfg.maxTopics))}
+      const basePrompt = ctx.systemPrompt.replace('{MAX_TOPICS}', String(cfg.maxTopics));
+      const promptWithRoster = `${basePrompt}\n\nAvailable worker agents (pick one id per topic for the "assignedAgent" field):\n${workerRoster}`;
+      const systemPrompt = packsBlock ? `${packsBlock}\n\n${promptWithRoster}` : promptWithRoster;
 
-Available worker agents (pick one id per topic for the "assignedAgent" field):
-${workerRoster}`;
+      // Pass 1: gather SERP data via tool-calling loop (max 6 hops)
+      const serperKey = env.SERPER_API_KEY;
+      const serperTools = serperKey
+        ? buildSerperTools({
+            tenantId: ctx.tenantId,
+            cache: new SerpCache(new SerperClient({ apiKey: serperKey })),
+          })
+        : [];
 
-      const messages = buildAgentMessages(systemPrompt, input.messages, constraints);
-      const plan = (await model.invoke(messages)) as ContentPlan;
+      const toolModel = buildModel(ctx.modelConfig).bindTools(
+        serperTools.map((t) => t.tool),
+      );
+      const collected: BaseMessage[] = [
+        ...buildAgentMessages(systemPrompt, input.messages, constraints),
+      ];
+
+      for (let hop = 0; hop < 6; hop++) {
+        const res = (await toolModel.invoke(collected)) as AIMessage;
+        collected.push(res);
+        if (!res.tool_calls?.length) break;
+        for (const call of res.tool_calls) {
+          const t = serperTools.find((x) => x.tool.name === call.name);
+          if (!t) continue;
+          const result = await t.tool.invoke(call.args as Record<string, unknown>);
+          collected.push(
+            new ToolMessage({ tool_call_id: call.id ?? '', content: JSON.stringify(result) }),
+          );
+        }
+      }
+
+      // Pass 2: produce the structured plan from the enriched conversation
+      const planModel = buildModel(ctx.modelConfig).withStructuredOutput(PlanSchema, {
+        name: 'seo_content_plan',
+      });
+      const plan = (await planModel.invoke([
+        ...collected,
+        new HumanMessage('Now produce the final structured plan.'),
+      ])) as ContentPlan;
+
       const capped: ContentTopic[] = plan.topics.slice(0, cfg.maxTopics);
 
-      // Defensive validation: structured output gives us `assignedAgent: string`
-      // but z.string() can't enforce membership in a runtime-built set. Catch
-      // an LLM that hallucinates a worker id here so it surfaces as a clear
-      // task error instead of an obscure "node not found" later.
       const invalid = capped.filter((t) => !validWorkerIds.has(t.assignedAgent));
       if (invalid.length > 0) {
         throw new Error(
@@ -194,6 +262,15 @@ ${workerRoster}`;
           brief: t.writerBrief,
           primaryKeyword: t.primaryKeyword,
           language: t.language,
+          research: {
+            searchIntent: t.searchIntent,
+            paaQuestions: t.paaQuestions,
+            relatedSearches: t.relatedSearches,
+            competitorTopAngles: t.competitorTopAngles,
+            competitorGaps: t.competitorGaps,
+            targetWordCount: t.targetWordCount,
+            eeatHook: t.eeatHook,
+          } satisfies TopicResearch,
         },
         ...(t.scheduledAt ? { scheduledAt: t.scheduledAt } : {}),
       }));
@@ -213,7 +290,6 @@ ${workerRoster}`;
         '_Approve to spawn each article as an independent writer task._',
       ].join('\n');
 
-      // Use the model's first-person progressNote as the timeline log.
       await ctx.emitLog('agent.plan.ready', plan.progressNote, {
         topicCount: capped.length,
       });

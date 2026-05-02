@@ -18,6 +18,13 @@ const planFixture = {
       language: 'zh-TW' as const,
       writerBrief: 'Long-form 1500 字文章, focus on layered styling for Taiwan humid summers.',
       assignedAgent: 'shopify-blog-writer',
+      searchIntent: 'commercial' as const,
+      paaQuestions: ['Is linen good for summer?', 'How to care for linen?'],
+      relatedSearches: ['linen vs cotton', 'best linen shirts 2026'],
+      competitorTopAngles: ['fabric guides', 'comparison listicles'],
+      competitorGaps: ['no Taiwan-specific humidity advice'],
+      targetWordCount: 1200,
+      eeatHook: 'Boss should share own washing/wearing experience in tropical humidity',
     },
     {
       title: 'Sustainable summer fabrics buyer guide',
@@ -26,15 +33,28 @@ const planFixture = {
       writerBrief: 'Buyer guide comparing linen, organic cotton, and Tencel for summer apparel.',
       assignedAgent: 'shopify-blog-writer',
       scheduledAt: '2026-06-01T09:00:00.000Z',
+      searchIntent: 'informational' as const,
+      paaQuestions: ['What is the most sustainable fabric?'],
+      relatedSearches: ['eco-friendly fabrics', 'sustainable summer clothing'],
+      competitorTopAngles: ['comparison tables', 'sustainability scores'],
+      competitorGaps: ['no first-hand washing durability data'],
+      targetWordCount: 1500,
+      eeatHook: 'Boss should mention their sourcing relationships and certifications',
     },
   ],
 };
 
-const invokeMock = vi.fn(async () => planFixture);
-const withStructuredOutputMock = vi.fn(() => ({ invoke: invokeMock }));
+// Pass 1: tool-calling model — returns AIMessage with no tool_calls so the loop exits immediately
+const toolPassInvokeMock = vi.fn(async () => ({ content: '', tool_calls: [] }));
+const bindToolsMock = vi.fn(() => ({ invoke: toolPassInvokeMock }));
+
+// Pass 2: structured plan model — returns the fixture
+const planPassInvokeMock = vi.fn(async () => planFixture);
+const withStructuredOutputMock = vi.fn(() => ({ invoke: planPassInvokeMock }));
 
 vi.mock('../src/llm/model-registry.js', () => ({
   buildModel: vi.fn(() => ({
+    bindTools: bindToolsMock,
     withStructuredOutput: withStructuredOutputMock,
   })),
 }));
@@ -74,7 +94,22 @@ describe('seoStrategistAgent.build → invoke', () => {
       expect(spawn.input).toHaveProperty('brief');
       expect(spawn.input).toHaveProperty('primaryKeyword');
       expect(spawn.input).toHaveProperty('language');
+      expect(spawn.input).toHaveProperty('research');
     }
+  });
+
+  it('forwards SERP research fields into spawn input', async () => {
+    const runnable = await seoStrategistAgent.build(ctx);
+    const result = await runnable.invoke({
+      messages: [{ role: 'user', content: 'plan summer SEO' }],
+      params: {},
+    });
+    const first = result.spawnTasks?.[0];
+    const research = (first?.input as { research?: Record<string, unknown> }).research;
+    expect(research).toBeDefined();
+    expect(research?.searchIntent).toBe('commercial');
+    expect(research?.paaQuestions).toHaveLength(2);
+    expect(research?.targetWordCount).toBe(1200);
   });
 
   it('forwards optional scheduledAt verbatim into the spawn spec', async () => {
@@ -114,16 +149,16 @@ describe('seoStrategistAgent.build → invoke', () => {
   });
 
   it('throws at build time if no peer worker agents are available', async () => {
-    expect(() =>
+    await expect(
       seoStrategistAgent.build({
         ...ctx,
         availableExecutionAgents: [],
       }),
-    ).toThrow(/at least one peer worker agent/);
+    ).rejects.toThrow(/at least one peer worker agent/);
   });
 
   it('throws at invoke time if the LLM hallucinates an unknown assignedAgent', async () => {
-    invokeMock.mockResolvedValueOnce({
+    planPassInvokeMock.mockResolvedValueOnce({
       reasoning: 'plan with bad assignee',
       progressNote: '計畫好了但 worker 名稱可能有誤',
       topics: [
@@ -133,6 +168,13 @@ describe('seoStrategistAgent.build → invoke', () => {
           language: 'zh-TW',
           writerBrief: 'something long enough to satisfy the schema minimum length.',
           assignedAgent: 'nonexistent-writer',
+          searchIntent: 'informational',
+          paaQuestions: [],
+          relatedSearches: [],
+          competitorTopAngles: [],
+          competitorGaps: [],
+          targetWordCount: 800,
+          eeatHook: 'Boss should share their direct product experience clearly.',
         },
       ],
     });
@@ -157,5 +199,21 @@ describe('seoStrategistAgent.build → invoke', () => {
 
     const readyCall = emitLog.mock.calls.find((c) => c[0] === 'agent.plan.ready');
     expect(readyCall?.[1]).toBe('規劃了 2 個主軸，圍繞夏季 + 永續，老闆過目');
+  });
+
+  it('system prompt contains SEO Fundamentals skill pack when seoFundamentals is enabled', async () => {
+    const runnable = await seoStrategistAgent.build(ctx);
+    await runnable.invoke({
+      messages: [{ role: 'user', content: 'plan' }],
+      params: {},
+    });
+    // buildAgentMessages is called with the enriched systemPrompt; check it was passed
+    // to both the tool-call model (bindTools) and the plan model (withStructuredOutput).
+    // We verify by inspecting what was passed to planPassInvokeMock.
+    const lastCallArgs = planPassInvokeMock.mock.calls.at(-1)?.[0] as
+      | { content?: string }[]
+      | undefined;
+    const systemMsg = lastCallArgs?.find((m) => 'content' in m);
+    expect(JSON.stringify(systemMsg)).toContain('SEO Fundamentals');
   });
 });

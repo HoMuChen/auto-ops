@@ -67,6 +67,13 @@ describe('Strategy → Spawn → Execution flow', () => {
           writerBrief:
             '1500 字 long-form article on layered summer styling for humid Taiwan climate.',
           assignedAgent: 'shopify-blog-writer',
+          searchIntent: 'commercial',
+          paaQuestions: ['Is linen good for summer?'],
+          relatedSearches: ['linen vs cotton'],
+          competitorTopAngles: ['fabric guides'],
+          competitorGaps: ['no Taiwan-specific humidity advice'],
+          targetWordCount: 1200,
+          eeatHook: 'Boss should share own washing/wearing experience in tropical humidity',
         },
         {
           title: 'Sustainable summer fabrics buyer guide',
@@ -74,6 +81,13 @@ describe('Strategy → Spawn → Execution flow', () => {
           language: 'en',
           writerBrief: 'Buyer guide comparing linen, organic cotton and Tencel for summer apparel.',
           assignedAgent: 'shopify-blog-writer',
+          searchIntent: 'informational',
+          paaQuestions: ['What is the most sustainable fabric?'],
+          relatedSearches: ['eco-friendly fabrics'],
+          competitorTopAngles: ['comparison tables'],
+          competitorGaps: ['no first-hand washing data'],
+          targetWordCount: 1500,
+          eeatHook: 'Boss should mention sourcing relationships and certifications',
         },
       ],
     });
@@ -131,6 +145,8 @@ describe('Strategy → Spawn → Execution flow', () => {
       expect(child.assignedAgent).toBe('shopify-blog-writer');
       expect(child.status).toBe('todo');
       expect(child.input).toHaveProperty('brief');
+      expect(child.input).toHaveProperty('research');
+      expect((child.input as { research?: { targetWordCount?: number } }).research?.targetWordCount).toBeGreaterThan(0);
     }
 
     // ── Phase 3: idempotent re-approve (network retry) ─────────────────────
