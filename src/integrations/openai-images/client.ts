@@ -51,7 +51,7 @@ export class OpenAIImagesClient {
     const res = await this.fetchImpl('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.opts.apiKey}` },
-      body: form as unknown as BodyInit,
+      body: form as unknown as NonNullable<Parameters<typeof fetch>[1]>['body'],
     });
     return this.parseImageResponse(res);
   }

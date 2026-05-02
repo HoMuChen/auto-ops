@@ -39,7 +39,7 @@ describe('OpenAIImagesClient', () => {
       prompt: 'white background',
     });
     expect(buf.toString('base64')).toBe(fakeImageB64);
-    const [, init] = fakeFetch.mock.calls[0] as [string, RequestInit];
+    const [, init] = fakeFetch.mock.calls[0] as unknown as [string, RequestInit];
     // multipart body, not JSON
     expect(init.headers).not.toHaveProperty('Content-Type');
   });

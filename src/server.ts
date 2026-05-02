@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
@@ -32,6 +33,7 @@ export async function createServer(): Promise<FastifyInstance> {
   await baseApp.register(helmet, { contentSecurityPolicy: false });
   await baseApp.register(cors, { origin: true, credentials: true });
   await baseApp.register(sensible);
+  await baseApp.register(multipart);
 
   await baseApp.register(swagger, {
     openapi: {

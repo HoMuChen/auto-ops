@@ -30,7 +30,7 @@ export class CloudflareImagesClient {
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.opts.token}` },
-        body: form as unknown as BodyInit,
+        body: form as unknown as NonNullable<Parameters<typeof fetch>[1]>['body'],
       },
     );
 
