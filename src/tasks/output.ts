@@ -1,6 +1,6 @@
 import type { PendingToolCall, SpawnTaskRequest } from '../agents/types.js';
 import type { Task } from '../db/schema/index.js';
-import type { AnyArtifact } from './artifact.js';
+import type { Artifact } from './artifact.js';
 
 /**
  * The shape persisted on `tasks.output`. Drizzle types the column as
@@ -19,9 +19,8 @@ import type { AnyArtifact } from './artifact.js';
  *     executeApprovedToolCall, replaces pendingToolCall)
  */
 export interface TaskOutput {
-  /** Typed deliverable. New shape: { report, body?, refs? }.
-   *  LegacyArtifact accepted during migration (removed in Task 10). */
-  artifact?: AnyArtifact;
+  /** Typed deliverable: { report, body?, refs? }. */
+  artifact?: Artifact;
 
   /** HITL: agent declared children to spawn on approve(finalize=true). */
   spawnTasks?: SpawnTaskRequest[];

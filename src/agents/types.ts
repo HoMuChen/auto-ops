@@ -2,7 +2,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { ZodType } from 'zod';
 import type { CredentialProvider } from '../db/schema/index.js';
 import type { ModelConfig } from '../llm/types.js';
-import type { AnyArtifact } from '../tasks/artifact.js';
+import type { Artifact } from '../tasks/artifact.js';
 
 /**
  * The pluggable Agent contract.
@@ -192,12 +192,8 @@ export interface AgentOutput {
   message: string;
   /** Whether the agent is requesting a HITL gate (Waiting state). */
   awaitingApproval?: boolean;
-  /**
-   * The typed deliverable for this stage. New shape: { report, body?, refs? }.
-   * LegacyArtifact (discriminated union) accepted during migration; agents
-   * migrate one at a time, Task 10 removes the legacy form.
-   */
-  artifact?: AnyArtifact;
+  /** The typed deliverable for this stage: { report, body?, refs? }. */
+  artifact?: Artifact;
   /** Output payload to attach to the task (final or intermediate). */
   payload?: Record<string, unknown>;
   /** Tool calls the agent made, for audit. */

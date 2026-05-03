@@ -18,123 +18,19 @@ const NullableIsoDate = z.preprocess(
 
 /**
  * Artifact + Output schemas — declared before TaskSchema so TaskSchema.output
- * can reference them. UI dispatches on artifact.kind; flow-control fields
- * (pendingToolCall, spawnTasks, eeatPending) drive Approve/Spawn buttons.
+ * can reference them. Flow-control fields (pendingToolCall, spawnTasks,
+ * eeatPending) drive Approve/Spawn buttons.
  *
  * `.passthrough()` on TaskOutputSchema lets older rows / extra agent payload
  * keys survive serialization without forcing a schema migration.
  */
-// `published` shapes are documented in API_GUIDE; schema kept loose so old
-// rows / partial mocks don't fail response serialization. Production code
-// produces the full shape.
-const BlogPublishedMetaSchema = z
-  .object({
-    articleId: z.number().optional(),
-    blogId: z.number().optional(),
-    blogHandle: z.string().optional(),
-    handle: z.string().optional(),
-    articleUrl: z.string().optional(),
-    publishedAt: z.string().nullable().optional(),
-    status: z.enum(['published', 'draft']).optional(),
-  })
-  .passthrough();
-
-const ProductPublishedMetaSchema = z
-  .object({
-    productId: z.number().optional(),
-    handle: z.string().optional(),
-    adminUrl: z.string().optional(),
-    status: z.enum(['active', 'draft']).optional(),
-  })
-  .passthrough();
-
-// Artifact response schema is a permissive union — UI dispatches on `kind`
-// but data fields are kept lenient so partial agent mocks (in tests) and any
-// older rows survive serialization. Producers in production emit the full
-// documented shape; see API_GUIDE §5.1 for the contract UI should expect.
-const NewArtifactSchema = z
+export const ArtifactSchema = z
   .object({
     report: z.string(),
     body: z.string().optional(),
     refs: z.record(z.unknown()).optional(),
   })
   .passthrough();
-
-const LegacyArtifactSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('blog-article'),
-    data: z
-      .object({
-        title: z.string(),
-        bodyHtml: z.string().describe('Article body HTML — sanitize + iframe srcdoc to render'),
-        summaryHtml: z.string().optional().describe('Shopify meta description / blog card excerpt'),
-        summary: z.string().optional().describe('zh-TW Markdown boss-facing review report'),
-        tags: z.array(z.string()).optional(),
-        language: z.string().optional(),
-        author: z.string().optional(),
-      })
-      .passthrough(),
-    published: BlogPublishedMetaSchema.optional(),
-  }),
-  z.object({
-    kind: z.literal('product-content'),
-    data: z
-      .object({
-        title: z.string(),
-        bodyHtml: z.string().describe('Product description HTML — sanitize + iframe srcdoc'),
-        summary: z.string().optional().describe('zh-TW Markdown boss-facing review report'),
-        tags: z.array(z.string()).optional(),
-        vendor: z.string().optional(),
-        productType: z.string().optional(),
-        language: z.string().optional(),
-        imageUrls: z.array(z.string()).optional(),
-      })
-      .passthrough(),
-    published: ProductPublishedMetaSchema.optional(),
-  }),
-  z.object({
-    kind: z.literal('seo-plan'),
-    data: z
-      .object({
-        summary: z.string().optional().describe('zh-TW Markdown report for boss review'),
-        topics: z.array(z.record(z.unknown())),
-      })
-      .passthrough(),
-  }),
-  z.object({
-    kind: z.literal('product-plan'),
-    data: z
-      .object({
-        summary: z.string().optional().describe('zh-TW Markdown report for boss review'),
-        variants: z.array(z.record(z.unknown())),
-      })
-      .passthrough(),
-  }),
-  z.object({
-    kind: z.literal('eeat-questions'),
-    data: z
-      .object({
-        summary: z.string().optional().describe('zh-TW Markdown — why these questions matter'),
-        questions: z.array(
-          z
-            .object({
-              question: z.string(),
-              hint: z.string().optional(),
-              optional: z.boolean().optional(),
-            })
-            .passthrough(),
-        ),
-        askedAt: z.string().optional(),
-      })
-      .passthrough(),
-  }),
-  z.object({
-    kind: z.literal('clarification'),
-    data: z.object({ question: z.string() }).passthrough(),
-  }),
-]);
-
-export const ArtifactSchema = z.union([NewArtifactSchema, LegacyArtifactSchema]);
 
 export const PendingToolCallSchema = z.object({
   id: z.string(),

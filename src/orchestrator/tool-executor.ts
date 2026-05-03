@@ -5,11 +5,7 @@ import { db } from '../db/client.js';
 import { type Task, tasks } from '../db/schema/index.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import type {
-  AnyArtifact,
-  BlogPublishedMeta,
-  ProductPublishedMeta,
-} from '../tasks/artifact.js';
+import type { Artifact } from '../tasks/artifact.js';
 import { readTaskOutput } from '../tasks/output.js';
 import { appendTaskLog, getTask, updateTaskStatus } from '../tasks/repository.js';
 
@@ -115,13 +111,11 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
     resultPreview:
       typeof result === 'string'
         ? result.slice(0, 200)
-        : 'structured (see task.output.artifact.refs.published or .published)',
+        : 'structured (see task.output.artifact.refs.published)',
   });
 
-  // Stamp publish metadata onto the artifact so the UI can render
-  // "已發布到 Shopify" without reading agent-specific fields. New shape
-  // uses `refs.published`; legacy shape uses `artifact.published` (kept
-  // until Task 10 removes the discriminated union).
+  // Stamp publish metadata onto the artifact's `refs.published` so the UI
+  // can render "已發布到 Shopify" without reading agent-specific fields.
   const nextArtifact = stampPublishedOnArtifact(output.artifact, pending.id, result);
 
   const nextOutput = {
@@ -158,32 +152,16 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
 }
 
 function stampPublishedOnArtifact(
-  current: AnyArtifact | undefined,
+  current: Artifact | undefined,
   toolId: string,
   result: unknown,
-): AnyArtifact | undefined {
+): Artifact | undefined {
   if (!current) return undefined;
-
-  // New flat artifact: stamp the publish metadata into refs.published so the
-  // UI artifact panel can read it without knowing which kind of agent emitted
-  // it. Tool-id check is kept loose — every publish-style tool's result lives
-  // in the same place.
-  if (!('kind' in current)) {
-    if (toolId === 'shopify.publish_article' || toolId === 'shopify.create_product') {
-      return {
-        ...current,
-        refs: { ...(current.refs ?? {}), published: result },
-      };
-    }
+  if (toolId !== 'shopify.publish_article' && toolId !== 'shopify.create_product') {
     return current;
   }
-
-  // Legacy discriminated-union artifacts — kept until Task 10 deletes them.
-  if (toolId === 'shopify.publish_article' && current.kind === 'blog-article') {
-    return { ...current, published: result as BlogPublishedMeta };
-  }
-  if (toolId === 'shopify.create_product' && current.kind === 'product-content') {
-    return { ...current, published: result as ProductPublishedMeta };
-  }
-  return current;
+  return {
+    ...current,
+    refs: { ...(current.refs ?? {}), published: result },
+  };
 }
