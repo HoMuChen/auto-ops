@@ -203,13 +203,19 @@ describe('Shopify Blog Writer EEAT two-stage flow', () => {
 
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
-    // tool-executor leaves the new flat artifact untouched — publish metadata
-    // lives only in the task log line, not stamped on artifact.refs.
     expect(task.output).toMatchObject({
       artifact: {
         report: expect.stringContaining('切角'),
         body: expect.stringContaining('## 為什麼亞麻'),
-        refs: expect.objectContaining({ title: expect.stringContaining('亞麻') }),
+        refs: expect.objectContaining({
+          title: expect.stringContaining('亞麻'),
+          published: expect.objectContaining({
+            articleId: 5000,
+            blogId: 100,
+            blogHandle: 'news',
+            handle: 'linen-summer',
+          }),
+        }),
       },
       toolExecutedAt: expect.any(String),
     });

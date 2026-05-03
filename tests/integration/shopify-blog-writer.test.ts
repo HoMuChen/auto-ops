@@ -193,14 +193,20 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
 
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
-    // New flat artifact survives publish — tool-executor doesn't stamp
-    // publish metadata onto Artifact{report,body,refs}. The publication
-    // record lives in the task log line.
     expect(task.output).toMatchObject({
       artifact: {
         report: expect.stringContaining('切角'),
         body: expect.stringContaining('## 選對材質'),
-        refs: expect.objectContaining({ title: '夏日穿搭 5 個必備單品' }),
+        refs: expect.objectContaining({
+          title: '夏日穿搭 5 個必備單品',
+          published: expect.objectContaining({
+            articleId: 4242,
+            blogId: 200,
+            blogHandle: 'editorial',
+            handle: 'xia-ri-chuan-da-5-ge-bi-bei-dan-pin',
+            status: 'draft',
+          }),
+        }),
       },
       toolExecutedAt: expect.any(String),
     });

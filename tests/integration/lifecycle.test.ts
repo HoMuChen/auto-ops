@@ -162,13 +162,20 @@ describe('Task lifecycle — happy path through HITL gate', () => {
 
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
-    // tool-executor leaves new flat artifacts unchanged — publish metadata
-    // for new flat artifacts lives only in the task log line.
     expect(task.output).toMatchObject({
       artifact: {
         report: expect.stringContaining('切角'),
         body: expect.stringContaining('## Lightweight cuts'),
-        refs: expect.objectContaining({ title: 'Summer Dresses Buying Guide' }),
+        refs: expect.objectContaining({
+          title: 'Summer Dresses Buying Guide',
+          published: expect.objectContaining({
+            articleId: 555,
+            blogId: 100,
+            blogHandle: 'news',
+            handle: 'summer-dresses-buying-guide',
+            status: 'draft',
+          }),
+        }),
       },
       toolExecutedAt: expect.any(String),
     });

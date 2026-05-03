@@ -239,13 +239,19 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
 
     child = await getTask(tenantId, childId);
     expect(child.status).toBe('done');
-    // tool-executor leaves the new flat artifact untouched — publish metadata
-    // for new flat artifacts lives only in the task log line.
     expect(child.output).toMatchObject({
       artifact: {
         report: expect.stringContaining('Decision'),
         body: expect.stringContaining('## Why Linen?'),
-        refs: expect.objectContaining({ title: expect.stringContaining('Linen') }),
+        refs: expect.objectContaining({
+          title: expect.stringContaining('Linen'),
+          published: expect.objectContaining({
+            articleId: 9001,
+            blogId: 200,
+            blogHandle: 'news',
+            handle: 'linen-summer-guide',
+          }),
+        }),
       },
       toolExecutedAt: expect.any(String),
     });

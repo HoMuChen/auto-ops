@@ -215,21 +215,20 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
 
     const finalTask = await getTask(tenantId, publisherTaskId);
     expect(finalTask.status).toBe('done');
-    // Publisher emits the new flat shape. tool-executor doesn't yet stamp
-    // refs.published for new-shape artifacts (Task 9 will fix); for now we
-    // assert the artifact survives the publish step unchanged + toolExecutedAt
-    // is stamped.
     expect(finalTask.output).toMatchObject({
       artifact: expect.objectContaining({
         report: expect.any(String),
         body: expect.any(String),
-        refs: expect.objectContaining({ ready: true }),
+        refs: expect.objectContaining({
+          ready: true,
+          published: expect.objectContaining({ productId: 456 }),
+        }),
       }),
       toolExecutedAt: expect.any(String),
     });
 
-    // Until Task 9 restores refs.published stamping, validate the publisher → Shopify
-    // HTTP binding directly via fetchMock — proves the title/body got out the door.
+    // Validate the publisher → Shopify HTTP binding directly via fetchMock —
+    // proves the title/body got out the door over the wire.
     const publishCall = fetchMock.mock.calls.find(([url]) =>
       String(url).includes('products.json'),
     );

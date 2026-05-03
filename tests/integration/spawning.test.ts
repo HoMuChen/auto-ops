@@ -260,7 +260,8 @@ describe('Strategy → Spawn → Execution flow', () => {
         } as unknown as Response);
     }
 
-    for (const child of children) {
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i]!;
       const r = await app.inject({
         method: 'POST',
         url: `/v1/tasks/${child.id}/approve`,
@@ -270,13 +271,18 @@ describe('Strategy → Spawn → Execution flow', () => {
       expect(r.statusCode).toBe(200);
       const final = await getTask(tenantId, child.id);
       expect(final.status).toBe('done');
-      // tool-executor leaves new flat artifacts unchanged — publish metadata
-      // lives only in the task log line.
       expect(final.output).toMatchObject({
         artifact: {
           report: expect.stringContaining('Decision'),
           body: expect.stringContaining('## Section'),
-          refs: expect.objectContaining({ title: expect.stringContaining('Article') }),
+          refs: expect.objectContaining({
+            title: expect.stringContaining('Article'),
+            published: expect.objectContaining({
+              articleId: 1000 + i,
+              blogId: 100,
+              handle: `article-${i + 1}`,
+            }),
+          }),
         },
         toolExecutedAt: expect.any(String),
       });

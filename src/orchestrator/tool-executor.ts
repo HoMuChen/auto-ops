@@ -115,13 +115,13 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
     resultPreview:
       typeof result === 'string'
         ? result.slice(0, 200)
-        : 'structured (see task.output.artifact.published)',
+        : 'structured (see task.output.artifact.refs.published or .published)',
   });
 
-  // Stamp `artifact.published` with the tool result so the UI's artifact
-  // panel shows "已發布到 Shopify" without reading agent-specific fields.
-  // The artifact.kind stays the same (blog-article / product-content) — the
-  // deliverable is still an article/product, now with a publication record.
+  // Stamp publish metadata onto the artifact so the UI can render
+  // "已發布到 Shopify" without reading agent-specific fields. New shape
+  // uses `refs.published`; legacy shape uses `artifact.published` (kept
+  // until Task 10 removes the discriminated union).
   const nextArtifact = stampPublishedOnArtifact(output.artifact, pending.id, result);
 
   const nextOutput = {
@@ -163,10 +163,22 @@ function stampPublishedOnArtifact(
   result: unknown,
 ): AnyArtifact | undefined {
   if (!current) return undefined;
-  // Only legacy artifacts carry a `kind` discriminant. New flat artifacts
-  // route publish stamps through `refs` and are migrated per-agent — they
-  // skip this helper until their owning agent wires its own publish path.
-  if (!('kind' in current)) return current;
+
+  // New flat artifact: stamp the publish metadata into refs.published so the
+  // UI artifact panel can read it without knowing which kind of agent emitted
+  // it. Tool-id check is kept loose — every publish-style tool's result lives
+  // in the same place.
+  if (!('kind' in current)) {
+    if (toolId === 'shopify.publish_article' || toolId === 'shopify.create_product') {
+      return {
+        ...current,
+        refs: { ...(current.refs ?? {}), published: result },
+      };
+    }
+    return current;
+  }
+
+  // Legacy discriminated-union artifacts — kept until Task 10 deletes them.
   if (toolId === 'shopify.publish_article' && current.kind === 'blog-article') {
     return { ...current, published: result as BlogPublishedMeta };
   }
