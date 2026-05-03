@@ -155,6 +155,10 @@ export const productDesignerAgent: IAgent = {
         );
       }
 
+      // NOTE: input.messages[0] carries the markdown brief — runner.ts seeds it from
+      // task.input.brief on first invocation. We deliberately do NOT read params.brief
+      // here; the LLM consumes the brief through the conversation thread, and only
+      // machine-actionable fields (language, originalImageIds) live on params.refs.
       const refs = (input.params as { refs?: { language?: string; originalImageIds?: string[] } })
         .refs;
       const inputLanguage = refs?.language ?? cfg.defaultLanguage;
@@ -169,10 +173,7 @@ export const productDesignerAgent: IAgent = {
           ?.content?.refs?.imageUrls ?? [];
       const imageUrls: string[] = [...previousImageUrls];
 
-      const originalImageIds =
-        refs?.originalImageIds ??
-        (input.params as { originalImageIds?: string[] }).originalImageIds ??
-        [];
+      const originalImageIds = refs?.originalImageIds ?? [];
 
       const constraints: string[] = [
         `Variant language: ${inputLanguage}`,

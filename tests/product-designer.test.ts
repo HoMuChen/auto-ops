@@ -188,6 +188,10 @@ describe('product-designer', () => {
     const content = output.spawnTasks![0]!.input.content as ProductContent;
     expect(content.refs.imageUrls).toEqual(['https://cdn.example.com/img-1.jpg']);
 
+    const artifact = output.artifact as { report: string };
+    expect(artifact.report).toContain('## 生成的圖片');
+    expect(artifact.report).toContain('![圖 1](https://cdn.example.com/img-1.jpg)');
+
     toolPassInvokeMock.mockImplementation(async () => ({ content: '', tool_calls: [] }));
     hop = 0;
   });
