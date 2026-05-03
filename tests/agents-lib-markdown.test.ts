@@ -36,4 +36,16 @@ describe('markdownToHtml', () => {
     expect(html).toContain('<pre>');
     expect(html).toContain('<code>');
   });
+
+  it('passes through unsanitized HTML — sanitization is publisher responsibility', () => {
+    expect(markdownToHtml('<script>alert(1)</script>')).toContain('<script>alert(1)</script>');
+  });
+
+  it('renders GFM tables', () => {
+    const md = '| a | b |\n|---|---|\n| 1 | 2 |';
+    const html = markdownToHtml(md);
+    expect(html).toContain('<table>');
+    expect(html).toContain('<th>a</th>');
+    expect(html).toContain('<td>1</td>');
+  });
 });
