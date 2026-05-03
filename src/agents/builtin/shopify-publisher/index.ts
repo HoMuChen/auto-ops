@@ -79,6 +79,7 @@ export const shopifyPublisherAgent: IAgent = {
           data: {
             title: content.title,
             bodyHtml: content.bodyHtml,
+            ...(content.summary ? { summary: content.summary } : {}),
             tags: content.tags,
             vendor: content.vendor,
             ...(content.productType ? { productType: content.productType } : {}),

@@ -73,7 +73,8 @@ export const ArtifactSchema = z.discriminatedUnion('kind', [
     data: z
       .object({
         title: z.string(),
-        bodyHtml: z.string(),
+        bodyHtml: z.string().describe('Product description HTML — sanitize + iframe srcdoc'),
+        summary: z.string().optional().describe('zh-TW Markdown boss-facing review report'),
         tags: z.array(z.string()).optional(),
         vendor: z.string().optional(),
         productType: z.string().optional(),

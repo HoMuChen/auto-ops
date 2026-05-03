@@ -16,4 +16,6 @@ export interface ProductContent {
   imageUrls: string[];
   /** First-person progress note shown on the kanban timeline. */
   progressNote: string;
+  /** zh-TW Markdown report for boss review. Forwarded to publisher artifacts. */
+  summary?: string;
 }

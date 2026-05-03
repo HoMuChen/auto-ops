@@ -48,6 +48,18 @@ const ProductListingSchema = z.object({
   tags: z.array(z.string().min(1)).min(1).max(20),
   vendor: z.string().min(1),
   productType: z.string().optional(),
+  summary: z
+    .string()
+    .min(20)
+    .max(2000)
+    .describe(
+      '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
+        '說明：你怎麼解讀 brief 與 variantSpec、文案的切角是什麼、為什麼選這幾張圖、' +
+        '特別考量的地方（受眾、平台、語言、素材限制）。' +
+        '可用 ## / ### 子標題、**粗體**、- 條列、表格。' +
+        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複 bodyHtml 的內容。' +
+        '長度建議 200–800 字。',
+    ),
   progressNote: z
     .string()
     .min(10)
@@ -236,6 +248,7 @@ export const productDesignerAgent: IAgent = {
         language: variantSpec?.language ?? cfg.defaultLanguage,
         imageUrls,
         progressNote: listing.progressNote,
+        summary: listing.summary,
       };
 
       const spawnTasks: SpawnTaskRequest[] = publishers.map((p) => ({
@@ -259,6 +272,7 @@ export const productDesignerAgent: IAgent = {
           data: {
             title: listing.title,
             bodyHtml: listing.bodyHtml,
+            summary: listing.summary,
             tags: listing.tags,
             vendor: listing.vendor,
             ...(listing.productType ? { productType: listing.productType } : {}),

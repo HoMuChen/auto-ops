@@ -39,11 +39,15 @@ export interface BlogPublishedMeta {
 
 export interface ProductContentData {
   title: string;
+  /** Product description as semantic HTML — sanitize + iframe srcdoc to render. */
   bodyHtml: string;
+  /** zh-TW Markdown boss-facing review report. Shown in artifact panel. */
+  summary?: string;
   tags: string[];
   vendor: string;
   productType?: string;
   language: string;
+  /** CF Images public URLs — already uploaded. */
   imageUrls: string[];
 }
 

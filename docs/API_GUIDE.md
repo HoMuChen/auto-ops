@@ -232,7 +232,8 @@ interface BlogArticleData {
 
 interface ProductContentData {
   title: string;
-  bodyHtml: string;
+  bodyHtml: string;       // 商品描述 HTML — DOMPurify + iframe srcdoc 渲染
+  summary?: string;       // zh-TW Markdown — 給老闆看的詳細匯報
   tags: string[];
   vendor: string;
   productType?: string;
@@ -1085,6 +1086,7 @@ UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](artifac
       "data": {
         "title": "Linen Oversized Shirt",
         "bodyHtml": "<p>Premium linen.</p>",
+        "summary": "## 設計重點\n\n從 designer 接手的商品，準備上架到 Shopify。\n\n## 即將執行\n\n按 Approve 後會以 `draft` 狀態建立 product，不會直接公開。",
         "tags": ["linen", "summer"],
         "vendor": "Acme",
         "language": "zh-TW",
@@ -1244,6 +1246,7 @@ UI 應該渲染：
       "data": {
         "title": "Linen Oversized Shirt",
         "bodyHtml": "<p>輕薄亞麻，台灣夏天通勤首選。</p>",
+        "summary": "## 文案切角\n\nvariantSpec 是 shopify 電商版（zh-TW），主打**通勤族**。我把切角放在「機能透氣」+ 「台灣濕熱通勤體驗」，跟競品的單純材質介紹做區隔。\n\n## 圖片配置\n\n生了 3 張：hero（白底）、lifestyle（捷運場景）、detail（質地特寫）。比 imagePlan 多生一張 detail 圖，因為這個材質感是賣點。\n\n## 待確認\n\n- 「180g 不悶熱」這個數據是 brief 給的，需老闆確認準確性",
         "tags": ["linen", "summer", "taiwan"],
         "vendor": "Acme",
         "language": "zh-TW",
@@ -1552,6 +1555,7 @@ interface BlogPublishedMeta {
 interface ProductContentData {
   title: string;
   bodyHtml: string;
+  summary?: string;       // zh-TW Markdown boss-facing review
   tags: string[];
   vendor: string;
   productType?: string;
