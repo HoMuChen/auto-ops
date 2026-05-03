@@ -39,7 +39,11 @@ const planFixture = {
         forbiddenClaims: [],
       },
       imagePlan: [
-        { purpose: 'lifestyle flat lay', styleHint: 'warm tones, linen texture', priority: 'required' },
+        {
+          purpose: 'lifestyle flat lay',
+          styleHint: 'warm tones, linen texture',
+          priority: 'required',
+        },
       ],
       assignedAgent: 'product-designer',
     },

@@ -366,11 +366,13 @@ function renderQuestionsMarkdown(questions: EeatQuestion[], summary?: string): s
   return [
     '## EEAT Experience Questions',
     '',
-    ...(summary ? [summary, ''] : [
-      'Before I draft the article, could you share a bit about your first-hand experience? ' +
-        "This helps ground the content in real expertise that competitors can't easily replicate.",
-      '',
-    ]),
+    ...(summary
+      ? [summary, '']
+      : [
+          'Before I draft the article, could you share a bit about your first-hand experience? ' +
+            "This helps ground the content in real expertise that competitors can't easily replicate.",
+          '',
+        ]),
     ...questions.map(
       (q, i) =>
         `**${i + 1}. ${q.question}**${q.optional ? ' _(optional)_' : ''}${

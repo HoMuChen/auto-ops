@@ -161,12 +161,9 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
    * SSE endpoint for tenant-wide log streaming across all tasks.
    * Each event includes `taskId` so the client can route logs to the correct card.
    */
-  app.get<{ Querystring: { since?: string } }>(
-    '/stream',
-    async (req, reply) => {
-      await streamTenantLogs(req, reply);
-    },
-  );
+  app.get<{ Querystring: { since?: string } }>('/stream', async (req, reply) => {
+    await streamTenantLogs(req, reply);
+  });
 
   app.post(
     '/tasks/:taskId/approve',

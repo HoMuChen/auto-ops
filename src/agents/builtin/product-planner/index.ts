@@ -43,16 +43,31 @@ Constraints:
 - Honor any brand tone or keyword constraints from the config.`;
 
 const ImageBriefSchema = z.object({
-  purpose: z.string().min(2).describe('Shot type and scene, e.g. "hero shot" or "lifestyle - morning commute"'),
-  styleHint: z.string().min(2).describe('Lighting, mood, background direction. No ratios or prompts.'),
+  purpose: z
+    .string()
+    .min(2)
+    .describe('Shot type and scene, e.g. "hero shot" or "lifestyle - morning commute"'),
+  styleHint: z
+    .string()
+    .min(2)
+    .describe('Lighting, mood, background direction. No ratios or prompts.'),
   priority: z.enum(['required', 'optional']),
 });
 
 const DesignerVariantSchema = z.object({
-  title: z.string().min(1).describe('Short label for the kanban card, e.g. "亞麻短袖 - 電商版 (zh-TW)"'),
-  platform: z.string().optional().describe('Target platform: "shopify", "instagram", "facebook", etc.'),
+  title: z
+    .string()
+    .min(1)
+    .describe('Short label for the kanban card, e.g. "亞麻短袖 - 電商版 (zh-TW)"'),
+  platform: z
+    .string()
+    .optional()
+    .describe('Target platform: "shopify", "instagram", "facebook", etc.'),
   language: z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']),
-  marketingAngle: z.string().min(10).describe('One sentence: who this is for and what pain it solves.'),
+  marketingAngle: z
+    .string()
+    .min(10)
+    .describe('One sentence: who this is for and what pain it solves.'),
   keyMessages: z.array(z.string().min(1)).min(1).max(5),
   copyBrief: z.object({
     tone: z.string().min(2),
@@ -86,17 +101,27 @@ type ContentPlan = z.infer<typeof PlanSchema>;
 type DesignerVariant = z.infer<typeof DesignerVariantSchema>;
 
 const configSchema = z.object({
-  maxVariants: z.number().int().min(1).max(10).default(5)
+  maxVariants: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(5)
     .describe('Maximum number of content variants to plan per brief'),
-  defaultLanguages: z.array(z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko'])).min(1).default(['zh-TW']),
+  defaultLanguages: z
+    .array(z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']))
+    .min(1)
+    .default(['zh-TW']),
   brandTone: z.string().nullish(),
   preferredKeywords: z.array(z.string()).default([]),
   useSerperSearch: z.boolean().default(true).describe('Search competitor SERPs before planning'),
-  skills: z.object({
-    seoFundamentals: z.boolean().default(true),
-    productPositioning: z.boolean().default(true),
-    ecommerceMarketing: z.boolean().default(true),
-  }).default({}),
+  skills: z
+    .object({
+      seoFundamentals: z.boolean().default(true),
+      productPositioning: z.boolean().default(true),
+      ecommerceMarketing: z.boolean().default(true),
+    })
+    .default({}),
 });
 
 type ProductPlannerConfig = z.infer<typeof configSchema>;
@@ -134,9 +159,7 @@ export const productPlannerAgent: IAgent = {
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
       if (!ctx.availableExecutionAgents.find((a) => a.id === 'product-designer')) {
-        throw new Error(
-          'product-planner requires product-designer to be enabled for this tenant',
-        );
+        throw new Error('product-planner requires product-designer to be enabled for this tenant');
       }
 
       await ctx.emitLog('agent.started', '研究一下競品，幫你規劃幾個方向', {

@@ -26,7 +26,10 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
         // defined here so fastify-swagger can generate the 200 schema correctly.
         response: {
           200: z.object({
-            id: z.string().uuid().describe('Image UUID — pass as imageIds entry in task/intake requests'),
+            id: z
+              .string()
+              .uuid()
+              .describe('Image UUID — pass as imageIds entry in task/intake requests'),
             url: z.string().url().describe('Cloudflare R2 public delivery URL'),
           }),
           400: ErrorEnvelope,
@@ -36,50 +39,50 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req) => {
-    const tenantId = tenantOf(req);
+      const tenantId = tenantOf(req);
 
-    const data = await req.file({ limits: { fileSize: MAX_BYTES } });
-    if (!data) throw new ValidationError('No file uploaded', {});
+      const data = await req.file({ limits: { fileSize: MAX_BYTES } });
+      if (!data) throw new ValidationError('No file uploaded', {});
 
-    const mimeType = data.mimetype;
-    if (!ALLOWED_MIME.has(mimeType)) {
-      throw new ValidationError(
-        `Unsupported MIME type: ${mimeType}. Allowed: jpeg, png, webp, gif`,
-        {},
-      );
-    }
+      const mimeType = data.mimetype;
+      if (!ALLOWED_MIME.has(mimeType)) {
+        throw new ValidationError(
+          `Unsupported MIME type: ${mimeType}. Allowed: jpeg, png, webp, gif`,
+          {},
+        );
+      }
 
-    const buffer = await data.toBuffer();
-    if (buffer.byteLength > MAX_BYTES) {
-      throw new ValidationError('File exceeds 10 MB limit', {});
-    }
+      const buffer = await data.toBuffer();
+      if (buffer.byteLength > MAX_BYTES) {
+        throw new ValidationError('File exceeds 10 MB limit', {});
+      }
 
-    // Pass env vars as-is; CloudflareImagesClient throws at upload time if misconfigured.
-    // This allows the constructor to be mocked in tests without needing real env vars.
-    const cf = new CloudflareImagesClient({
-      accountId: env.CLOUDFLARE_ACCOUNT_ID ?? '',
-      accessKeyId: env.CLOUDFLARE_R2_ACCESS_KEY_ID ?? '',
-      secretAccessKey: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY ?? '',
-      bucket: env.CLOUDFLARE_R2_BUCKET ?? '',
-      publicBaseUrl: env.CLOUDFLARE_R2_PUBLIC_BASE_URL ?? 'https://unconfigured.invalid',
-    });
-    const { cfImageId, url } = await cf.upload(buffer, {
-      filename: data.filename ?? 'upload',
-      mimeType,
-      metadata: { tenantId },
-    });
+      // Pass env vars as-is; CloudflareImagesClient throws at upload time if misconfigured.
+      // This allows the constructor to be mocked in tests without needing real env vars.
+      const cf = new CloudflareImagesClient({
+        accountId: env.CLOUDFLARE_ACCOUNT_ID ?? '',
+        accessKeyId: env.CLOUDFLARE_R2_ACCESS_KEY_ID ?? '',
+        secretAccessKey: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY ?? '',
+        bucket: env.CLOUDFLARE_R2_BUCKET ?? '',
+        publicBaseUrl: env.CLOUDFLARE_R2_PUBLIC_BASE_URL ?? 'https://unconfigured.invalid',
+      });
+      const { cfImageId, url } = await cf.upload(buffer, {
+        filename: data.filename ?? 'upload',
+        mimeType,
+        metadata: { tenantId },
+      });
 
-    const image = await insertImage({
-      tenantId,
-      cfImageId,
-      url,
-      sourceType: 'uploaded',
-      status: 'ready',
-      mimeType,
-      fileSize: buffer.byteLength,
-    });
+      const image = await insertImage({
+        tenantId,
+        cfImageId,
+        url,
+        sourceType: 'uploaded',
+        status: 'ready',
+        mimeType,
+        fileSize: buffer.byteLength,
+      });
 
-    return { id: image.id, url: image.url };
-  },
+      return { id: image.id, url: image.url };
+    },
   );
 }

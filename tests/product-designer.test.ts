@@ -19,7 +19,10 @@ const listingFixture = {
 };
 
 // Pass 1 mock: no tool calls by default (overridden per test)
-let toolPassResponse: { content: string; tool_calls: { name: string; id: string; args: Record<string, unknown> }[] } = { content: '', tool_calls: [] };
+let toolPassResponse: {
+  content: string;
+  tool_calls: { name: string; id: string; args: Record<string, unknown> }[];
+} = { content: '', tool_calls: [] };
 const toolPassInvokeMock = vi.fn(async () => toolPassResponse);
 const bindToolsMock = vi.fn(() => ({ invoke: toolPassInvokeMock }));
 
@@ -34,7 +37,10 @@ vi.mock('../src/llm/model-registry.js', () => ({
   })),
 }));
 
-const generateToolInvoke = vi.fn(async () => ({ id: 'img-1', url: 'https://cdn.example.com/img-1.jpg' }));
+const generateToolInvoke = vi.fn(async () => ({
+  id: 'img-1',
+  url: 'https://cdn.example.com/img-1.jpg',
+}));
 
 vi.mock('../src/integrations/openai-images/tools.js', () => ({
   IMAGE_TOOL_IDS: ['images.generate', 'images.edit'],
@@ -143,7 +149,9 @@ describe('product-designer', () => {
         hop++;
         return {
           content: '',
-          tool_calls: [{ name: 'images_generate', id: 'call-1', args: { prompt: 'new background' } }],
+          tool_calls: [
+            { name: 'images_generate', id: 'call-1', args: { prompt: 'new background' } },
+          ],
         };
       }
       return { content: '', tool_calls: [] };

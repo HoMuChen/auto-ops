@@ -7,7 +7,10 @@ type EmitLog = (event: string, message: string, data?: Record<string, unknown>) 
 
 interface ToolLogFormatter {
   calling: (args: Record<string, unknown>) => { message: string; data?: Record<string, unknown> };
-  result: (args: Record<string, unknown>, result: unknown) => { message: string; data?: Record<string, unknown> };
+  result: (
+    args: Record<string, unknown>,
+    result: unknown,
+  ) => { message: string; data?: Record<string, unknown> };
 }
 
 // Default log messages for known tools. Keyed by tool.name (the LangChain name).
@@ -106,21 +109,19 @@ export async function runToolLoop({
       const fmt = formatters[call.name];
 
       const callingLog = fmt?.calling?.(args);
-      await emitLog(
-        `tool.calling.${call.name}`,
-        callingLog?.message ?? `呼叫 ${call.name}`,
-        { tool: call.name, ...callingLog?.data },
-      );
+      await emitLog(`tool.calling.${call.name}`, callingLog?.message ?? `呼叫 ${call.name}`, {
+        tool: call.name,
+        ...callingLog?.data,
+      });
 
       const result = await agentTool.tool.invoke(args);
       calls.push({ toolName: call.name, args, result });
 
       const resultLog = fmt?.result?.(args, result);
-      await emitLog(
-        `tool.result.${call.name}`,
-        resultLog?.message ?? `${call.name} 完成`,
-        { tool: call.name, ...resultLog?.data },
-      );
+      await emitLog(`tool.result.${call.name}`, resultLog?.message ?? `${call.name} 完成`, {
+        tool: call.name,
+        ...resultLog?.data,
+      });
 
       collected.push(
         new ToolMessage({ tool_call_id: call.id ?? '', content: JSON.stringify(result) }),

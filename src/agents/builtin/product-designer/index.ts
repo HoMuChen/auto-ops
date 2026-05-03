@@ -142,8 +142,8 @@ export const productDesignerAgent: IAgent = {
 
       // imageUrls state management across feedback rounds
       const previousImageUrls =
-        (input.taskOutput?.payload as { content?: { imageUrls?: string[] } } | undefined)
-          ?.content?.imageUrls ?? [];
+        (input.taskOutput?.payload as { content?: { imageUrls?: string[] } } | undefined)?.content
+          ?.imageUrls ?? [];
 
       const imageUrls: string[] = [...previousImageUrls];
 
@@ -168,9 +168,7 @@ export const productDesignerAgent: IAgent = {
           `Features to highlight: ${variantSpec.copyBrief.featuresToHighlight.join(', ')}`,
         );
         if (variantSpec.copyBrief.forbiddenClaims?.length) {
-          constraints.push(
-            `Forbidden claims: ${variantSpec.copyBrief.forbiddenClaims.join(', ')}`,
-          );
+          constraints.push(`Forbidden claims: ${variantSpec.copyBrief.forbiddenClaims.join(', ')}`);
         }
       }
       if (variantSpec?.keyMessages?.length) {
