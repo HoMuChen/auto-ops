@@ -192,7 +192,7 @@ export const shopifyBlogWriterAgent: IAgent = {
     description:
       'Writes a single multilingual SEO blog article from a focused brief and ' +
       'publishes it to the tenant Shopify blog after human approval.',
-    defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.4 },
+    defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.4 },
     defaultPrompt: DEFAULT_PROMPT,
     toolIds: ['shopify.publish_article'],
     requiredCredentials: [

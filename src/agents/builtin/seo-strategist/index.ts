@@ -170,7 +170,7 @@ export const seoStrategistAgent: IAgent = {
     description:
       'Plans SEO campaigns: turns a high-level brief into a list of focused article topics, ' +
       'each spawned as an independent execution task for the Shopify Blog Writer.',
-    defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.2 },
+    defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.2 },
     defaultPrompt: DEFAULT_PROMPT,
     toolIds: ['serper.search'],
     requiredCredentials: [],

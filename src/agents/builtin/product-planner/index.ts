@@ -132,7 +132,7 @@ export const productPlannerAgent: IAgent = {
       'Plans product content strategy: researches competitor angles via Serper, ' +
       'produces N content variants (platform × language × audience), ' +
       'and spawns a Product Designer task for each variant.',
-    defaultModel: { model: 'anthropic/claude-opus-4.7', temperature: 0.2 },
+    defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.2 },
     defaultPrompt: DEFAULT_PROMPT,
     toolIds: ['serper.search'],
     requiredCredentials: [],
