@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { eventBus } from '../../events/event-bus.js';
 import { streamTaskLogs, streamTenantLogs } from '../../events/sse.js';
 import { IllegalStateError } from '../../lib/errors.js';
 import { executeApprovedToolCall } from '../../orchestrator/tool-executor.js';
@@ -80,6 +81,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
         scheduledAt,
         createdBy: user.id,
       });
+
+      if (!scheduledAt || scheduledAt <= new Date()) {
+        eventBus.signal('task.ready');
+      }
 
       await appendMessage({
         tenantId,
@@ -192,7 +197,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       //   3. plain text-only task → just transition to done
       if (body?.finalize) {
         if (task.kind === 'strategy') {
-          const { parent } = await finalizeStrategyTask(tenantId, taskId);
+          const { parent, children } = await finalizeStrategyTask(tenantId, taskId);
+          const now = new Date();
+          const hasReadyChild = children.some((c) => !c.scheduledAt || c.scheduledAt <= now);
+          if (hasReadyChild) eventBus.signal('task.ready');
           return parent;
         }
         if (readTaskOutput(task).pendingToolCall) {

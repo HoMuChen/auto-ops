@@ -46,6 +46,17 @@ class EventBus {
     this.emitter.on(channel, listener);
     return () => this.emitter.off(channel, listener);
   }
+
+  /** Lightweight internal signals (not SSE — no payload, just a nudge). */
+  signal(channel: string): void {
+    this.emitter.emit(`signal:${channel}`);
+  }
+
+  onSignal(channel: string, cb: () => void): () => void {
+    const ch = `signal:${channel}`;
+    this.emitter.on(ch, cb);
+    return () => this.emitter.off(ch, cb);
+  }
 }
 
 export const eventBus = new EventBus();
