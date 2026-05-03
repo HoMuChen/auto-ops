@@ -16,8 +16,12 @@
 
 export interface BlogArticleData {
   title: string;
+  /** Article body — semantic HTML, sanitize and render in iframe srcdoc on the UI. */
   bodyHtml: string;
+  /** Short HTML excerpt used as the Shopify meta description / blog index card. */
   summaryHtml: string;
+  /** Markdown-formatted boss-facing review report (zh-TW). Shown in artifact panel. */
+  summary?: string;
   tags: string[];
   language: string;
   author?: string;
@@ -105,6 +109,8 @@ export interface EeatQuestion {
 }
 
 export interface EeatQuestionsData {
+  /** Markdown explanation: why these questions, how the answers will be used (zh-TW). */
+  summary?: string;
   questions: EeatQuestion[];
   askedAt: string;
 }

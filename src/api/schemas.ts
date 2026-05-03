@@ -58,8 +58,9 @@ export const ArtifactSchema = z.discriminatedUnion('kind', [
     data: z
       .object({
         title: z.string(),
-        bodyHtml: z.string(),
-        summaryHtml: z.string().optional(),
+        bodyHtml: z.string().describe('Article body HTML — sanitize + iframe srcdoc to render'),
+        summaryHtml: z.string().optional().describe('Shopify meta description / blog card excerpt'),
+        summary: z.string().optional().describe('zh-TW Markdown boss-facing review report'),
         tags: z.array(z.string()).optional(),
         language: z.string().optional(),
         author: z.string().optional(),
@@ -104,6 +105,7 @@ export const ArtifactSchema = z.discriminatedUnion('kind', [
     kind: z.literal('eeat-questions'),
     data: z
       .object({
+        summary: z.string().optional().describe('zh-TW Markdown — why these questions matter'),
         questions: z.array(
           z
             .object({

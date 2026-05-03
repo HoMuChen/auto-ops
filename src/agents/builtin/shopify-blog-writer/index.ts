@@ -121,11 +121,13 @@ const ArticleSchema = z.object({
   summary: z
     .string()
     .min(20)
-    .max(500)
+    .max(2000)
     .describe(
-      '給老闆看的匯報摘要。說明你做了什麼、參考了什麼素材或資料、有什麼特別考量的地方。' +
-        '老闆靠這段文字決定要不要 Approve，所以要夠詳細但不冗長。' +
-        '用 zh-TW，語氣像員工向老闆口頭匯報，3–5 句話。',
+      '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
+        '說明：你做了什麼研究、引用了什麼素材、文章的切角是什麼、特別考量的地方。' +
+        '可用 ## / ### 子標題、**粗體**、- 條列、表格、> 引用。' +
+        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複文章內容（bodyHtml 已有）。' +
+        '語氣像員工向老闆書面匯報。長度建議 200–800 字。',
     ),
   progressNote: z
     .string()
@@ -154,11 +156,13 @@ const EeatQuestionsSchema = z.object({
   summary: z
     .string()
     .min(20)
-    .max(500)
+    .max(2000)
     .describe(
-      '給老闆看的匯報摘要。說明你做了什麼、參考了什麼素材或資料、有什麼特別考量的地方。' +
-        '老闆靠這段文字決定要不要 Approve，所以要夠詳細但不冗長。' +
-        '用 zh-TW，語氣像員工向老闆口頭匯報，3–5 句話。',
+      '給老闆看的詳細說明。**用 zh-TW 繁體中文** + Markdown 格式。' +
+        '說明：為什麼需要老闆親身經驗（這是 EEAT 加分項）、你打算怎麼用這些答案。' +
+        '可用 ## / ### 子標題、**粗體**、- 條列。' +
+        '老闆看完才知道為什麼要花時間回答這些問題。' +
+        '長度建議 100–500 字。',
     ),
   progressNote: z.string().min(10).max(200),
 });
@@ -298,7 +302,7 @@ export const shopifyBlogWriterAgent: IAgent = {
           awaitingApproval: true,
           artifact: {
             kind: 'eeat-questions',
-            data: { questions: q.questions, askedAt },
+            data: { summary: q.summary, questions: q.questions, askedAt },
           },
           payload: {
             eeatPending: { questions: q.questions, askedAt },
@@ -348,6 +352,7 @@ export const shopifyBlogWriterAgent: IAgent = {
             title: article.title,
             bodyHtml: article.bodyHtml,
             summaryHtml: article.summaryHtml,
+            summary: article.summary,
             tags: article.tags,
             language: article.language,
             ...(article.author ? { author: article.author } : {}),
