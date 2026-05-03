@@ -148,10 +148,11 @@ x-tenant-id: <UUID>
                                                     ↓ 拿到 tenant.id
 
 [列可聘員工]                    GET /v1/agents      回 [seo-strategist, shopify-blog-writer,
-  顯示卡片：                                          product-strategist, shopify-publisher, ...]
+  顯示卡片：                                          product-planner, product-designer, shopify-publisher, ...]
   - ✓ Shopify Blog Writer (ready)                            每個含 ready / credentials
   - ✓ SEO Strategist (ready)                        checklist / configSchema
-  - ✗ Product Content Strategist (need shopify-publisher enabled)
+  - ✗ Product Planner (need product-designer enabled)
+  - ✗ Product Designer (need shopify-publisher enabled)
   - ✗ Shopify Publisher (need creds)
                                                     ↓ 老闆點 Shopify Blog Writer
 
@@ -285,18 +286,33 @@ x-tenant-id: <UUID>
     "credentials": [{"provider":"shopify","bound":false,"description":"..."}]
   },
   {
-    "id": "product-strategist",
-    "name": "AI Product Content Strategist",
-    "description": "Generates platform-agnostic product copy and images from a brief, then spawns publisher agents to distribute to enabled platforms.",
-    "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.2 },
+    "id": "product-planner",
+    "name": "AI Product Planner",
+    "description": "Plans product content strategy: researches competitor angles via Serper, produces N content variants (platform × language × audience), and spawns a Product Designer task for each variant.",
+    "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.2 },
+    "toolIds": ["serper.search"],
+    "requiredCredentials": [],
+    "configSchema": {
+      /* maxVariants(default:5), defaultLanguages(default:['zh-TW']),
+         brandTone, preferredKeywords, useSerperSearch(default:true),
+         skills: { seoFundamentals(default:true), productPositioning(default:true), ecommerceMarketing(default:true) } */
+    },
+    "metadata": { "kind": "strategy" },
+    "enabled": false,
+    "ready": true,   ← 不需要 creds；但需要 product-designer 同時啟用
+    "credentials": []
+  },
+  {
+    "id": "product-designer",
+    "name": "AI Product Designer",
+    "description": "Generates product images and copy from a variant spec produced by the Product Planner, then spawns publisher agents to distribute to enabled platforms.",
+    "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.3 },
     "toolIds": ["images.generate", "images.edit"],
     "requiredCredentials": [],
     "configSchema": {
-      /* defaultLanguage(zh-TW|en|ja), defaultVendor,
-         images: { autoGenerate(default:true), style },
-         skills: { seoFundamentals(default:true) } */
+      /* defaultVendor, defaultLanguage(default:'zh-TW'),
+         skills: { productPhotography(default:true), socialMediaImages(default:true) } */
     },
-    "metadata": { "kind": "strategy" },
     "enabled": false,
     "ready": true,   ← 不需要 creds；但需要至少一個 publisher agent 同時啟用
     "credentials": []
@@ -340,12 +356,22 @@ x-tenant-id: <UUID>
   "toolWhitelist": null          // 可選；填了會限制 agent 只能用列表內的 tool
 }
 
-// product-strategist 範例
+// product-planner 範例
+{
+  "config": {
+    "maxVariants": 3,
+    "defaultLanguages": ["zh-TW"],
+    "brandTone": "warm, professional",
+    "useSerperSearch": true
+  }
+}
+
+// product-designer 範例
 {
   "config": {
     "defaultLanguage": "zh-TW",
     "defaultVendor": "Acme",
-    "images": { "autoGenerate": true, "style": "clean white background, product photography" }
+    "skills": { "productPhotography": true, "socialMediaImages": true }
   }
 }
 
@@ -770,7 +796,7 @@ LLM 後**不會**直接打 API；它會把「想呼叫的 tool + 參數」放到
 
 目前帶 `pendingToolCall` 的 agent：
 - `shopify-blog-writer` → `shopify.publish_article`（發部落格文章，**MVP 主流程**）
-- `shopify-publisher` → `shopify.create_product`（上架商品；由 `product-strategist` 產生的子任務呼叫）
+- `shopify-publisher` → `shopify.create_product`（上架商品；由 `product-designer` 產生的子任務呼叫）
 
 ### 範例：shopify-blog-writer 發部落格
 
@@ -866,7 +892,7 @@ UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](toolRes
 
 ### 範例：shopify-publisher 上架商品
 
-`shopify-publisher` 是 `product-strategist` 的執行子任務，**本身不呼叫 LLM**。它從 `task.input.params.content`（`ProductContent` 物件）讀商品資料，直接映射成 `shopify.create_product` 的參數。
+`shopify-publisher` 是 `product-designer` 的執行子任務，**本身不呼叫 LLM**。它從 `task.input.params.content`（`ProductContent` 物件）讀商品資料，直接映射成 `shopify.create_product` 的參數。
 
 #### `waiting` 狀態的 `output` 形狀
 
@@ -929,74 +955,124 @@ Shopify 回 4xx/5xx → executor 捕捉 → 寫 `task.error.message`、status=`f
 
 ---
 
-## 6.y product-strategist → shopify-publisher 商品上架流程
+## 6.y product-planner → product-designer → shopify-publisher 商品上架流程
 
 ### 概念
 
-商品上架拆成兩個角色：
+商品上架拆成三個角色：
 
 | Agent | 種類 | LLM | 職責 |
 |---|---|---|---|
-| `product-strategist` | strategy | ✓ | 看商品 brief → 產出 `ProductContent`（標題、HTML 描述、標籤、廠商、圖片） → 交由人審 → spawn publisher 子任務 |
+| `product-planner` | strategy | ✓ | 看商品 brief → 搜尋競品 SERP → 規劃 N 個 content variants（不同平台 / 語言 / 受眾切角） → 交由人審 → spawn designer 子任務 |
+| `product-designer` | execution → strategy | ✓ | 收 variant spec → tool loop 生圖 → 寫 HTML 文案 → 交由人審 → spawn publisher 子任務 |
 | `shopify-publisher` | execution | ✗ | 讀 `task.input.params.content` → 直接映射 `shopify.create_product` 參數 → HITL 等核准 |
 
-**啟用順序：** 兩個 agent 必須對同一個 tenant **同時啟用**，`product-strategist` 才能在執行時找到 publisher。
+**啟用順序：** 三個 agent 必須對同一個 tenant 同時啟用。`shopify-publisher` 需要先綁 Shopify credential。
 
 ```
-POST /v1/agents/product-strategist/activate  { config: { defaultLanguage, defaultVendor } }
-POST /v1/agents/shopify-publisher/activate   { config: { shopify: { autoPublish: false } } }
+PUT  /v1/credentials/shopify              { secret, metadata: { storeUrl } }
+POST /v1/agents/product-planner/activate  { config: { defaultLanguages, maxVariants } }
+POST /v1/agents/product-designer/activate { config: { defaultLanguage, defaultVendor } }
+POST /v1/agents/shopify-publisher/activate { config: { shopify: { autoPublish: false } } }
 ```
-
-`shopify-publisher` 需要先綁 Shopify credential（`PUT /v1/credentials/shopify`），否則 activate 回 409。
 
 ### 完整流程
 
 ```
-user POST /v1/tasks { brief: "上架這件亞麻衫" }
-   ↓ worker 撿走 → supervisor 路由 → product-strategist
-   ↓ LLM 產 ProductContent + 圖片（R2）
+user POST /v1/tasks { brief: "上架這件亞麻衫，做電商版跟 Instagram 版" }
+   ↓ worker 撿走 → supervisor 路由 → product-planner
+   ↓ Pass 1: serper_search 研究競品切角（若有 SERPER_API_KEY）
+   ↓ Pass 2: 規劃 2 個 variants（shopify 版 + instagram 版）
    → 父任務 status='waiting', kind='strategy'
-     output.spawnTasks = [{ assignedAgent: 'shopify-publisher', input: { content: {...} } }]
+     output.spawnTasks = [
+       { assignedAgent: 'product-designer', input: { variantSpec: { platform:'shopify', ... }, originalImageIds: [] } },
+       { assignedAgent: 'product-designer', input: { variantSpec: { platform:'instagram', ... }, originalImageIds: [] } }
+     ]
 
-user POST /v1/tasks/:stratTaskId/approve { finalize: true }
-   ↓ 框架原子建出 shopify-publisher 子任務（status='todo'）
+user POST /v1/tasks/:plannerTaskId/approve { finalize: true }
+   ↓ 框架原子建出 2 張 product-designer 子任務（status='todo'）
    → 父任務 status='done'
 
-worker 撿走子任務（pinnedAgent='shopify-publisher'，跳過 supervisor LLM 路由）
+worker 撿走 designer 子任務（pinnedAgent='product-designer'）
+   ↓ Pass 1: tool loop 生圖（images.generate / images.edit）
+   ↓ Pass 2: LLM 產 title / bodyHtml / tags / vendor
+   → designer 子任務 status='waiting', kind='strategy'（因回傳 spawnTasks）
+     output.spawnTasks = [{ assignedAgent: 'shopify-publisher', input: { content: {...} } }]
+
+user POST /v1/tasks/:designerTaskId/approve { finalize: true }
+   ↓ 框架原子建出 shopify-publisher 孫任務（status='todo'）
+   → designer 子任務 status='done'
+
+worker 撿走 publisher 孫任務（pinnedAgent='shopify-publisher'）
    ↓ shopify-publisher 讀 task.input.params.content，映射 pendingToolCall
-   → 子任務 status='waiting'
+   → 孫任務 status='waiting'
      output.pendingToolCall = { id: 'shopify.create_product', args: {...} }
 
 user POST /v1/tasks/:pubTaskId/approve { finalize: true }
    ↓ 框架呼叫 shopify.create_product → 寫入 output.toolResult
-   → 子任務 status='done'
+   → 孫任務 status='done'
 ```
 
-### strategy 父任務的 `output` 形狀（waiting 時）
+### product-planner 父任務的 `output` 形狀（waiting 時）
 
 ```json
 {
-  "id": "parent-uuid",
+  "id": "planner-uuid",
   "kind": "strategy",
   "status": "waiting",
-  "assignedAgent": "product-strategist",
+  "assignedAgent": "product-planner",
+  "output": {
+    "plan": {
+      "reasoning": "Two variants targeting different channels.",
+      "variants": [
+        {
+          "title": "亞麻短袖 - 電商版 (zh-TW)",
+          "platform": "shopify",
+          "language": "zh-TW",
+          "marketingAngle": "機能透氣，台灣濕熱夏天通勤族",
+          "keyMessages": ["180g 亞麻不悶熱", "可機洗"],
+          "copyBrief": { "tone": "warm, professional", "featuresToHighlight": ["fabric weight"] },
+          "imagePlan": [
+            { "purpose": "hero shot", "styleHint": "clean white background", "priority": "required" }
+          ],
+          "assignedAgent": "product-designer"
+        }
+      ]
+    },
+    "spawnTasks": [ /* 同 variants，每個 variant 一張 designer 子任務 */ ]
+  }
+}
+```
+
+UI 應該渲染：
+- 每個 variant 的標題 + 平台 + marketingAngle
+- imagePlan 摘要（幾張圖、required/optional）
+- 「即將建立 N 張設計師子卡」
+- CTA：[Approve & Spawn] (`finalize:true`) / [Feedback]（要求調整規劃）
+
+### product-designer 子任務的 `output` 形狀（waiting 時）
+
+```json
+{
+  "id": "designer-uuid",
+  "kind": "strategy",
+  "status": "waiting",
+  "assignedAgent": "product-designer",
   "output": {
     "content": {
       "title": "Linen Oversized Shirt",
-      "bodyHtml": "<p>Premium linen.</p>",
-      "tags": ["linen", "summer"],
+      "bodyHtml": "<p>輕薄亞麻，台灣夏天通勤首選。</p>",
+      "tags": ["linen", "summer", "taiwan"],
       "vendor": "Acme",
       "language": "zh-TW",
       "imageUrls": ["https://assets.example.com/img-1.png"],
-      "progressNote": "商品文案好了，老闆看一下"
+      "progressNote": "文案跟圖片都好了，老闆看一下"
     },
     "spawnTasks": [
       {
         "title": "Linen Oversized Shirt → Shopify Product Publisher",
         "assignedAgent": "shopify-publisher",
-        "input": {
-          "content": { /* ProductContent 同上 */ }
-        }
+        "input": { "content": { /* ProductContent 同上 */ } }
       }
     ]
   }
@@ -1004,31 +1080,49 @@ user POST /v1/tasks/:pubTaskId/approve { finalize: true }
 ```
 
 UI 應該渲染：
-- 標題 + Vendor / Tags / 圖片張數
-- HTML 描述預覽
+- 標題 + Vendor / Tags / 圖片預覽
+- HTML 描述預覽（`bodyHtml`）
 - 「即將建立 1 張子卡：shopify-publisher」
-- CTA：[Approve & Spawn] (`finalize:true`) / [Feedback]（要求修改文案）
+- CTA：[Approve & Spawn] (`finalize:true`) / [Feedback]（要求修改文案或重生圖）
 
-### product-strategist 啟用設定
+**Feedback 重生圖：** 用戶說「背景換成木紋」→ POST /feedback → designer 重跑 → LLM 呼叫 `images.edit`（以前一輪的圖片 URL 為 source）→ 新圖取代舊圖。若 feedback 只改文案、不提圖片，LLM 不呼叫任何 image tool，舊圖自動保留。
+
+### product-planner 啟用設定
 
 ```json
 {
   "config": {
-    "defaultLanguage": "zh-TW",          // zh-TW | en | ja
-    "defaultVendor": "Acme",             // 選填；brief 沒提到廠商時用這個
-    "images": {
-      "autoGenerate": true,              // true → 若沒有上傳圖片，自動用 OpenAI 產圖
-      "style": "clean white background, product photography"
-    },
+    "maxVariants": 5,                    // 最多幾個 variant，預設 5
+    "defaultLanguages": ["zh-TW"],       // 預設語言，brief 沒指定時用
+    "brandTone": "warm, professional",   // 選填；傳給設計師的品牌語調
+    "preferredKeywords": [],             // 選填；優先納入的 keyword cluster
+    "useSerperSearch": true,             // true → 搜尋競品 SERP 後再規劃
     "skills": {
-      "seoFundamentals": true            // 注入 SEO 基本原則 skill pack
+      "seoFundamentals": true,
+      "productPositioning": true,        // USP 挖掘 + 受眾分群框架
+      "ecommerceMarketing": true         // 電商內容切角 + 轉換文案原則
+    }
+  }
+}
+```
+
+### product-designer 啟用設定
+
+```json
+{
+  "config": {
+    "defaultLanguage": "zh-TW",
+    "defaultVendor": "Acme",             // 選填；brief 沒提到廠商時用
+    "skills": {
+      "productPhotography": true,        // 商品攝影構圖原則（ratio、組圖邏輯）
+      "socialMediaImages": true          // 各平台圖片規格（1:1、4:5、9:16 等）
     }
   }
 }
 ```
 
 > 圖片生成需要同時設定 Cloudflare R2（`CLOUDFLARE_*` env）+ OpenAI key（`OPENAI_API_KEY`）。
-> 若 env 缺一，`autoGenerate` 自動降級為「不產圖」而不是報錯。
+> 若 env 缺一，Pass 1 工具為空，designer 跳過生圖直接寫文案。
 
 ---
 
@@ -1238,7 +1332,7 @@ interface PendingToolCall {
 }
 
 /**
- * Platform-agnostic product content produced by product-strategist and
+ * Platform-agnostic product content produced by product-designer and
  * forwarded to shopify-publisher (and future publishers) via task.input.params.content.
  */
 interface ProductContent {
@@ -1336,9 +1430,9 @@ interface AgentStatus {
 | 沒 rate limit | 任意 client 短時間內可灌 N 次 POST /v1/tasks；UI 自己擋 |
 | 沒 RLS 兜底 | 不影響 UI；純粹是後端安全防線 |
 | `parentTaskId=null` query 還沒解析 | 列「頂層任務」目前要 client-side filter `parentTaskId === null` |
-| shopify-blog-writer 文章無附圖 | 文章本身不夾圖；`product-strategist` 支援圖片生成（需 R2 + OpenAI env），blog writer 尚未接 |
+| shopify-blog-writer 文章無附圖 | 文章本身不夾圖；`product-designer` 支援圖片生成（需 R2 + OpenAI env），blog writer 尚未接 |
 | shopify-blog-writer 必綁 Shopify creds | 即使打算只用 `publishToShopify=false` 純草稿，activate 仍要 creds；roadmap 改為動態 required |
-| product-strategist 需同時啟用 publisher | 若 tenant 啟用了 `product-strategist` 但沒啟用任何 `kind=publisher` agent，worker 跑到 invoke 時會 throw；UI 應提示用戶同時啟用 `shopify-publisher` |
+| product-planner / product-designer 需同時啟用 | `product-planner` 需要 `product-designer` 存在；`product-designer` 需要至少一個 `kind=publisher` agent。若缺少，worker 跑到 invoke 時會 throw |
 
 ---
 
