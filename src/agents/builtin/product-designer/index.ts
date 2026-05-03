@@ -7,7 +7,7 @@ import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-
 import { getImageById, insertImage } from '../../../integrations/cloudflare/images-repository.js';
 import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
 import { buildImageTools } from '../../../integrations/openai-images/tools.js';
-import { buildModel } from '../../../llm/model-registry.js';
+import { invokeStructured } from '../../lib/invoke-structured.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
@@ -55,7 +55,6 @@ const ProductListingSchema = z.object({
     .describe('一句話對老闆回報剛完成什麼。用 zh-TW 第一人稱，對話對象是「老闆」。'),
 });
 
-type ProductListing = z.infer<typeof ProductListingSchema>;
 
 const configSchema = z.object({
   defaultVendor: z.string().nullish(),
@@ -221,13 +220,12 @@ export const productDesignerAgent: IAgent = {
       }
 
       // Pass 2: structured copy
-      const listingModel = buildModel(ctx.modelConfig).withStructuredOutput(ProductListingSchema, {
-        name: 'product_listing',
-      });
-      const listing = (await listingModel.invoke([
-        ...collectedMessages,
-        new HumanMessage('Now produce the structured product listing.'),
-      ])) as ProductListing;
+      const listing = await invokeStructured(
+        ctx.modelConfig,
+        ProductListingSchema,
+        'product_listing',
+        [...collectedMessages, new HumanMessage('Now produce the structured product listing.')],
+      );
 
       const content: ProductContent = {
         title: listing.title,

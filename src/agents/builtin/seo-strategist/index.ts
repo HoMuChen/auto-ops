@@ -6,7 +6,7 @@ import { env } from '../../../config/env.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
-import { buildModel } from '../../../llm/model-registry.js';
+import { invokeStructured } from '../../lib/invoke-structured.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
@@ -239,13 +239,10 @@ export const seoStrategistAgent: IAgent = {
       });
 
       // Pass 2: produce the structured plan from the enriched conversation
-      const planModel = buildModel(ctx.modelConfig).withStructuredOutput(PlanSchema, {
-        name: 'seo_content_plan',
-      });
-      const plan = (await planModel.invoke([
+      const plan = await invokeStructured(ctx.modelConfig, PlanSchema, 'seo_content_plan', [
         ...collected,
         new HumanMessage('Now produce the final structured plan.'),
-      ])) as ContentPlan;
+      ]);
 
       const capped: ContentTopic[] = plan.topics.slice(0, cfg.maxTopics);
 

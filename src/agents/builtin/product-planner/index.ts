@@ -6,7 +6,7 @@ import { env } from '../../../config/env.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
-import { buildModel } from '../../../llm/model-registry.js';
+import { invokeStructured } from '../../lib/invoke-structured.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
@@ -97,8 +97,6 @@ const PlanSchema = z.object({
   variants: z.array(DesignerVariantSchema).min(1),
 });
 
-type ContentPlan = z.infer<typeof PlanSchema>;
-type DesignerVariant = z.infer<typeof DesignerVariantSchema>;
 
 const configSchema = z.object({
   maxVariants: z
@@ -196,19 +194,16 @@ export const productPlannerAgent: IAgent = {
       });
 
       // Pass 2: structured variant plan
-      const planModel = buildModel(ctx.modelConfig).withStructuredOutput(PlanSchema, {
-        name: 'product_content_plan',
-      });
-      const plan = (await planModel.invoke([
+      const plan = await invokeStructured(ctx.modelConfig, PlanSchema, 'product_content_plan', [
         ...collected,
         new HumanMessage('Now produce the final structured content plan.'),
-      ])) as ContentPlan;
+      ]);
 
       const capped = plan.variants.slice(0, cfg.maxVariants);
 
       const originalImageIds = (input.params as { imageIds?: string[] }).imageIds ?? [];
 
-      const spawnTasks: SpawnTaskRequest[] = capped.map((v: DesignerVariant) => ({
+      const spawnTasks: SpawnTaskRequest[] = capped.map((v) => ({
         title: v.title,
         description: `Product content — ${v.marketingAngle}`,
         assignedAgent: 'product-designer',
@@ -225,7 +220,7 @@ export const productPlannerAgent: IAgent = {
         plan.summary,
         '',
         ...capped.map(
-          (v: DesignerVariant, i: number) =>
+          (v, i) =>
             `${i + 1}. **${v.title}**${v.platform ? ` _(${v.platform})_` : ''} — ${v.marketingAngle}`,
         ),
         '',

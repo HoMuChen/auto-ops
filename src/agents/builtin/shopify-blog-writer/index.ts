@@ -7,7 +7,7 @@ import { insertImage } from '../../../integrations/cloudflare/images-repository.
 import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
 import { buildImageTools } from '../../../integrations/openai-images/tools.js';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
-import { buildModel } from '../../../llm/model-registry.js';
+import { invokeStructured } from '../../lib/invoke-structured.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import type {
@@ -279,17 +279,18 @@ export const shopifyBlogWriterAgent: IAgent = {
         : systemPrompt;
 
       if (shouldDoStage1(input.taskOutput, input.params, input.messages)) {
-        const questionModel = buildModel(ctx.modelConfig).withStructuredOutput(
-          EeatQuestionsSchema,
-          { name: 'eeat_questions' },
-        );
         const messages = await buildAgentMessages(
           systemWithResearch,
           input.messages,
           constraints,
           input.imageResolver,
         );
-        const q = (await questionModel.invoke(messages)) as EeatQuestions;
+        const q = await invokeStructured(
+          ctx.modelConfig,
+          EeatQuestionsSchema,
+          'eeat_questions',
+          messages,
+        );
         await ctx.emitLog('agent.questions.asked', q.progressNote, {
           count: q.questions.length,
         });
@@ -302,16 +303,18 @@ export const shopifyBlogWriterAgent: IAgent = {
         };
       }
 
-      const articleModel = buildModel(ctx.modelConfig).withStructuredOutput(ArticleSchema, {
-        name: 'seo_blog_article',
-      });
       const messages = await buildAgentMessages(
         systemWithResearch,
         input.messages,
         constraints,
         input.imageResolver,
       );
-      const article = (await articleModel.invoke(messages)) as ArticleDraft;
+      const article = await invokeStructured(
+        ctx.modelConfig,
+        ArticleSchema,
+        'seo_blog_article',
+        messages,
+      );
 
       let coverImageUrl: string | undefined;
       if (cfg.generateCoverImage && imageTools.length > 0) {
