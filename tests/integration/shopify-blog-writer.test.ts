@@ -80,12 +80,13 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured({
       title: '夏日穿搭 5 個必備單品',
-      bodyHtml:
-        '<h2>選對材質讓夏天更舒服</h2><p>今年夏天必備的 5 個單品讓妳在 35 度高溫也能保持優雅。</p>',
+      body: '## 選對材質讓夏天更舒服\n\n今年夏天必備的 5 個單品讓妳在 35 度高溫也能保持優雅。\n\n- 機能麻襯衫\n- 寬版亞麻褲\n- 透氣涼鞋',
       summaryHtml: '5 個夏季必備單品挑選指南，含材質與搭配建議。',
       tags: ['夏季穿搭', '女裝', '購物指南'],
       language: 'zh-TW',
       author: 'Editorial Team',
+      report:
+        '## 切角\n\n從「機能性」切入而不是純穿搭潮流，理由是讀者更在意涼感與抗皺。E-E-A-T 部分引用了店家的實穿經驗。',
       progressNote: '草稿好了，這篇我從機能性切入而不是純穿搭，老闆看一下',
     });
 
@@ -105,13 +106,21 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     expect(task.assignedAgent).toBe('shopify-blog-writer');
     expect(task.output).toMatchObject({
       artifact: {
-        kind: 'blog-article',
-        data: { title: '夏日穿搭 5 個必備單品', language: 'zh-TW' },
+        report: expect.stringContaining('切角'),
+        body: expect.stringContaining('## 選對材質'),
+        refs: expect.objectContaining({
+          title: '夏日穿搭 5 個必備單品',
+          language: 'zh-TW',
+          tags: expect.arrayContaining(['夏季穿搭']),
+          author: 'Editorial Team',
+        }),
       },
       pendingToolCall: {
         id: 'shopify.publish_article',
         args: expect.objectContaining({
           title: '夏日穿搭 5 個必備單品',
+          // bodyHtml is markdownToHtml(body) — converted at the boundary.
+          bodyHtml: expect.stringContaining('<h2>選對材質讓夏天更舒服</h2>'),
           summaryHtml: expect.stringContaining('挑選指南'),
           tags: expect.arrayContaining(['夏季穿搭']),
           author: 'Editorial Team',
@@ -184,20 +193,18 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
 
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
+    // New flat artifact survives publish — tool-executor doesn't stamp
+    // publish metadata onto Artifact{report,body,refs}. The publication
+    // record lives in the task log line.
     expect(task.output).toMatchObject({
       artifact: {
-        kind: 'blog-article',
-        published: {
-          articleId: 4242,
-          blogId: 200,
-          blogHandle: 'editorial',
-          handle: 'xia-ri-chuan-da-5-ge-bi-bei-dan-pin',
-          articleUrl: 'https://demo-shop.myshopify.com/admin/articles/4242',
-          status: 'draft',
-        },
+        report: expect.stringContaining('切角'),
+        body: expect.stringContaining('## 選對材質'),
+        refs: expect.objectContaining({ title: '夏日穿搭 5 個必備單品' }),
       },
       toolExecutedAt: expect.any(String),
     });
+    expect(task.output).not.toHaveProperty('pendingToolCall');
   });
 
   it('publishToShopify=false → no pendingToolCall, plain done on approve', async () => {
@@ -221,10 +228,12 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured({
       title: 'Drafts only mode',
-      bodyHtml: '<p>This article should never reach Shopify.</p>',
+      body: 'This article should never reach Shopify because publishing is disabled by config.',
       summaryHtml: 'A draft to be exported manually.',
       tags: ['draft', 'manual'],
       language: 'en',
+      report:
+        '## Decision\n\nPublishing skipped because the boss disabled `publishToShopify`. This stays as a kanban draft so the team can copy/paste manually.',
       progressNote: 'Draft done, saving locally per the publishToShopify=false config.',
     });
 
@@ -242,8 +251,9 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     expect(task.output).not.toHaveProperty('pendingToolCall');
     expect(task.output).toMatchObject({
       artifact: {
-        kind: 'blog-article',
-        data: { title: 'Drafts only mode' },
+        report: expect.stringContaining('Decision'),
+        body: expect.stringContaining('publishing'),
+        refs: expect.objectContaining({ title: 'Drafts only mode', language: 'en' }),
       },
       publishToShopify: false,
     });
@@ -288,10 +298,12 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured({
       title: 'Will fail to publish',
-      bodyHtml: '<p>Long enough body to satisfy the schema minimum length.</p>',
+      body: 'Long enough body to satisfy the schema minimum length — even after the markdown migration.',
       summaryHtml: 'A summary that will never be published.',
       tags: ['fail'],
       language: 'en',
+      report:
+        '## Decision\n\nDraft is ready. We will queue it for publish to validate the failure path on the missing blog handle.',
       progressNote: 'Draft ready, queued for publish.',
     });
 
@@ -355,11 +367,13 @@ describe('Shopify Blog Writer — cover image generation in Stage 2', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptStructured({
       title: '夏日穿搭指南',
-      bodyHtml: '<p>輕鬆穿出夏日風格</p>',
+      body: '## 夏日風格\n\n輕鬆穿出夏日風格 — 機能、透氣、寬鬆是三大關鍵。內文示範 5 個搭配。',
       summaryHtml: '夏日穿搭指南',
       tags: ['夏季', '穿搭'],
       language: 'zh-TW',
       author: 'Auto',
+      report:
+        '## 切角\n\n從機能 + 涼感切入。封面圖會用 editorial 風格，與主視覺一致。E-E-A-T 部分引用了實穿經驗。',
       progressNote: '草稿完成了',
     });
 

@@ -1,18 +1,19 @@
 /**
- * End-to-end integration test: Strategist → Writer draft → approve flow.
+ * End-to-end integration test: Strategist → Writer EEAT → Writer draft → approve flow.
  *
- * After the markdown-first refactor (Task 4), the strategist passes a markdown
- * brief to the child via `input.brief` + `input.refs.{primaryKeyword,language}`.
- * It no longer emits a structured `research` block — so the writer's Stage 1
- * (EEAT Q&A) does not fire from this strategist-spawned path. EEAT coverage
- * lives in `shopify-blog-writer-eeat.test.ts`, which exercises the writer in
- * isolation with `params.research.eeatHook` injected directly.
+ * After the markdown-first refactor, the strategist passes a markdown brief
+ * to the child via `input.brief` + `input.refs.{primaryKeyword,language}`.
+ * The writer's Stage 1 (EEAT Q&A) fires whenever `params.refs.primaryKeyword`
+ * is present (i.e. the task came from the strategist), so the full e2e path
+ * goes through both stages.
  *
  * Flow:
- *   1. POST /v1/tasks (strategy brief) → drain → Strategist runs two-pass (bindTools + plan)
+ *   1. POST /v1/tasks (strategy brief) → drain → Strategist runs two-pass
  *   2. approve(finalize=true) → 1 writer child spawned with markdown brief + refs
- *   3. drain Writer → Stage 2 fires (no EEAT path) → task waiting with pendingToolCall
- *   4. approve(finalize=true) → shopify.publish_article fires → done
+ *   3. drain Writer → Stage 1 fires (EEAT questions) → task waiting with eeatPending
+ *   4. boss feedback → task back to todo
+ *   5. drain Writer → Stage 2 fires → task waiting with pendingToolCall
+ *   6. approve(finalize=true) → shopify.publish_article fires → done
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -164,30 +165,68 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
     });
     expect((firstChild.input as { brief: string }).brief).toContain('PAA');
 
-    // ── Phase 3: Writer Stage 2 — draft article (no EEAT path from strategist) ─
+    // ── Phase 3: Writer Stage 1 — EEAT questions (refs.primaryKeyword triggers it) ─
+    scriptStructured({
+      questions: [
+        { question: 'How many wash cycles before pilling shows?', optional: false },
+        { question: 'Have you worn it in 35°C humid weather? How did it feel?', optional: true },
+      ],
+      narrative:
+        '## Why I need your input\n\nFirst-hand wash + wear data is the EEAT moat for this article. I will fold the numbers into the opening paragraph.',
+      progressNote: 'Got a few EEAT questions before drafting',
+    });
+
+    const stage1Drain = await drainNextTask();
+    expect(stage1Drain.taskId).toBe(childId);
+
+    let child = await getTask(tenantId, childId);
+    expect(child.status).toBe('waiting');
+    expect(child.output).toMatchObject({
+      eeatPending: { questions: expect.any(Array), askedAt: expect.any(String) },
+      artifact: {
+        report: expect.stringContaining('我需要先請你回答幾個問題'),
+        refs: { askedAt: expect.any(String) },
+      },
+    });
+    expect(child.output).not.toHaveProperty('pendingToolCall');
+
+    // ── Phase 4: boss replies with EEAT answers → task → todo ───────────────
+    const feedback = await app.inject({
+      method: 'POST',
+      url: `/v1/tasks/${childId}/feedback`,
+      headers: authHeaders(jwt, tenantId),
+      payload: { feedback: 'Washed it 12 times — no pilling. 35°C humid is fine, dries fast.' },
+    });
+    expect(feedback.statusCode).toBe(200);
+
+    // ── Phase 5: Writer Stage 2 — draft article ─────────────────────────────
     scriptStructured({
       title: 'Linen Shirts: The Ultimate Summer Guide',
-      bodyHtml:
-        '<h2>Why Linen?</h2><p>Lightweight, breathable, and a perfect match for humid summers.</p>',
+      body: '## Why Linen?\n\nLightweight, breathable, and a perfect match for humid summers. Washed it 12 times without pilling.',
       summaryHtml: 'A first-hand guide to linen shirts for humid summer climates.',
       tags: ['linen', 'summer', 'fabric guide'],
       language: 'en',
+      report:
+        '## Decision\n\nOpening paragraph leads with the boss-provided 12-wash data point — strongest EEAT signal we have. Comparison table left out to keep length under 1200 words.',
       progressNote: '草稿好了，老闆過目',
     });
 
     const writerDrain = await drainNextTask();
     expect(writerDrain.taskId).toBe(childId);
 
-    let child = await getTask(tenantId, childId);
+    child = await getTask(tenantId, childId);
     expect(child.status).toBe('waiting');
     expect(child.output).toMatchObject({
       artifact: {
-        kind: 'blog-article',
-        data: { title: expect.stringContaining('Linen') },
+        report: expect.stringContaining('Decision'),
+        body: expect.stringContaining('## Why Linen?'),
+        refs: expect.objectContaining({
+          title: expect.stringContaining('Linen'),
+          language: 'en',
+        }),
       },
       pendingToolCall: { id: 'shopify.publish_article' },
     });
-    expect(child.output).not.toHaveProperty('eeatPending');
 
     // ── Phase 4: approve → publish_article fires ──────────────────────────────
     const approve = await app.inject({
@@ -200,12 +239,16 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
 
     child = await getTask(tenantId, childId);
     expect(child.status).toBe('done');
+    // tool-executor leaves the new flat artifact untouched — publish metadata
+    // for new flat artifacts lives only in the task log line.
     expect(child.output).toMatchObject({
       artifact: {
-        kind: 'blog-article',
-        published: { articleId: 9001, blogId: 200, status: 'draft' },
+        report: expect.stringContaining('Decision'),
+        body: expect.stringContaining('## Why Linen?'),
+        refs: expect.objectContaining({ title: expect.stringContaining('Linen') }),
       },
       toolExecutedAt: expect.any(String),
     });
+    expect(child.output).not.toHaveProperty('pendingToolCall');
   });
 });

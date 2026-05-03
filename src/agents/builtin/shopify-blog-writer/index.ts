@@ -8,6 +8,7 @@ import { OpenAIImagesClient } from '../../../integrations/openai-images/client.j
 import { buildImageTools } from '../../../integrations/openai-images/tools.js';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { invokeStructured } from '../../lib/invoke-structured.js';
+import { markdownToHtml } from '../../lib/markdown.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import type {
@@ -18,23 +19,6 @@ import type {
   IAgent,
   PendingToolCall,
 } from '../../types.js';
-/**
- * Local type for the legacy `params.research` block — the seo-strategist used
- * to forward this verbatim. After the markdown-first refactor (Task 4), the
- * strategist no longer emits this shape; this type stays as a transitional
- * decoder for any in-flight tasks until Task 6 rewrites the writer to read
- * `input.brief` (markdown) directly.
- */
-type TopicResearch = {
-  // TODO(task-6): remove together with TopicResearch shim — strategist no longer emits params.research
-  searchIntent: 'informational' | 'commercial' | 'transactional' | 'navigational';
-  paaQuestions: string[];
-  relatedSearches: string[];
-  competitorTopAngles: string[];
-  competitorGaps: string[];
-  targetWordCount: number;
-  eeatHook: string;
-};
 
 const DEFAULT_PROMPT = `You are an Shopify Blog Writer AI employee for an e-commerce business.
 Your job: produce ONE polished, multilingual blog article from a single brief
@@ -43,16 +27,14 @@ the article to the tenant's Shopify blog after the user reviews and approves.
 
 Requirements:
 - Title: <= 70 chars, include the primary keyword if natural.
-- Body: clean, semantic HTML (<h2>, <p>, <ul>/<li>, <blockquote>; never
-  <script>/<style>). Aim for 800–1500 words for top-of-funnel SEO posts.
+- Body: clean Markdown. Use ## / ### headings, **bold**, *italic*, - bullets, > blockquote. Do NOT emit raw HTML — the framework converts at the Shopify publish boundary. Aim for 800–1500 words for top-of-funnel SEO posts.
 - Summary: 1–2 sentence excerpt (<= 200 chars) used as the meta description
   and the blog index card.
 - Tags: 3–8 short lower-case keywords.
 - Honor any tone/keyword/forbidden-phrase constraints in the brief.
 - Stay focused on the single topic — do NOT propose other articles.
 
-When you have EEAT research hooks from the strategist, ask the boss 2–3
-concrete experience questions BEFORE drafting. Use the eeatHook to focus them.`;
+When the task is Stage 1 (EEAT questions), the agent prompt will explicitly ask you for questions; otherwise produce the article.`;
 
 const configSchema = z.object({
   targetLanguages: z
@@ -118,32 +100,37 @@ type SeoWriterConfig = z.infer<typeof configSchema>;
 
 const ArticleSchema = z.object({
   title: z.string().min(1).max(140).describe('Article title shown on the blog and in feeds.'),
-  bodyHtml: z
+  body: z
     .string()
     .min(50)
     .describe(
-      'Article body as semantic HTML. Use <h2>, <p>, <ul>/<li>, <blockquote>; never <script>/<style>.',
+      'Article body in Markdown. Use ## / ### headings, **bold**, *italic*, - bullets, ' +
+        '> blockquote. Do NOT emit raw HTML. The framework converts to HTML at the ' +
+        'Shopify publish boundary. 800–1500 words for top-of-funnel SEO posts.',
     ),
   summaryHtml: z
     .string()
     .min(20)
     .max(400)
-    .describe('1–2 sentence excerpt — used as meta description and blog index card.'),
+    .describe(
+      '1–2 sentence excerpt as plain HTML (or plain text — Shopify accepts either). ' +
+        'Used as meta description and blog index card. Do not include block-level tags.',
+    ),
   tags: z.array(z.string().min(1)).min(1).max(20).describe('Short keyword tags. 3–8 is ideal.'),
   language: z
     .enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko'])
     .describe('The language the article is written in.'),
   author: z.string().optional().describe('Author byline. Leave blank to use the agent default.'),
-  summary: z
+  report: z
     .string()
-    .min(20)
-    .max(2000)
+    .min(80)
+    .max(4000)
     .describe(
-      '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
-        '說明：你做了什麼研究、引用了什麼素材、文章的切角是什麼、特別考量的地方。' +
-        '可用 ## / ### 子標題、**粗體**、- 條列、表格、> 引用。' +
-        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複文章內容（bodyHtml 已有）。' +
-        '語氣像員工向老闆書面匯報。長度建議 200–800 字。',
+      '給老闆看的匯報。**用 zh-TW 繁體中文 + Markdown**。' +
+        '說明：你的切入角度、為什麼選這個標題、E-E-A-T 強化點、特別考量。' +
+        '可用 ## / ### 子標題、**粗體**、- 條列。' +
+        '不要重複文章內容（boss 會直接看 body）。長度 200–800 字。' +
+        '語氣像員工向老闆書面匯報。',
     ),
   progressNote: z
     .string()
@@ -157,7 +144,6 @@ const ArticleSchema = z.object({
     ),
 });
 
-
 const EeatQuestionsSchema = z.object({
   questions: z
     .array(
@@ -169,34 +155,31 @@ const EeatQuestionsSchema = z.object({
     )
     .min(1)
     .max(5),
-  summary: z
+  narrative: z
     .string()
     .min(20)
     .max(2000)
     .describe(
       '給老闆看的詳細說明。**用 zh-TW 繁體中文** + Markdown 格式。' +
         '說明：為什麼需要老闆親身經驗（這是 EEAT 加分項）、你打算怎麼用這些答案。' +
-        '可用 ## / ### 子標題、**粗體**、- 條列。' +
-        '老闆看完才知道為什麼要花時間回答這些問題。' +
-        '長度建議 100–500 字。',
+        '可用 ## / ### 子標題、**粗體**、- 條列。長度建議 100–500 字。' +
+        '注意：不要在這段裡列出問題本身（agent 會在 narrative 後面用 markdown 列出問題）。',
     ),
   progressNote: z.string().min(10).max(200),
 });
 
-
 /**
- * Stage 1 fires when the task has research from the strategist (eeatHook present)
- * AND the boss hasn't yet answered the EEAT questions (eeatPending not set).
- * Stage 2 fires for all other cases (direct tasks, or after EEAT answers received).
+ * Stage 1 fires when the task came from the SEO Strategist (signalled by
+ * `params.refs.primaryKeyword`) AND the boss hasn't yet answered the EEAT
+ * questions (`eeatPending` not set). Direct user-created tasks skip Stage 1.
  */
 function shouldDoStage1(
   taskOutput: Record<string, unknown> | undefined,
   params: Record<string, unknown>,
   messages: AgentInput['messages'],
 ): boolean {
-  // TODO(task-6): remove together with TopicResearch shim — strategist no longer emits params.research
-  const research = (params as { research?: TopicResearch }).research;
-  if (!research?.eeatHook) return false;
+  const refs = (params as { refs?: { primaryKeyword?: unknown } }).refs;
+  if (!refs?.primaryKeyword) return false;
   const pending = (taskOutput as { eeatPending?: unknown } | undefined)?.eeatPending;
   if (!pending) return true;
   if (messages[messages.length - 1]?.role === 'user') return false;
@@ -278,28 +261,9 @@ export const shopifyBlogWriterAgent: IAgent = {
       }
       constraints.push(`Writer fluent in: ${cfg.targetLanguages.join(', ')}`);
 
-      // Build research section if task came from the Strategist
-      // TODO(task-6): remove together with TopicResearch shim — strategist no longer emits params.research
-      const research = (input.params as { research?: TopicResearch }).research;
-      const researchSection = research
-        ? [
-            'Research from the strategist:',
-            `- Search intent: ${research.searchIntent}`,
-            `- People Also Ask: ${research.paaQuestions.join(' / ')}`,
-            `- Related searches: ${research.relatedSearches.join(' / ')}`,
-            `- Competitor top angles: ${research.competitorTopAngles.join(' / ')}`,
-            `- Competitor gaps: ${research.competitorGaps.join(' / ')}`,
-            `- Target word count: ${research.targetWordCount}`,
-            `- EEAT hook: ${research.eeatHook}`,
-          ].join('\n')
-        : '';
-      const systemWithResearch = researchSection
-        ? `${systemPrompt}\n\n${researchSection}`
-        : systemPrompt;
-
       if (shouldDoStage1(input.taskOutput, input.params, input.messages)) {
         const messages = await buildAgentMessages(
-          systemWithResearch,
+          systemPrompt,
           input.messages,
           constraints,
           input.imageResolver,
@@ -311,17 +275,31 @@ export const shopifyBlogWriterAgent: IAgent = {
           messages,
         );
         const askedAt = new Date().toISOString();
+        const questionList = q.questions
+          .map((qu, i) => {
+            const hint = qu.hint ? ` — ${qu.hint}` : '';
+            const optional = qu.optional ? ' *(選填)*' : '';
+            return `${i + 1}. **${qu.question}**${hint}${optional}`;
+          })
+          .join('\n');
+
+        const report = `## 我需要先請你回答幾個問題
+
+${q.narrative}
+
+${questionList}
+
+答完後我會把這些經驗融進文章裡。`;
+
         await ctx.emitLog('agent.questions.asked', q.progressNote, {
-          artifactKind: 'eeat-questions',
+          artifactShape: 'report',
           count: q.questions.length,
         });
+
         return {
           message: q.progressNote,
           awaitingApproval: true,
-          artifact: {
-            kind: 'eeat-questions',
-            data: { summary: q.summary, questions: q.questions, askedAt },
-          },
+          artifact: { report, refs: { askedAt } },
           payload: {
             eeatPending: { questions: q.questions, askedAt },
           },
@@ -329,7 +307,7 @@ export const shopifyBlogWriterAgent: IAgent = {
       }
 
       const messages = await buildAgentMessages(
-        systemWithResearch,
+        systemPrompt,
         input.messages,
         constraints,
         input.imageResolver,
@@ -354,28 +332,25 @@ export const shopifyBlogWriterAgent: IAgent = {
       }
 
       await ctx.emitLog('agent.draft.ready', article.progressNote, {
-        artifactKind: 'blog-article',
+        artifactShape: 'report+body',
         title: article.title,
         language: article.language,
-        bodyLength: article.bodyHtml.length,
+        bodyLength: article.body.length,
         publishOnApprove: cfg.publishToShopify,
       });
+
+      const refs: Record<string, unknown> = {
+        title: article.title,
+        summaryHtml: article.summaryHtml,
+        tags: article.tags,
+        language: article.language,
+        ...(article.author ? { author: article.author } : {}),
+      };
 
       const result: AgentOutput = {
         message: article.progressNote,
         awaitingApproval: true,
-        artifact: {
-          kind: 'blog-article',
-          data: {
-            title: article.title,
-            bodyHtml: article.bodyHtml,
-            summaryHtml: article.summaryHtml,
-            summary: article.summary,
-            tags: article.tags,
-            language: article.language,
-            ...(article.author ? { author: article.author } : {}),
-          },
-        },
+        artifact: { report: article.report, body: article.body, refs },
         payload: { publishToShopify: cfg.publishToShopify },
       };
 
@@ -384,7 +359,7 @@ export const shopifyBlogWriterAgent: IAgent = {
           id: 'shopify.publish_article',
           args: {
             title: article.title,
-            bodyHtml: article.bodyHtml,
+            bodyHtml: markdownToHtml(article.body),
             summaryHtml: article.summaryHtml,
             tags: article.tags,
             ...(article.author ? { author: article.author } : {}),

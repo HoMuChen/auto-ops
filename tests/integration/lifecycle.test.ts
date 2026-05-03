@@ -37,15 +37,17 @@ beforeEach(async () => {
 
 /**
  * Article fixture for shopify-blog-writer's withStructuredOutput call. Centralised so
- * each test can just `scriptStructured(article())`.
+ * each test can just `scriptStructured(article())`. Body is markdown — converted
+ * to HTML at the publish boundary by the writer.
  */
 function article(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     title: 'Summer Dresses Buying Guide',
-    bodyHtml: '<p>The lightweight cuts that work all summer long.</p>',
+    body: '## Lightweight cuts\n\nThe lightweight cuts that work all summer long. Here are the picks for humid Taiwan weather.',
     summaryHtml: 'A short guide to summer dresses for hot, humid weather.',
     tags: ['summer', 'dresses', 'guide'],
     language: 'zh-TW',
+    report: '## 切角\n\n從輕薄涼感切入，避開純穿搭潮流。E-E-A-T 部分引用了店家親穿經驗。',
     progressNote: '草稿好了，這篇我著重在輕薄涼感面料，老闆看一下開頭那段',
     ...overrides,
   };
@@ -94,8 +96,9 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     expect(task.status).toBe('waiting');
     expect(task.output).toMatchObject({
       artifact: {
-        kind: 'blog-article',
-        data: { title: 'Summer Dresses Buying Guide' },
+        report: expect.stringContaining('切角'),
+        body: expect.stringContaining('## Lightweight cuts'),
+        refs: expect.objectContaining({ title: 'Summer Dresses Buying Guide' }),
       },
       pendingToolCall: { id: 'shopify.publish_article' },
     });
@@ -159,16 +162,15 @@ describe('Task lifecycle — happy path through HITL gate', () => {
 
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
+    // tool-executor leaves new flat artifacts unchanged — publish metadata
+    // for new flat artifacts lives only in the task log line.
     expect(task.output).toMatchObject({
       artifact: {
-        kind: 'blog-article',
-        published: {
-          articleId: 555,
-          blogId: 100,
-          handle: 'summer-dresses-buying-guide',
-          status: 'draft',
-        },
+        report: expect.stringContaining('切角'),
+        body: expect.stringContaining('## Lightweight cuts'),
+        refs: expect.objectContaining({ title: 'Summer Dresses Buying Guide' }),
       },
+      toolExecutedAt: expect.any(String),
     });
     expect(task.completedAt).not.toBeNull();
   });

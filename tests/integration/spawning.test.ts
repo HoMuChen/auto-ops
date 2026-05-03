@@ -154,17 +154,23 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(stillTwo).toHaveLength(2);
 
     // ── Phase 4: drain children — supervisor LLM is BYPASSED via pinning ───
-    // Each child has assignedAgent='shopify-blog-writer' so the supervisor short-circuits;
-    // only the writer's structured output needs to be scripted (one per child).
+    // Each child has assignedAgent='shopify-blog-writer' so the supervisor short-circuits.
+    // Children carry refs.primaryKeyword (strategist signal) so Stage 1 (EEAT) fires
+    // first; we then post boss feedback to drive Stage 2 (article draft).
     expect(pendingScript()).toBe(0);
+
+    // Script Stage 1 (EEAT questions) for each child.
     for (let i = 0; i < children.length; i++) {
       scriptStructured({
-        title: `Article ${i + 1} draft`,
-        bodyHtml: `<p>Body ${i + 1} long enough to satisfy the schema minimum.</p>`,
-        summaryHtml: `Summary ${i + 1} for the article excerpt and meta description.`,
-        tags: ['seo', 'summer'],
-        language: i === 0 ? 'zh-TW' : 'en',
-        progressNote: `Article ${i + 1} 草稿好了，老闆過目`,
+        questions: [
+          {
+            question: `For child ${i + 1}: how long have you actually used this product?`,
+            optional: false,
+          },
+        ],
+        narrative:
+          '## Why I need your input\n\nFirst-hand wear/use data is the EEAT moat for this article — I will fold it into the opener.',
+        progressNote: `Stage 1 EEAT for child ${i + 1}`,
       });
     }
 
@@ -173,13 +179,57 @@ describe('Strategy → Spawn → Execution flow', () => {
     const c2 = await drainNextTask();
     expect(c2.claimed).toBe(true);
 
+    // Stage 1 outcome: each child waiting with eeatPending + report artifact
+    for (const child of children) {
+      const refreshed = await getTask(tenantId, child.id);
+      expect(refreshed.status).toBe('waiting');
+      expect(refreshed.output).toMatchObject({
+        eeatPending: { questions: expect.any(Array), askedAt: expect.any(String) },
+        artifact: {
+          report: expect.stringContaining('我需要先請你回答幾個問題'),
+          refs: { askedAt: expect.any(String) },
+        },
+      });
+      expect(refreshed.output).not.toHaveProperty('pendingToolCall');
+    }
+
+    // Boss replies with EEAT answers → each child back to todo
+    for (const child of children) {
+      const fb = await app.inject({
+        method: 'POST',
+        url: `/v1/tasks/${child.id}/feedback`,
+        headers: authHeaders(jwt, tenantId),
+        payload: { feedback: 'Worn it for 3 summers, washed weekly, no issues.' },
+      });
+      expect(fb.statusCode).toBe(200);
+    }
+
+    // Script Stage 2 (article draft) for each child.
+    for (let i = 0; i < children.length; i++) {
+      scriptStructured({
+        title: `Article ${i + 1} draft`,
+        body: `## Section ${i + 1}\n\nBody ${i + 1} long enough to satisfy the schema minimum after the markdown migration.`,
+        summaryHtml: `Summary ${i + 1} for the article excerpt and meta description.`,
+        tags: ['seo', 'summer'],
+        language: i === 0 ? 'zh-TW' : 'en',
+        report: `## Decision\n\nArticle ${i + 1} leads with the boss's first-hand wear data. Length kept tight.`,
+        progressNote: `Article ${i + 1} 草稿好了，老闆過目`,
+      });
+    }
+
+    const c1b = await drainNextTask();
+    expect(c1b.claimed).toBe(true);
+    const c2b = await drainNextTask();
+    expect(c2b.claimed).toBe(true);
+
     for (const child of children) {
       const refreshed = await getTask(tenantId, child.id);
       expect(refreshed.status).toBe('waiting');
       expect(refreshed.output).toMatchObject({
         artifact: {
-          kind: 'blog-article',
-          data: { title: expect.stringContaining('Article') },
+          report: expect.stringContaining('Decision'),
+          body: expect.stringContaining('## Section'),
+          refs: expect.objectContaining({ title: expect.stringContaining('Article') }),
         },
         pendingToolCall: { id: 'shopify.publish_article' },
       });
@@ -220,11 +270,15 @@ describe('Strategy → Spawn → Execution flow', () => {
       expect(r.statusCode).toBe(200);
       const final = await getTask(tenantId, child.id);
       expect(final.status).toBe('done');
+      // tool-executor leaves new flat artifacts unchanged — publish metadata
+      // lives only in the task log line.
       expect(final.output).toMatchObject({
         artifact: {
-          kind: 'blog-article',
-          published: { blogId: 100, status: 'draft' },
+          report: expect.stringContaining('Decision'),
+          body: expect.stringContaining('## Section'),
+          refs: expect.objectContaining({ title: expect.stringContaining('Article') }),
         },
+        toolExecutedAt: expect.any(String),
       });
     }
     expect(fetchMock).toHaveBeenCalledTimes(children.length * 2);
