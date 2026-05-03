@@ -246,7 +246,9 @@ export const productStrategistAgent: IAgent = {
         '',
         '---',
         '',
+        '```html',
         listing.bodyHtml,
+        '```',
       ].join('\n');
 
       await ctx.emitLog('agent.content.ready', listing.progressNote, {

@@ -403,7 +403,9 @@ function renderArticleMarkdown(article: ArticleDraft, cfg: SeoWriterConfig): str
     '',
     '---',
     '',
+    '```html',
     article.bodyHtml,
+    '```',
     '',
     '_Approve to proceed; Feedback to ask for revisions._',
   ].join('\n');

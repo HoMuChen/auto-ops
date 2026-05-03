@@ -95,7 +95,9 @@ function renderProductPreview(content: ProductContent, autoPublish: boolean): st
     '',
     '---',
     '',
+    '```html',
     content.bodyHtml,
+    '```',
     '',
     '_Approve to push to Shopify; Discard to abandon._',
   ].join('\n');
