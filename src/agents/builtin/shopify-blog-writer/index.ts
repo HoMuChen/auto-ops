@@ -33,6 +33,8 @@ Requirements:
 - Tags: 3–8 short lower-case keywords.
 - Honor any tone/keyword/forbidden-phrase constraints in the brief.
 - Stay focused on the single topic — do NOT propose other articles.
+- progressNote is one short sentence for the kanban timeline. report is the
+  full memo for the boss-review panel. Don't duplicate them.
 
 When the task is Stage 1 (EEAT questions), the agent prompt will explicitly ask you for questions; otherwise produce the article.`;
 
@@ -169,15 +171,19 @@ const EeatQuestionsSchema = z.object({
 });
 
 /**
- * Stage 1 fires when the task came from the SEO Strategist (signalled by
- * `params.refs.primaryKeyword`) AND the boss hasn't yet answered the EEAT
- * questions (`eeatPending` not set). Direct user-created tasks skip Stage 1.
+ * Stage 1 fires when (1) the writer's `cfg.skills.eeat` is enabled, (2) the
+ * task came from the SEO Strategist (signalled by `params.refs.primaryKeyword`)
+ * AND (3) the boss hasn't yet answered the EEAT questions (`eeatPending` not
+ * set). Tenants who disable the EEAT skill in writer config skip Stage 1
+ * entirely; direct user-created tasks (no primaryKeyword) also skip.
  */
 function shouldDoStage1(
   taskOutput: Record<string, unknown> | undefined,
   params: Record<string, unknown>,
   messages: AgentInput['messages'],
+  eeatSkillEnabled: boolean,
 ): boolean {
+  if (!eeatSkillEnabled) return false;
   const refs = (params as { refs?: { primaryKeyword?: unknown } }).refs;
   if (!refs?.primaryKeyword) return false;
   const pending = (taskOutput as { eeatPending?: unknown } | undefined)?.eeatPending;
@@ -261,7 +267,7 @@ export const shopifyBlogWriterAgent: IAgent = {
       }
       constraints.push(`Writer fluent in: ${cfg.targetLanguages.join(', ')}`);
 
-      if (shouldDoStage1(input.taskOutput, input.params, input.messages)) {
+      if (shouldDoStage1(input.taskOutput, input.params, input.messages, cfg.skills.eeat)) {
         const messages = await buildAgentMessages(
           systemPrompt,
           input.messages,
@@ -283,6 +289,10 @@ export const shopifyBlogWriterAgent: IAgent = {
           })
           .join('\n');
 
+        // Layout contract: H2 header → q.narrative (LLM's "why" prose, schema forbids
+        // listing questions in this string) → numbered list rendered from q.questions
+        // → CTA footer. If narrative drifts and lists questions too, the user sees
+        // duplication; mitigated by EeatQuestionsSchema.narrative description.
         const report = `## 我需要先請你回答幾個問題
 
 ${q.narrative}
@@ -339,6 +349,9 @@ ${questionList}
         publishOnApprove: cfg.publishToShopify,
       });
 
+      // Note: summaryHtml stays HTML (not markdown). Shopify's article excerpt
+      // field accepts HTML or text and the LLM emits a short, safe excerpt;
+      // markdown→HTML conversion would add a dependency for negligible benefit.
       const refs: Record<string, unknown> = {
         title: article.title,
         summaryHtml: article.summaryHtml,

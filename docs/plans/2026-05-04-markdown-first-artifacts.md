@@ -1055,6 +1055,16 @@ git add src/orchestrator/tool-executor.ts tests/
 git commit -m "refactor(tool-executor): stamp publish meta on artifact.refs.published"
 ```
 
+**Coverage restoration (acceptance):** Task 6 temporarily removed `published: { articleId, articleUrl, status, ... }` assertions from these integration tests because the legacy stamp helper no longer fires for flat artifacts:
+
+- `tests/integration/lifecycle.test.ts`
+- `tests/integration/spawning.test.ts`
+- `tests/integration/seo-cluster.test.ts`
+- `tests/integration/shopify-blog-writer.test.ts`
+- `tests/integration/shopify-blog-writer-eeat.test.ts`
+
+Once `stampPublishedOnArtifact` writes to `artifact.refs.published` for the new shape, restore those assertions in shape `expect(task.output.artifact.refs?.published).toMatchObject({ articleId: ..., status: ... })`. Without this, the test suite has lost end-to-end validation that publish-tool return values are bound to the artifact.
+
 ---
 
 ### Task 10: Remove LegacyArtifact + tighten schema
