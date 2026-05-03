@@ -62,6 +62,9 @@ importers:
       jose:
         specifier: ^5.9.6
         version: 5.10.0
+      jsonrepair:
+        specifier: ^3.14.0
+        version: 3.14.0
       pino:
         specifier: ^9.5.0
         version: 9.14.0
@@ -1915,6 +1918,10 @@ packages:
 
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
+
+  jsonrepair@3.14.0:
+    resolution: {integrity: sha512-tWPGKMZf/8UPim+fcW2EfcQ/d/7aKUrP6IECz9G3Tu6Q5dX0orSleqJ9z6sSw7qrQkjF8/Edo4DvsWBZ8H+HNg==}
+    hasBin: true
 
   langsmith@0.3.87:
     resolution: {integrity: sha512-XXR1+9INH8YX96FKWc5tie0QixWz6tOqAsAKfcJyPkE0xPep+NDz0IQLR32q4bn10QK3LqD2HN6T3n6z1YLW7Q==}
@@ -4388,6 +4395,8 @@ snapshots:
       - supports-color
 
   json-schema-traverse@1.0.0: {}
+
+  jsonrepair@3.14.0: {}
 
   langsmith@0.3.87(openai@4.104.0(ws@8.20.0)(zod@3.25.76)):
     dependencies:
