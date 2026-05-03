@@ -1,11 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  type AIMessage,
-  type BaseMessage,
-  HumanMessage,
-  ToolMessage,
-} from '@langchain/core/messages';
+import { HumanMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { env } from '../../../config/env.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
@@ -14,6 +9,7 @@ import { buildSerperTools } from '../../../integrations/serper/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
+import { runToolLoop } from '../../lib/tool-loop.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -227,33 +223,20 @@ export const seoStrategistAgent: IAgent = {
           })
         : [];
 
-      const toolModel = (
-        buildModel(ctx.modelConfig) as unknown as {
-          bindTools: (tools: unknown[]) => { invoke: (msgs: BaseMessage[]) => Promise<AIMessage> };
-        }
-      ).bindTools(serperTools.map((t) => t.tool));
-      const collected: BaseMessage[] = [
-        ...(await buildAgentMessages(
-          systemPrompt,
-          input.messages,
-          constraints,
-          input.imageResolver,
-        )),
-      ];
+      const baseMessages = await buildAgentMessages(
+        systemPrompt,
+        input.messages,
+        constraints,
+        input.imageResolver,
+      );
 
-      for (let hop = 0; hop < 6; hop++) {
-        const res = (await toolModel.invoke(collected)) as AIMessage;
-        collected.push(res);
-        if (!res.tool_calls?.length) break;
-        for (const call of res.tool_calls) {
-          const t = serperTools.find((x) => x.tool.name === call.name);
-          if (!t) continue;
-          const result = await t.tool.invoke(call.args as Record<string, unknown>);
-          collected.push(
-            new ToolMessage({ tool_call_id: call.id ?? '', content: JSON.stringify(result) }),
-          );
-        }
-      }
+      const { collected } = await runToolLoop({
+        modelConfig: ctx.modelConfig,
+        messages: baseMessages,
+        tools: serperTools,
+        maxHops: 6,
+        emitLog: ctx.emitLog,
+      });
 
       // Pass 2: produce the structured plan from the enriched conversation
       const planModel = buildModel(ctx.modelConfig).withStructuredOutput(PlanSchema, {

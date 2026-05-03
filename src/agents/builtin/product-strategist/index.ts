@@ -1,11 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  type AIMessage,
-  type BaseMessage,
-  HumanMessage,
-  ToolMessage,
-} from '@langchain/core/messages';
+import { type BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { env } from '../../../config/env.js';
 import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-client.js';
@@ -15,6 +10,7 @@ import { buildImageTools } from '../../../integrations/openai-images/tools.js';
 import { buildModel } from '../../../llm/model-registry.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
+import { runToolLoop } from '../../lib/tool-loop.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -187,32 +183,20 @@ export const productStrategistAgent: IAgent = {
 
       // Pass 1: tool-calling loop — LLM reads the full conversation and decides:
       // generate from scratch, edit an uploaded image, or skip tools entirely.
-      const collected: BaseMessage[] = [...baseMessages];
+      let collected: BaseMessage[] = [...baseMessages];
       if (imageTools.length > 0) {
-        const toolModel = (
-          buildModel(ctx.modelConfig) as unknown as {
-            bindTools: (tools: unknown[]) => { invoke: (msgs: BaseMessage[]) => Promise<AIMessage> };
-          }
-        ).bindTools(imageTools.map((t) => t.tool));
+        const { collected: loopMessages, calls } = await runToolLoop({
+          modelConfig: ctx.modelConfig,
+          messages: baseMessages,
+          tools: imageTools,
+          maxHops: 4,
+          emitLog: ctx.emitLog,
+        });
+        collected = loopMessages;
 
-        const toolGeneratedUrls: string[] = [];
-        for (let hop = 0; hop < 4; hop++) {
-          const res = (await toolModel.invoke(collected)) as AIMessage;
-          collected.push(res);
-          if (!res.tool_calls?.length) break;
-          for (const call of res.tool_calls) {
-            const t = imageTools.find((x) => x.tool.name === call.name);
-            if (!t) continue;
-            const result = (await t.tool.invoke(call.args as Record<string, unknown>)) as {
-              id: string;
-              url: string;
-            };
-            toolGeneratedUrls.push(result.url);
-            collected.push(
-              new ToolMessage({ tool_call_id: call.id ?? '', content: JSON.stringify(result) }),
-            );
-          }
-        }
+        const toolGeneratedUrls = calls
+          .map((c) => (c.result as { url?: string }).url)
+          .filter((u): u is string => Boolean(u));
 
         if (toolGeneratedUrls.length > 0) {
           // Tool calls produced new images — discard original uploads (they were
