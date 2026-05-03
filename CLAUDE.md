@@ -66,6 +66,9 @@ Tenant credentials live in `tenant_credentials` (currently **plaintext** — pro
 - **Zod everywhere on the wire**: route I/O, agent config, structured LLM output. The Zod schema is the single source of truth — derive types via `z.infer`, render to JSON Schema for the activation form via `zod-to-json-schema`.
 - **Tests are tiered**: unit tests mock the LLM (`tests/integration/helpers/llm-mock.ts` exposes `scriptStructured`/`scriptText` queues for the integration suite). Integration tests hit local Supabase but stub `fetch` for any external API (Shopify). No test should hit OpenRouter.
 - **Drizzle returns Dates** — `src/api/schemas.ts` uses `z.preprocess(... .toISOString())` for any timestamp field on the response wire format. Don't bypass.
+- **API changes require doc updates** — any new or modified endpoint must be reflected in two places:
+  1. `docs/API_GUIDE.md` — consumer-facing description, request/response shapes, usage examples
+  2. Swagger (automatic) — every route **must** declare a `schema` object with `tags`, `querystring`/`body`, and `response` so `/docs` stays accurate. Routes without `schema` are invisible to the UI team.
 
 ## What's NOT done yet (read before adding features)
 
