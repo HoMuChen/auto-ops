@@ -9,10 +9,13 @@ import { readTaskOutput } from '../../tasks/output.js';
 import {
   createTask,
   finalizeStrategyTask,
+  getStreamCursor,
   getTask,
   listTaskLogs,
+  listTenantLogs,
   listTasks,
   updateTaskStatus,
+  upsertStreamCursor,
 } from '../../tasks/repository.js';
 import { requireAuth } from '../middleware/auth.js';
 import { authedTenantOf, requireTenant, tenantOf } from '../middleware/tenant.js';
@@ -169,6 +172,50 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Querystring: { since?: string } }>('/stream', async (req, reply) => {
     await streamTenantLogs(req, reply);
   });
+
+  /** Tenant-wide historical log query (non-SSE). Supports ?since=, ?until=, ?limit=. */
+  app.get<{ Querystring: { since?: string; until?: string; limit?: string } }>(
+    '/logs',
+    { preHandler: [requireTenant] },
+    async (req) => {
+      const { tenantId } = authedTenantOf(req);
+      const q = req.query as { since?: string; until?: string; limit?: string };
+      const since = q.since ? new Date(q.since) : undefined;
+      const until = q.until ? new Date(q.until) : undefined;
+      const limit = q.limit ? Math.min(Number(q.limit), 1000) : 500;
+      const logs = await listTenantLogs(tenantId, { since, until, limit });
+      return logs.map((row) => ({
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+      }));
+    },
+  );
+
+  /** Get the current stream cursor (last-read position) for the authenticated user. */
+  app.get(
+    '/stream/cursor',
+    { preHandler: [requireTenant] },
+    async (req) => {
+      const { tenantId, user } = authedTenantOf(req);
+      const cursor = await getStreamCursor(user.id, tenantId);
+      return { cursor: cursor?.toISOString() ?? null };
+    },
+  );
+
+  /** Update the stream cursor — frontend calls this when the user has read up to a point. */
+  app.put<{ Body: { cursor: string } }>(
+    '/stream/cursor',
+    {
+      preHandler: [requireTenant],
+      schema: { body: z.object({ cursor: z.string().datetime() }) },
+    },
+    async (req, reply) => {
+      const { tenantId, user } = authedTenantOf(req);
+      const { cursor } = req.body as { cursor: string };
+      await upsertStreamCursor(user.id, tenantId, new Date(cursor));
+      return reply.code(204).send();
+    },
+  );
 
   app.post(
     '/tasks/:taskId/approve',

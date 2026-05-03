@@ -1,7 +1,14 @@
 import { and, asc, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 import { agentRegistry } from '../agents/registry.js';
 import { db } from '../db/client.js';
-import { type NewTask, type Task, type TaskStatus, taskLogs, tasks } from '../db/schema/index.js';
+import {
+  type NewTask,
+  type Task,
+  type TaskStatus,
+  taskLogs,
+  tasks,
+  userStreamCursors,
+} from '../db/schema/index.js';
 import { eventBus } from '../events/event-bus.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 import type { TaskOutput } from './output.js';
@@ -313,7 +320,7 @@ export async function appendTaskLog(input: {
 
 export async function listTenantLogs(
   tenantId: string,
-  opts?: { since?: Date; limit?: number },
+  opts?: { since?: Date; until?: Date; limit?: number },
 ): Promise<
   {
     id: string;
@@ -328,6 +335,7 @@ export async function listTenantLogs(
 > {
   const conditions = [eq(taskLogs.tenantId, tenantId)];
   if (opts?.since) conditions.push(gt(taskLogs.createdAt, opts.since));
+  if (opts?.until) conditions.push(lte(taskLogs.createdAt, opts.until));
 
   return db
     .select({
@@ -378,4 +386,27 @@ export async function listTaskLogs(
     .where(and(...conditions))
     .orderBy(asc(taskLogs.createdAt))
     .limit(opts?.limit ?? 500);
+}
+
+export async function getStreamCursor(userId: string, tenantId: string): Promise<Date | null> {
+  const [row] = await db
+    .select({ cursorAt: userStreamCursors.cursorAt })
+    .from(userStreamCursors)
+    .where(and(eq(userStreamCursors.userId, userId), eq(userStreamCursors.tenantId, tenantId)))
+    .limit(1);
+  return row?.cursorAt ?? null;
+}
+
+export async function upsertStreamCursor(
+  userId: string,
+  tenantId: string,
+  cursorAt: Date,
+): Promise<void> {
+  await db
+    .insert(userStreamCursors)
+    .values({ userId, tenantId, cursorAt, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: [userStreamCursors.userId, userStreamCursors.tenantId],
+      set: { cursorAt, updatedAt: new Date() },
+    });
 }

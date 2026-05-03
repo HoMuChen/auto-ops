@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { getTask, listTaskLogs, listTenantLogs } from '../tasks/repository.js';
+import { getStreamCursor, getTask, listTaskLogs, listTenantLogs } from '../tasks/repository.js';
 import { type TaskLogEvent, eventBus } from './event-bus.js';
 
 /**
@@ -94,7 +94,17 @@ export async function streamTenantLogs(
 
   const lastEventId = req.headers['last-event-id'];
   const sinceParam = (Array.isArray(lastEventId) ? lastEventId[0] : lastEventId) ?? req.query.since;
-  const since = sinceParam ? new Date(sinceParam) : undefined;
+
+  let since: Date | undefined;
+  if (sinceParam) {
+    since = new Date(sinceParam);
+  } else {
+    // No explicit since: use the user's stored cursor as the replay start point.
+    // Falls back to 24h ago for first-time connections (no cursor stored yet).
+    const userId = req.user?.id;
+    const cursor = userId ? await getStreamCursor(userId, tenantId) : null;
+    since = cursor ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+  }
 
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
