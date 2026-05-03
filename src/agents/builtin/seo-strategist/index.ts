@@ -166,7 +166,7 @@ export type TopicResearch = Pick<
 export const seoStrategistAgent: IAgent = {
   manifest: {
     id: 'seo-strategist',
-    name: 'AI SEO Strategist',
+    name: 'SEO Strategist',
     description:
       'Plans SEO campaigns: turns a high-level brief into a list of focused article topics, ' +
       'each spawned as an independent execution task for the Shopify Blog Writer.',

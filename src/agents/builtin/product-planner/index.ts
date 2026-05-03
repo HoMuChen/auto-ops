@@ -127,7 +127,7 @@ type ProductPlannerConfig = z.infer<typeof configSchema>;
 export const productPlannerAgent: IAgent = {
   manifest: {
     id: 'product-planner',
-    name: 'AI Product Planner',
+    name: 'Product Planner',
     description:
       'Plans product content strategy: researches competitor angles via Serper, ' +
       'produces N content variants (platform × language × audience), ' +

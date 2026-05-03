@@ -72,7 +72,7 @@ type ProductDesignerConfig = z.infer<typeof configSchema>;
 export const productDesignerAgent: IAgent = {
   manifest: {
     id: 'product-designer',
-    name: 'AI Product Designer',
+    name: 'Product Designer',
     description:
       'Generates product images and copy from a variant spec produced by the Product Planner, ' +
       'then spawns publisher agents to distribute to enabled platforms.',

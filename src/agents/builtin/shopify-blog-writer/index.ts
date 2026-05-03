@@ -185,7 +185,7 @@ function shouldDoStage1(
 export const shopifyBlogWriterAgent: IAgent = {
   manifest: {
     id: 'shopify-blog-writer',
-    name: 'AI Shopify Blog Writer',
+    name: 'Shopify Blog Writer',
     description:
       'Writes a single multilingual SEO blog article from a focused brief and ' +
       'publishes it to the tenant Shopify blog after human approval.',

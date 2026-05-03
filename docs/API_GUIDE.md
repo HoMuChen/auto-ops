@@ -368,7 +368,7 @@ function BlogArticleView({ data, published }) {
 [
   {
     "id": "seo-strategist",
-    "name": "AI SEO Strategist",
+    "name": "SEO Strategist",
     "description": "Plans SEO campaigns: turns a high-level brief into a list of focused article topics, each spawned as an independent execution task for the Shopify Blog Writer.",
     "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.2 },
     "toolIds": ["serper.search"],
@@ -385,7 +385,7 @@ function BlogArticleView({ data, published }) {
   },
   {
     "id": "shopify-blog-writer",
-    "name": "AI Shopify Blog Writer",
+    "name": "Shopify Blog Writer",
     "description": "Writes a single multilingual SEO blog article from a focused brief and publishes it to the tenant Shopify blog after human approval.",
     "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.4 },
     "toolIds": ["shopify.publish_article"],
@@ -408,7 +408,7 @@ function BlogArticleView({ data, published }) {
   },
   {
     "id": "product-planner",
-    "name": "AI Product Planner",
+    "name": "Product Planner",
     "description": "Plans product content strategy: researches competitor angles via Serper, produces N content variants (platform × language × audience), and spawns a Product Designer task for each variant.",
     "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.2 },
     "toolIds": ["serper.search"],
@@ -425,7 +425,7 @@ function BlogArticleView({ data, published }) {
   },
   {
     "id": "product-designer",
-    "name": "AI Product Designer",
+    "name": "Product Designer",
     "description": "Generates product images and copy from a variant spec produced by the Product Planner, then spawns publisher agents to distribute to enabled platforms.",
     "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.3 },
     "toolIds": ["images.generate", "images.edit"],

@@ -28,7 +28,7 @@ const { runIntakeTurn } = await import('../src/intakes/agent.js');
 const ROSTER = [
   {
     id: 'shopify-blog-writer',
-    name: 'AI Shopify Blog Writer',
+    name: 'Shopify Blog Writer',
     description: 'Writes a single multilingual SEO article from a focused brief.',
   },
   {

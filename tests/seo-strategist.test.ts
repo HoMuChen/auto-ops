@@ -64,7 +64,7 @@ const { seoStrategistAgent } = await import('../src/agents/builtin/seo-strategis
 const PEERS = [
   {
     id: 'shopify-blog-writer',
-    name: 'AI Shopify Blog Writer',
+    name: 'Shopify Blog Writer',
     description: 'Writes a single multilingual SEO article from a focused brief.',
   },
 ];
