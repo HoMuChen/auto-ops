@@ -66,7 +66,7 @@ describe('Strategy → Spawn → Execution flow', () => {
           primaryKeyword: '夏季穿搭',
           language: 'zh-TW',
           writerBrief:
-            '## 主題：夏季穿搭 5 個必備單品\n\n**搜尋意圖**: commercial\n\n### PAA\n- Is linen good for summer?\n\n### 競品缺口\n沒有台灣濕熱氣候的穿搭建議。\n\n### 目標\n1500 字 long-form article on layered summer styling for humid Taiwan climate.',
+            '**搜尋意圖**: commercial\n\n### PAA\n- Is linen good for summer?\n\n### 競品缺口\n沒有台灣濕熱氣候的穿搭建議。\n\n### 目標\n1500 字 long-form article on layered summer styling for humid Taiwan climate.',
           assignedAgent: 'shopify-blog-writer',
         },
         {
@@ -74,7 +74,7 @@ describe('Strategy → Spawn → Execution flow', () => {
           primaryKeyword: 'sustainable fabrics summer',
           language: 'en',
           writerBrief:
-            '## Topic: Sustainable summer fabrics buyer guide\n\n**Search intent**: informational\n\n### PAA\n- What is the most sustainable fabric?\n\n### Competitor gap\nNo first-hand washing data.\n\n### Target\nBuyer guide comparing linen, organic cotton and Tencel for summer apparel.',
+            '**Search intent**: informational\n\n### PAA\n- What is the most sustainable fabric?\n\n### Competitor gap\nNo first-hand washing data.\n\n### Target\nBuyer guide comparing linen, organic cotton and Tencel for summer apparel.',
           assignedAgent: 'shopify-blog-writer',
         },
       ],

@@ -112,7 +112,7 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
           primaryKeyword: 'linen shirt summer',
           language: 'en',
           writerBrief:
-            '## Topic: Linen shirts summer guide\n\n**Search intent**: commercial\n\n### PAA\n- Is linen good for summer?\n- How to care for linen?\n\n### Related queries\n- linen vs cotton summer\n- best linen shirts 2026\n\n### Competitor gap\nNo Taiwan humidity specifics.\n\n### Target\n~1200 words. Comprehensive guide on linen shirts for humid summer climates.\n\n### E-E-A-T hook\nBoss should share washing experience and wearability in humid heat.',
+            '**Search intent**: commercial\n\n### PAA\n- Is linen good for summer?\n- How to care for linen?\n\n### Related queries\n- linen vs cotton summer\n- best linen shirts 2026\n\n### Competitor gap\nNo Taiwan humidity specifics.\n\n### Target\n~1200 words. Comprehensive guide on linen shirts for humid summer climates.\n\n### E-E-A-T hook\nBoss should share washing experience and wearability in humid heat.',
           assignedAgent: 'shopify-blog-writer',
         },
       ],
@@ -156,7 +156,7 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
 
     // Child carries the markdown brief + minimal refs (post-Task-4 contract)
     expect(firstChild.input).toMatchObject({
-      brief: expect.stringContaining('Linen shirts summer guide'),
+      brief: expect.stringContaining('Search intent'),
       refs: {
         primaryKeyword: 'linen shirt summer',
         language: 'en',

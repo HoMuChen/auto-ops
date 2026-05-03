@@ -22,9 +22,7 @@ const planFixture = {
       title: '夏季穿搭 5 個必備單品',
       primaryKeyword: '夏季穿搭',
       language: 'zh-TW' as const,
-      writerBrief: `## 主題：夏季穿搭 5 個必備單品
-
-**搜尋意圖**：commercial（讀者準備買，需要選品建議）
+      writerBrief: `**搜尋意圖**：commercial（讀者準備買，需要選品建議）
 
 ### PAA 必答
 - Is linen good for summer?
@@ -51,9 +49,7 @@ listicle 7 件 / fabric 比較 / wash care guide
       title: 'Sustainable summer fabrics buyer guide',
       primaryKeyword: 'sustainable fabrics summer',
       language: 'en' as const,
-      writerBrief: `## Topic: Sustainable summer fabrics buyer guide
-
-**Search intent**: informational
+      writerBrief: `**Search intent**: informational
 
 ### Must answer (PAA)
 - What is the most sustainable fabric?

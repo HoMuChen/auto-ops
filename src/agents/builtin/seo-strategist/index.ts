@@ -106,7 +106,11 @@ const TopicSchema = z.object({
         'Embed all research findings as prose: search intent, top PAA questions, related searches to weave in, ' +
         "competitor top angles, competitor gaps (the differentiation hook), target word count, " +
         'and the most important E-E-A-T hook. Use ## / ### subheads + bullet lists. The writer ' +
-        'reads this as the canonical context — be specific, not generic.',
+        'reads this as the canonical context — be specific, not generic. ' +
+        "The strategist's code wraps your brief inside `### {topic title}`, so do NOT start your " +
+        'brief with H1 (`#`) or H2 (`##`); start with prose or a bullet list. You may use H3 ' +
+        '(`###`) and H4 (`####`) inside the brief for sub-sections, since they nest correctly ' +
+        'under the wrapping H3.',
     ),
   assignedAgent: z.string().describe('Id of the worker agent that should produce this article.'),
   scheduledAt: z.string().datetime().optional().describe('Optional ISO timestamp.'),
@@ -243,6 +247,7 @@ export const seoStrategistAgent: IAgent = {
       }));
 
       await ctx.emitLog('agent.plan.ready', plan.progressNote, {
+        artifactShape: 'report',
         topicCount: capped.length,
       });
 

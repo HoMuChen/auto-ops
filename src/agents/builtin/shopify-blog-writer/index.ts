@@ -26,6 +26,7 @@ import type {
  * `input.brief` (markdown) directly.
  */
 type TopicResearch = {
+  // TODO(task-6): remove together with TopicResearch shim — strategist no longer emits params.research
   searchIntent: 'informational' | 'commercial' | 'transactional' | 'navigational';
   paaQuestions: string[];
   relatedSearches: string[];
@@ -193,6 +194,7 @@ function shouldDoStage1(
   params: Record<string, unknown>,
   messages: AgentInput['messages'],
 ): boolean {
+  // TODO(task-6): remove together with TopicResearch shim — strategist no longer emits params.research
   const research = (params as { research?: TopicResearch }).research;
   if (!research?.eeatHook) return false;
   const pending = (taskOutput as { eeatPending?: unknown } | undefined)?.eeatPending;
@@ -277,6 +279,7 @@ export const shopifyBlogWriterAgent: IAgent = {
       constraints.push(`Writer fluent in: ${cfg.targetLanguages.join(', ')}`);
 
       // Build research section if task came from the Strategist
+      // TODO(task-6): remove together with TopicResearch shim — strategist no longer emits params.research
       const research = (input.params as { research?: TopicResearch }).research;
       const researchSection = research
         ? [
