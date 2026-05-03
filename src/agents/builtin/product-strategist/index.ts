@@ -1,5 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  type AIMessage,
+  type BaseMessage,
+  HumanMessage,
+  ToolMessage,
+} from '@langchain/core/messages';
 import { z } from 'zod';
 import { env } from '../../../config/env.js';
 import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-client.js';
@@ -33,7 +39,14 @@ Hard rules:
 - Default vendor and language come from the agent config; honour them unless the brief overrides.
 - Use the tenant's default language for all copy.
 
-Return strictly the structured object requested.`;
+Image generation (when tools are available):
+- If the user described a desired image angle, background, or style in their message, call
+  images.generate with a detailed English prompt that captures those descriptions.
+- You may call images.generate up to 3 times for different angles (e.g. front, detail, lifestyle).
+- If no image description is given, generate one product shot on a clean white background.
+- Do NOT generate images if the user explicitly said they will provide their own.
+
+After any tool calls, produce the structured product listing object.`;
 
 const configSchema = z.object({
   defaultLanguage: z
@@ -99,9 +112,6 @@ export const productStrategistAgent: IAgent = {
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
     const cfg = configSchema.parse(ctx.agentConfig ?? {}) as ProductStrategistConfig;
-    const model = buildModel(ctx.modelConfig).withStructuredOutput(ProductListingSchema, {
-      name: 'product_listing',
-    });
 
     const publishers = ctx.availableExecutionAgents.filter((a) => a.metadata?.kind === 'publisher');
 
@@ -151,31 +161,76 @@ export const productStrategistAgent: IAgent = {
         `Default vendor: ${cfg.defaultVendor ?? '(must infer from brief)'}`,
         `Default language: ${cfg.defaultLanguage}`,
       ];
+      if (cfg.images.style) {
+        constraints.push(`Default image style: ${cfg.images.style}`);
+      }
 
-      const messages = await buildAgentMessages(
+      // Resolve any uploaded images first so the LLM can reference their URLs in tool calls
+      const imageUrls: string[] = [];
+      const inputImageIds = (input.params as { imageIds?: string[] }).imageIds ?? [];
+      if (inputImageIds.length > 0 && input.imageResolver) {
+        const resolved = await input.imageResolver(inputImageIds);
+        imageUrls.push(...resolved);
+        if (resolved.length > 0) {
+          constraints.push(
+            `User uploaded image(s) — use as-is or pass to images.edit if they asked to modify: ${resolved.join(', ')}`,
+          );
+        }
+      }
+
+      const baseMessages = await buildAgentMessages(
         systemPrompt,
         input.messages,
         constraints,
         input.imageResolver,
       );
-      const listing = (await model.invoke(messages)) as ProductListing;
 
-      // Image handling in code — no LLM tool-calling needed.
-      const imageUrls: string[] = [];
-      const inputImageIds = (input.params as { imageIds?: string[] }).imageIds ?? [];
+      // Pass 1: tool-calling loop — LLM reads the full conversation and decides:
+      // generate from scratch, edit an uploaded image, or skip tools entirely.
+      const collected: BaseMessage[] = [...baseMessages];
+      if (imageTools.length > 0) {
+        const toolModel = (
+          buildModel(ctx.modelConfig) as unknown as {
+            bindTools: (tools: unknown[]) => { invoke: (msgs: BaseMessage[]) => Promise<AIMessage> };
+          }
+        ).bindTools(imageTools.map((t) => t.tool));
 
-      if (inputImageIds.length > 0 && input.imageResolver) {
-        imageUrls.push(...(await input.imageResolver(inputImageIds)));
-      } else if (cfg.images.autoGenerate && imageTools.length > 0) {
-        const genTool = imageTools.find((t) => t.id === 'images.generate');
-        if (genTool) {
-          const style = cfg.images.style ?? 'clean white background, product photography';
-          const imgResult = (await genTool.tool.invoke({
-            prompt: `${listing.title}. ${style}`,
-          })) as { id: string; url: string };
-          imageUrls.push(imgResult.url);
+        const toolGeneratedUrls: string[] = [];
+        for (let hop = 0; hop < 4; hop++) {
+          const res = (await toolModel.invoke(collected)) as AIMessage;
+          collected.push(res);
+          if (!res.tool_calls?.length) break;
+          for (const call of res.tool_calls) {
+            const t = imageTools.find((x) => x.tool.name === call.name);
+            if (!t) continue;
+            const result = (await t.tool.invoke(call.args as Record<string, unknown>)) as {
+              id: string;
+              url: string;
+            };
+            toolGeneratedUrls.push(result.url);
+            collected.push(
+              new ToolMessage({ tool_call_id: call.id ?? '', content: JSON.stringify(result) }),
+            );
+          }
         }
+
+        if (toolGeneratedUrls.length > 0) {
+          // Tool calls produced new images — discard original uploads (they were
+          // either the source for images.edit, or superseded by images.generate).
+          imageUrls.length = 0;
+          imageUrls.push(...toolGeneratedUrls);
+        }
+        // If no tools were called, imageUrls still holds the user's uploaded images as-is.
       }
+
+      // Pass 2: structured output for the text fields
+      const listingModel = buildModel(ctx.modelConfig).withStructuredOutput(ProductListingSchema, {
+        name: 'product_listing',
+      });
+      const listing = (await listingModel.invoke([
+        ...collected,
+        new HumanMessage('Now produce the structured product listing.'),
+      ])) as ProductListing;
 
       const content: ProductContent = {
         title: listing.title,
