@@ -124,17 +124,16 @@ const TopicSchema = z.object({
 });
 
 const PlanSchema = z.object({
-  reasoning: z
-    .string()
-    .describe('One-paragraph rationale: why this set of topics covers the brief.'),
   summary: z
     .string()
     .min(20)
-    .max(500)
+    .max(2000)
     .describe(
-      '給老闆看的匯報摘要。說明你做了什麼、參考了什麼素材或資料、有什麼特別考量的地方。' +
-        '老闆靠這段文字決定要不要 Approve，所以要夠詳細但不冗長。' +
-        '用 zh-TW，語氣像員工向老闆口頭匯報，3–5 句話。',
+      '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
+        '說明：你做了什麼研究、為什麼選這些主題、競品缺口在哪、特別考量的地方。' +
+        '可用 ## / ### 子標題、**粗體**、- 條列、表格。' +
+        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複每篇 topic 細節（topics 陣列已有）。' +
+        '語氣像員工向老闆書面匯報。長度建議 200–800 字。',
     ),
   progressNote: z
     .string()
@@ -286,7 +285,7 @@ export const seoStrategistAgent: IAgent = {
         awaitingApproval: true,
         artifact: {
           kind: 'seo-plan',
-          data: { reasoning: plan.reasoning, summary: plan.summary, topics: capped },
+          data: { summary: plan.summary, topics: capped },
         },
         spawnTasks,
       };

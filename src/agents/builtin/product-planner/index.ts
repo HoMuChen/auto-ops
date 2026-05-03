@@ -80,14 +80,16 @@ const DesignerVariantSchema = z.object({
 });
 
 const PlanSchema = z.object({
-  reasoning: z.string().describe('One-paragraph rationale for the chosen variants.'),
   summary: z
     .string()
     .min(20)
-    .max(500)
+    .max(2000)
     .describe(
-      '給老闆看的匯報摘要。說明你做了什麼研究、有什麼特別考量。' +
-        '用 zh-TW，語氣像員工向老闆口頭匯報，3–5 句話。',
+      '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
+        '說明：你做了什麼研究（competitor SERP 看到什麼）、為什麼選這些 variants、' +
+        '差異化切角是什麼、特別考量的地方。可用 ## / ### 子標題、**粗體**、- 條列、表格。' +
+        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複每個 variant 細節（variants 陣列已有）。' +
+        '語氣像員工向老闆書面匯報。長度建議 200–800 字。',
     ),
   progressNote: z
     .string()
@@ -233,7 +235,6 @@ export const productPlannerAgent: IAgent = {
         artifact: {
           kind: 'product-plan',
           data: {
-            reasoning: plan.reasoning,
             summary: plan.summary,
             variants: variantsForArtifact,
           },

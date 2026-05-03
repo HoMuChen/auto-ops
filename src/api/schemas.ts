@@ -86,8 +86,7 @@ export const ArtifactSchema = z.discriminatedUnion('kind', [
     kind: z.literal('seo-plan'),
     data: z
       .object({
-        reasoning: z.string().optional(),
-        summary: z.string().optional(),
+        summary: z.string().optional().describe('zh-TW Markdown report for boss review'),
         topics: z.array(z.record(z.unknown())),
       })
       .passthrough(),
@@ -96,8 +95,7 @@ export const ArtifactSchema = z.discriminatedUnion('kind', [
     kind: z.literal('product-plan'),
     data: z
       .object({
-        reasoning: z.string().optional(),
-        summary: z.string().optional(),
+        summary: z.string().optional().describe('zh-TW Markdown report for boss review'),
         variants: z.array(z.record(z.unknown())),
       })
       .passthrough(),

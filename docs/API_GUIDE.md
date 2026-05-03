@@ -240,14 +240,12 @@ interface ProductContentData {
 }
 
 interface SeoPlanData {
-  reasoning: string;
-  summary: string;
+  summary: string;          // zh-TW Markdown — 詳細匯報，前端用 marked / react-markdown 渲染
   topics: SeoPlanTopic[];   // 每個 topic 一張卡，approve 後 spawn 出 writer 子任務
 }
 
 interface ProductPlanData {
-  reasoning: string;
-  summary: string;
+  summary: string;          // zh-TW Markdown — 詳細匯報
   variants: ProductPlanVariant[];   // 每個 variant 一張 designer 子任務
 }
 
@@ -1199,8 +1197,7 @@ user POST /v1/tasks/:pubTaskId/approve { finalize: true }
     "artifact": {
       "kind": "product-plan",
       "data": {
-        "reasoning": "Two variants targeting different channels.",
-        "summary": "規劃了 2 個版本，shopify 主打通勤族、instagram 主打週末風格，老闆過目",
+        "summary": "## 規劃摘要\n\n做了 2 個版本互補：\n\n- **Shopify 電商版**：主打通勤族痛點（台灣濕熱、機能透氣）\n- **Instagram 版**：主打週末風格、視覺感更強\n\n## 競品研究發現\n\nSERP 上前 10 名都缺少**台灣在地穿著體驗**的描述，這是我們的差異化切角。\n\n## 為什麼這樣切\n\n兩個版本受眾不重疊，可同時跑不會稀釋流量，老闆過目。",
         "variants": [
           {
             "title": "亞麻短袖 - 電商版 (zh-TW)",
@@ -1333,8 +1330,7 @@ UI 應該渲染：
     "artifact": {
       "kind": "seo-plan",
       "data": {
-        "reasoning": "Three-pronged plan covering core summer keyword clusters.",
-        "summary": "規劃了 3 篇夏季 SEO 文章，主軸是把材質知識和台灣濕熱氣候結合，老闆過目",
+        "summary": "## 規劃摘要\n\n規劃了 3 篇夏季 SEO 文章，主軸是把材質知識和台灣濕熱氣候結合。\n\n## 三篇定位\n\n1. **夏季穿搭 5 個必備單品**（zh-TW）— 商業意圖，賣 listing\n2. **永續夏季布料指南**（en）— 資訊型，建立權威\n3. **亞麻保養 FAQ**（zh-TW）— 長尾關鍵字，導流到 #1\n\n## 競品缺口\n\nSERP 前 10 名都沒有針對**台灣濕熱氣候**的具體建議，這是我們的差異化切角。我特別在 topic #1 加了 EEAT hook 請老闆分享親身洗滌與穿著體驗。",
         "topics": [
           {
             "title": "夏季穿搭 5 個必備單品",
@@ -1380,7 +1376,7 @@ UI 應該渲染：
 
 UI 應該渲染：
 - conversation：assistant 最新一句 progressNote（「規劃了 3 篇主軸是…」）
-- artifact panel：dispatch on `artifact.kind === 'seo-plan'` → 渲染 `data.reasoning` + `data.topics` 卡片清單
+- artifact panel：dispatch on `artifact.kind === 'seo-plan'` → 上半渲染 `data.summary`（用 markdown renderer 如 `marked` / `react-markdown`），下半渲染 `data.topics` 卡片清單
 - 下方提示：「即將建立 N 張子卡」清單（從 `output.spawnTasks` 拿 title / assignedAgent）
 - CTA：[Approve & Spawn] (`finalize:true`) / [Feedback]（要求調整計畫）
 
@@ -1565,8 +1561,7 @@ interface ProductPublishedMeta {
 }
 
 interface SeoPlanData {
-  reasoning: string;
-  summary: string;
+  summary: string;          // zh-TW Markdown
   topics: SeoPlanTopic[];
 }
 
@@ -1587,8 +1582,7 @@ interface SeoPlanTopic {
 }
 
 interface ProductPlanData {
-  reasoning: string;
-  summary: string;
+  summary: string;          // zh-TW Markdown
   variants: ProductPlanVariant[];
 }
 

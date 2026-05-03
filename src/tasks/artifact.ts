@@ -67,7 +67,7 @@ export interface SeoPlanTopic {
 }
 
 export interface SeoPlanData {
-  reasoning: string;
+  /** Markdown-formatted detailed report shown in the artifact panel (zh-TW). */
   summary: string;
   topics: SeoPlanTopic[];
 }
@@ -93,7 +93,7 @@ export interface ProductPlanVariant {
 }
 
 export interface ProductPlanData {
-  reasoning: string;
+  /** Markdown-formatted detailed report shown in the artifact panel (zh-TW). */
   summary: string;
   variants: ProductPlanVariant[];
 }
