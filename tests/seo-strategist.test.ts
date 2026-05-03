@@ -144,9 +144,10 @@ describe('seoStrategistAgent.build → invoke', () => {
       messages: [{ role: 'user', content: 'plan summer SEO' }],
       params: {},
     });
-    expect(result.artifact?.kind).toBe('seo-plan');
-    if (result.artifact?.kind === 'seo-plan') {
-      expect(result.artifact.data.topics).toHaveLength(2);
+    const artifact = result.artifact;
+    expect(artifact && 'kind' in artifact ? artifact.kind : undefined).toBe('seo-plan');
+    if (artifact && 'kind' in artifact && artifact.kind === 'seo-plan') {
+      expect(artifact.data.topics).toHaveLength(2);
     }
   });
 

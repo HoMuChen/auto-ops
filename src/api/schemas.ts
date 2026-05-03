@@ -52,7 +52,15 @@ const ProductPublishedMetaSchema = z
 // but data fields are kept lenient so partial agent mocks (in tests) and any
 // older rows survive serialization. Producers in production emit the full
 // documented shape; see API_GUIDE §5.1 for the contract UI should expect.
-export const ArtifactSchema = z.discriminatedUnion('kind', [
+const NewArtifactSchema = z
+  .object({
+    report: z.string(),
+    body: z.string().optional(),
+    refs: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
+
+const LegacyArtifactSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('blog-article'),
     data: z
@@ -125,6 +133,8 @@ export const ArtifactSchema = z.discriminatedUnion('kind', [
     data: z.object({ question: z.string() }).passthrough(),
   }),
 ]);
+
+export const ArtifactSchema = z.union([NewArtifactSchema, LegacyArtifactSchema]);
 
 export const PendingToolCallSchema = z.object({
   id: z.string(),

@@ -8,6 +8,7 @@ import { logger } from '../lib/logger.js';
 import type {
   Artifact,
   BlogPublishedMeta,
+  LegacyArtifact,
   ProductPublishedMeta,
 } from '../tasks/artifact.js';
 import { readTaskOutput } from '../tasks/output.js';
@@ -158,11 +159,15 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
 }
 
 function stampPublishedOnArtifact(
-  current: Artifact | undefined,
+  current: Artifact | LegacyArtifact | undefined,
   toolId: string,
   result: unknown,
-): Artifact | undefined {
+): Artifact | LegacyArtifact | undefined {
   if (!current) return undefined;
+  // Only legacy artifacts carry a `kind` discriminant. New flat artifacts
+  // route publish stamps through `refs` and are migrated per-agent — they
+  // skip this helper until their owning agent wires its own publish path.
+  if (!('kind' in current)) return current;
   if (toolId === 'shopify.publish_article' && current.kind === 'blog-article') {
     return { ...current, published: result as BlogPublishedMeta };
   }

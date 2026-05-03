@@ -1,26 +1,41 @@
 /**
  * Task artifacts — the typed deliverables produced by agents.
  *
- * Tasks have three orthogonal surfaces:
- *   - logs:     timeline of execution events (what happened, when)
- *   - messages: conversation thread (short progressNotes + user feedback)
- *   - output.artifact: the actual deliverable, typed as a discriminated union
+ * We're migrating from a discriminated union (`LegacyArtifact`, kept here
+ * during the refactor) to a flat shape (`Artifact`):
  *
- * UI dispatches on `artifact.kind` and renders one component per kind. This
- * keeps the frontend independent of agent internals — every agent that
- * produces an article emits `kind: 'blog-article'` regardless of who wrote it.
+ *   {
+ *     report: string,             // markdown narrative — primary surface
+ *     body?: string,              // markdown deliverable — only for content agents
+ *     refs?: Record<string, unknown>,  // structured contract for IDs/URLs/scheduling
+ *   }
  *
- * Flow-control fields (pendingToolCall, spawnTasks, eeatPending) live on
- * task.output directly — they're not artifacts.
+ * Inter-agent handoff is markdown; structured fields exist only where they
+ * absolutely must (machine reading by tools, spawn routing, idempotency stamps).
+ *
+ * See docs/plans/2026-05-04-markdown-first-artifacts-design.md for rationale.
  */
+
+export interface Artifact {
+  /** Canonical narrative (markdown). Audience: humans + downstream agents. */
+  report: string;
+  /** Deliverable content (markdown). Only present when an agent produces
+   *  publishable content (article body, product description). Converted to
+   *  HTML at the publish boundary via `markdownToHtml`. */
+  body?: string;
+  /** Structured contract: IDs, URLs, scheduling, routing, publish stamps.
+   *  Free-form bag — keys agreed between producing agent and any consumer
+   *  (publisher, tool-executor). Frontend ignores it apart from a small
+   *  details panel. */
+  refs?: Record<string, unknown>;
+}
+
+// ----- LEGACY (will be removed in Task 10) -----
 
 export interface BlogArticleData {
   title: string;
-  /** Article body — semantic HTML, sanitize and render in iframe srcdoc on the UI. */
   bodyHtml: string;
-  /** Short HTML excerpt used as the Shopify meta description / blog index card. */
   summaryHtml: string;
-  /** Markdown-formatted boss-facing review report (zh-TW). Shown in artifact panel. */
   summary?: string;
   tags: string[];
   language: string;
@@ -39,15 +54,12 @@ export interface BlogPublishedMeta {
 
 export interface ProductContentData {
   title: string;
-  /** Product description as semantic HTML — sanitize + iframe srcdoc to render. */
   bodyHtml: string;
-  /** zh-TW Markdown boss-facing review report. Shown in artifact panel. */
   summary?: string;
   tags: string[];
   vendor: string;
   productType?: string;
   language: string;
-  /** CF Images public URLs — already uploaded. */
   imageUrls: string[];
 }
 
@@ -75,7 +87,6 @@ export interface SeoPlanTopic {
 }
 
 export interface SeoPlanData {
-  /** Markdown-formatted detailed report shown in the artifact panel (zh-TW). */
   summary: string;
   topics: SeoPlanTopic[];
 }
@@ -101,7 +112,6 @@ export interface ProductPlanVariant {
 }
 
 export interface ProductPlanData {
-  /** Markdown-formatted detailed report shown in the artifact panel (zh-TW). */
   summary: string;
   variants: ProductPlanVariant[];
 }
@@ -113,7 +123,6 @@ export interface EeatQuestion {
 }
 
 export interface EeatQuestionsData {
-  /** Markdown explanation: why these questions, how the answers will be used (zh-TW). */
   summary?: string;
   questions: EeatQuestion[];
   askedAt: string;
@@ -123,7 +132,7 @@ export interface ClarificationData {
   question: string;
 }
 
-export type Artifact =
+export type LegacyArtifact =
   | { kind: 'blog-article'; data: BlogArticleData; published?: BlogPublishedMeta }
   | { kind: 'product-content'; data: ProductContentData; published?: ProductPublishedMeta }
   | { kind: 'seo-plan'; data: SeoPlanData }
@@ -131,4 +140,4 @@ export type Artifact =
   | { kind: 'eeat-questions'; data: EeatQuestionsData }
   | { kind: 'clarification'; data: ClarificationData };
 
-export type ArtifactKind = Artifact['kind'];
+export type LegacyArtifactKind = LegacyArtifact['kind'];
