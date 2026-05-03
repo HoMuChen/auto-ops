@@ -46,8 +46,8 @@ export function buildImageTools(tenantId: string, opts: BuildImageToolsOpts): Ag
         'Generate a new image from a text prompt using AI. Returns the image id and url.',
       schema: z.object({
         prompt: z.string().min(5).describe('Detailed description of the image to generate.'),
-        size: z.enum(['1024x1024', '1792x1024', '1024x1792']).optional(),
-        quality: z.enum(['standard', 'hd']).optional(),
+        size: z.enum(['1024x1024', '1792x1024', '1024x1792']).nullish(),
+        quality: z.enum(['standard', 'hd']).nullish(),
       }),
     },
   );

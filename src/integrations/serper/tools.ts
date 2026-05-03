@@ -26,13 +26,13 @@ export function buildSerperTools(opts: BuildSerperToolsOptions): AgentTool[] {
         'and related searches. Use this for SEO keyword research and competitor SERP analysis.',
       schema: z.object({
         query: z.string().min(2).describe('The search query (a specific keyword phrase).'),
-        locale: z.string().optional().describe('Optional locale, e.g. "en", "zh-tw".'),
+        locale: z.string().nullish().describe('Optional locale, e.g. "en", "zh-tw".'),
         num: z
           .number()
           .int()
           .min(1)
           .max(20)
-          .optional()
+          .nullish()
           .describe('Number of organic results, default 10.'),
       }),
     },

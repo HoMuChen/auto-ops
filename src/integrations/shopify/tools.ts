@@ -87,12 +87,12 @@ export async function buildShopifyTools(
       description: 'Create a new Shopify product. Requires approval before execution.',
       schema: z.object({
         title: z.string(),
-        bodyHtml: z.string().optional(),
-        tags: z.array(z.string()).optional(),
-        vendor: z.string().optional(),
+        bodyHtml: z.string().nullish(),
+        tags: z.array(z.string()).nullish(),
+        vendor: z.string().nullish(),
         images: z
           .array(z.object({ url: z.string().url() }))
-          .optional()
+          .nullish()
           .describe(
             'Optional product images. Each entry has a url pointing to an accessible image.',
           ),
@@ -176,13 +176,13 @@ export async function buildShopifyTools(
       schema: z.object({
         title: z.string(),
         bodyHtml: z.string(),
-        summaryHtml: z.string().optional(),
-        tags: z.array(z.string()).optional(),
-        author: z.string().optional(),
+        summaryHtml: z.string().nullish(),
+        tags: z.array(z.string()).nullish(),
+        author: z.string().nullish(),
         coverImageUrl: z
           .string()
           .url()
-          .optional()
+          .nullish()
           .describe('Optional cover image URL. Attached as the article image in Shopify.'),
       }),
     },
