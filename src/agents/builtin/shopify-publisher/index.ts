@@ -51,11 +51,8 @@ export const shopifyPublisherAgent: IAgent = {
     const filtered = tools.filter((t) => t.id === 'shopify.create_product');
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
-      // TODO(task-8): publisher emits legacy artifact shape; rewrite to emit
-      // { report, body, refs } in Task 8. The reads below already handle the new
-      // content shape from product-designer.
       const content = input.params.content as ProductContent;
-      const { title, tags, vendor, productType, imageUrls, language } = content.refs;
+      const { title, tags, vendor, productType, imageUrls } = content.refs;
       const bodyHtml = markdownToHtml(content.body);
 
       await ctx.emitLog('agent.started', content.progressNote, {
@@ -75,24 +72,13 @@ export const shopifyPublisherAgent: IAgent = {
         },
       };
 
-      // TODO(task-8): replace this legacy artifact with { report, body, refs }
-      // in Task 8. For now we keep the legacy `kind: 'product-content'` shape
-      // because downstream readers (kanban / artifact panel) still rely on it.
       return {
         message: content.progressNote,
         awaitingApproval: true,
         artifact: {
-          kind: 'product-content',
-          data: {
-            title,
-            bodyHtml,
-            ...(content.report ? { summary: content.report } : {}),
-            tags,
-            vendor,
-            ...(productType ? { productType } : {}),
-            language,
-            imageUrls,
-          },
+          report: content.report,
+          body: content.body,
+          refs: { ...content.refs, ready: true },
         },
         payload: { content },
         pendingToolCall,
