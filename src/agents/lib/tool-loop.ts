@@ -17,8 +17,8 @@ interface ToolLogFormatter {
 const DEFAULT_FORMATTERS: Record<string, Partial<ToolLogFormatter>> = {
   serper_search: {
     calling: (args) => ({
-      message: `搜尋關鍵字「${(args as { q?: string }).q ?? ''}」`,
-      data: { query: (args as { q?: string }).q },
+      message: `搜尋關鍵字「${(args as { query?: string }).query ?? ''}」`,
+      data: { query: (args as { query?: string }).query },
     }),
     result: (_args, result) => {
       const organic = (result as { organic?: unknown[] }).organic;
