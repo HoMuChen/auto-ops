@@ -14,12 +14,15 @@ vi.mock('../src/integrations/shopify/tools.js', () => ({
 const { shopifyPublisherAgent } = await import('../src/agents/builtin/shopify-publisher/index.js');
 
 const MOCK_CONTENT: ProductContent = {
-  title: 'Linen Oversized Shirt',
-  bodyHtml: '<p>Premium linen shirt.</p>',
-  tags: ['linen', 'summer', 'oversize'],
-  vendor: 'Acme',
-  language: 'zh-TW',
-  imageUrls: ['https://media.autoffice.app/img-1.png'],
+  report: '## 我的切角\n\n機能透氣切「台灣通勤」實戰。',
+  body: '## 主特色\n\n- 180g 亞麻\n- 可機洗',
+  refs: {
+    title: 'Linen Oversized Shirt',
+    tags: ['linen', 'summer', 'oversize'],
+    vendor: 'Acme',
+    language: 'zh-TW',
+    imageUrls: ['https://media.autoffice.app/img-1.png'],
+  },
   progressNote: '商品文案好了',
 };
 
@@ -49,7 +52,8 @@ describe('shopify-publisher', () => {
       id: 'shopify.create_product',
       args: {
         title: 'Linen Oversized Shirt',
-        bodyHtml: '<p>Premium linen shirt.</p>',
+        // body is markdown; publisher converts via markdownToHtml at the boundary.
+        bodyHtml: expect.stringContaining('<h2>主特色</h2>'),
         tags: expect.arrayContaining(['linen']),
         vendor: 'Acme',
         images: [{ url: 'https://media.autoffice.app/img-1.png' }],
@@ -78,7 +82,7 @@ describe('shopify-publisher', () => {
 
     const output = await runnable.invoke({
       messages: [{ role: 'user', content: 'brief' }],
-      params: { content: { ...MOCK_CONTENT, imageUrls: [] } },
+      params: { content: { ...MOCK_CONTENT, refs: { ...MOCK_CONTENT.refs, imageUrls: [] } } },
     });
 
     expect(output.pendingToolCall?.args).not.toHaveProperty('images');

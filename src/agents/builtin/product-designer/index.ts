@@ -22,43 +22,62 @@ import type {
 import type { ProductContent } from '../shopify-publisher/content.js';
 
 const DEFAULT_PROMPT = `You are a Product Designer AI employee for an e-commerce business.
-You receive a variant spec from the Product Planner and produce:
-1. Images — call images.generate or images.edit based on the imagePlan and any user feedback.
-2. Copy — title, HTML description, tags, vendor — tailored to the variant's platform and audience.
+You receive a markdown brief from the Product Planner and produce:
+1. Images — call images.generate or images.edit based on the image plan in the
+   brief and any user feedback.
+2. Copy — title, markdown product description (\`body\`), tags, vendor — tailored
+   to the variant's platform and audience as described in the brief.
 
 Image generation rules:
-- The imagePlan lists required and optional shots with purpose and style hints.
-- Your packs provide the correct aspect ratios and composition principles per shot type and platform.
-- On first run: generate all "required" shots; generate "optional" if the brief supports it.
-- On feedback: if user wants image changes, call images.edit with the previously generated URL
-  (listed in "Previously generated images") or images.generate for new angles.
+- The brief lists required and optional shots with purpose and style hints.
+- Your packs provide the correct aspect ratios and composition principles per
+  shot type and platform.
+- On first run: generate all "required" shots; generate "optional" if the brief
+  supports it.
+- On feedback: if the user wants image changes, call images.edit with the
+  previously generated URL (listed in "Previously generated images") or
+  images.generate for new angles.
 - If user feedback is copy-only, do NOT call any image tools.
 
 Copy rules:
-- bodyHtml must be safe, well-formed HTML (<p>, <ul>/<li>, <h3>; no <script>/<style>).
-- Honor the variant's tone, keyMessages, and featuresToHighlight.
-- Use the variant's language for all copy.
+- body must be valid Markdown. Use ## / ### subheads, **bold**, - bullets,
+  > blockquote. Do NOT emit raw HTML; the publisher converts to HTML at the
+  Shopify Admin API boundary.
+- Honor the variant's tone, key messages, and features-to-highlight from the
+  brief.
+- Use the variant's language (from refs or inferred from the brief) for all copy.
 - Tags: 3–8 short lower-case keywords.
 
-After tool calls (or if no tools needed), produce the structured listing object.`;
+After tool calls (or if no tools needed), produce the structured listing object.
+- progressNote is one short sentence for the kanban timeline. report is the
+  full memo for the boss-review panel. Don't duplicate them.`;
 
 const ProductListingSchema = z.object({
   title: z.string().min(1).max(255),
-  bodyHtml: z.string().min(1),
+  body: z
+    .string()
+    .min(20)
+    .describe(
+      'Product description body in Markdown. Use <h3>-equivalent ## / ### subheads, ' +
+        '**bold**, *italic*, - bullets, > blockquote. Do NOT emit raw HTML — the publisher ' +
+        'converts to HTML at the Shopify Admin API boundary.',
+    ),
   tags: z.array(z.string().min(1)).min(1).max(20),
   vendor: z.string().min(1),
   productType: z.string().optional(),
-  summary: z
+  report: z
     .string()
-    .min(20)
-    .max(2000)
+    .min(80)
+    .max(4000)
     .describe(
       '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
-        '說明：你怎麼解讀 brief 與 variantSpec、文案的切角是什麼、為什麼選這幾張圖、' +
+        '說明：你怎麼解讀 brief、文案的切角是什麼、為什麼選這幾張圖、' +
         '特別考量的地方（受眾、平台、語言、素材限制）。' +
         '可用 ## / ### 子標題、**粗體**、- 條列、表格。' +
-        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複 bodyHtml 的內容。' +
-        '長度建議 200–800 字。',
+        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複 body 的內容。' +
+        '長度建議 200–800 字。' +
+        '注意：圖片會由 agent code 在你的 report 後面附上 markdown image syntax，' +
+        '所以你的 report 不需要插入 ![](url)。',
     ),
   progressNote: z
     .string()
@@ -66,7 +85,6 @@ const ProductListingSchema = z.object({
     .max(200)
     .describe('一句話對老闆回報剛完成什麼。用 zh-TW 第一人稱，對話對象是「老闆」。'),
 });
-
 
 const configSchema = z.object({
   defaultVendor: z.string().nullish(),
@@ -86,7 +104,7 @@ export const productDesignerAgent: IAgent = {
     id: 'product-designer',
     name: 'Product Designer',
     description:
-      'Generates product images and copy from a variant spec produced by the Product Planner, ' +
+      'Generates product images and copy from a markdown brief produced by the Product Planner, ' +
       'then spawns publisher agents to distribute to enabled platforms.',
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.3 },
     defaultPrompt: DEFAULT_PROMPT,
@@ -137,57 +155,30 @@ export const productDesignerAgent: IAgent = {
         );
       }
 
-      // TODO(task-7): planner no longer emits variantSpec; rewrite to read from input.params.brief markdown
-      const variantSpec = input.params.variantSpec as {
-        platform?: string;
-        language: string;
-        marketingAngle: string;
-        keyMessages: string[];
-        copyBrief: { tone: string; featuresToHighlight: string[]; forbiddenClaims?: string[] };
-        imagePlan: { purpose: string; styleHint: string; priority: string }[];
-      };
+      const refs = (input.params as { refs?: { language?: string; originalImageIds?: string[] } })
+        .refs;
+      const inputLanguage = refs?.language ?? cfg.defaultLanguage;
 
       await ctx.emitLog('agent.started', '收到設計需求，開始畫圖跟寫文', {
-        platform: variantSpec?.platform,
+        language: inputLanguage,
         publishers: publishers.map((p) => p.id),
       });
 
-      // imageUrls state management across feedback rounds
       const previousImageUrls =
-        (input.taskOutput?.payload as { content?: { imageUrls?: string[] } } | undefined)?.content
-          ?.imageUrls ?? [];
-
+        (input.taskOutput?.payload as { content?: { refs?: { imageUrls?: string[] } } } | undefined)
+          ?.content?.refs?.imageUrls ?? [];
       const imageUrls: string[] = [...previousImageUrls];
 
       const originalImageIds =
-        (input.params as { originalImageIds?: string[] }).originalImageIds ?? [];
+        refs?.originalImageIds ??
+        (input.params as { originalImageIds?: string[] }).originalImageIds ??
+        [];
 
       const constraints: string[] = [
-        `Variant language: ${variantSpec?.language ?? cfg.defaultLanguage}`,
+        `Variant language: ${inputLanguage}`,
         `Default vendor: ${cfg.defaultVendor ?? '(must infer from brief)'}`,
       ];
 
-      // TODO(task-7): planner no longer emits variantSpec; rewrite to read from input.params.brief markdown
-      if (variantSpec?.imagePlan) {
-        constraints.push(
-          `Image plan:\n${variantSpec.imagePlan
-            .map((s) => `- [${s.priority}] ${s.purpose}: ${s.styleHint}`)
-            .join('\n')}`,
-        );
-      }
-      // TODO(task-7): planner no longer emits variantSpec; rewrite to read from input.params.brief markdown
-      if (variantSpec?.copyBrief) {
-        constraints.push(`Tone: ${variantSpec.copyBrief.tone}`);
-        constraints.push(
-          `Features to highlight: ${variantSpec.copyBrief.featuresToHighlight.join(', ')}`,
-        );
-        if (variantSpec.copyBrief.forbiddenClaims?.length) {
-          constraints.push(`Forbidden claims: ${variantSpec.copyBrief.forbiddenClaims.join(', ')}`);
-        }
-      }
-      if (variantSpec?.keyMessages?.length) {
-        constraints.push(`Key messages: ${variantSpec.keyMessages.join(' / ')}`);
-      }
       if (previousImageUrls.length > 0) {
         constraints.push(
           `Previously generated images (pass to images.edit to modify): ${previousImageUrls.join(', ')}`,
@@ -242,16 +233,27 @@ export const productDesignerAgent: IAgent = {
         [...collectedMessages, new HumanMessage('Now produce the structured product listing.')],
       );
 
-      const content: ProductContent = {
+      const refsOut: ProductContent['refs'] = {
         title: listing.title,
-        bodyHtml: listing.bodyHtml,
         tags: listing.tags,
         vendor: listing.vendor,
-        productType: listing.productType,
-        language: variantSpec?.language ?? cfg.defaultLanguage,
+        ...(listing.productType ? { productType: listing.productType } : {}),
+        language: inputLanguage,
         imageUrls,
+      };
+
+      // Append generated images to the report so the boss panel renders them inline.
+      const imageMarkdown =
+        imageUrls.length > 0
+          ? `\n\n## 生成的圖片\n\n${imageUrls.map((url, i) => `![圖 ${i + 1}](${url})`).join('\n\n')}`
+          : '';
+      const reportWithImages = `${listing.report}${imageMarkdown}`;
+
+      const content: ProductContent = {
+        report: reportWithImages,
+        body: listing.body,
+        refs: refsOut,
         progressNote: listing.progressNote,
-        summary: listing.summary,
       };
 
       const spawnTasks: SpawnTaskRequest[] = publishers.map((p) => ({
@@ -261,7 +263,7 @@ export const productDesignerAgent: IAgent = {
       }));
 
       await ctx.emitLog('agent.content.ready', listing.progressNote, {
-        artifactKind: 'product-content',
+        artifactShape: 'report+body',
         title: listing.title,
         imageCount: imageUrls.length,
         publisherCount: spawnTasks.length,
@@ -271,17 +273,9 @@ export const productDesignerAgent: IAgent = {
         message: listing.progressNote,
         awaitingApproval: true,
         artifact: {
-          kind: 'product-content',
-          data: {
-            title: listing.title,
-            bodyHtml: listing.bodyHtml,
-            summary: listing.summary,
-            tags: listing.tags,
-            vendor: listing.vendor,
-            ...(listing.productType ? { productType: listing.productType } : {}),
-            language: content.language,
-            imageUrls,
-          },
+          report: reportWithImages,
+          body: listing.body,
+          refs: refsOut,
         },
         payload: { content },
         spawnTasks,

@@ -1,20 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ProductContent } from '../src/agents/builtin/shopify-publisher/content.js';
 
 /**
- * product-designer: execution agent that receives a variant spec from product-planner,
- * generates images via tool loop, writes copy, then spawns publisher tasks.
+ * product-designer: execution agent that receives a markdown brief from
+ * product-planner, generates images via tool loop, writes copy, then spawns
+ * publisher tasks.
  *
  * Key behaviours tested:
  * 1. Happy path: spawns shopify-publisher with ProductContent
  * 2. Feedback round: preserves previous imageUrls when no tool calls fire
  * 3. Feedback round: replaces imageUrls when LLM generates new images
+ * 4. Emits an Artifact { report, body, refs }
  */
 
 const listingFixture = {
   title: 'Linen Oversized Shirt',
-  bodyHtml: '<p>Premium 180g linen.</p>',
+  body: '## 主特色\n\n180g 亞麻、台灣製造、可機洗。\n\n- 不悶熱\n- 可機洗',
   tags: ['linen', 'summer', 'oversized'],
   vendor: 'Acme',
+  report: `## 我的切角
+
+機能透氣切「台灣通勤」實戰。文案直接連結濕熱痛點。
+
+## 為什麼選這個 vendor 跟 productType
+從 brief 推斷 Acme 為品牌，productType 留空（brief 未指定）。`,
   progressNote: '文案好了，老闆看一下',
 };
 
@@ -83,16 +92,22 @@ const publisherPeer = {
   metadata: { kind: 'publisher' },
 };
 
-const variantSpec = {
-  title: '亞麻短袖 - 電商版',
-  platform: 'shopify',
-  language: 'zh-TW',
-  marketingAngle: '機能透氣，台灣通勤族',
-  keyMessages: ['不悶熱', '可機洗'],
-  copyBrief: { tone: 'warm', featuresToHighlight: ['fabric'], forbiddenClaims: [] },
-  imagePlan: [{ purpose: 'hero shot', styleHint: 'white background', priority: 'required' }],
-  assignedAgent: 'product-designer',
-};
+// briefMarkdown emulates what product-planner now spawns: a markdown brief
+// folding marketing angle / key messages / image plan / copy brief into prose.
+const briefMarkdown = `### Marketing angle
+機能透氣，台灣濕熱夏天通勤族 — 切「機能 + 在地實穿」。
+
+### Key messages
+- 不悶熱
+- 可機洗
+
+### Copy brief
+**Tone**: warm, professional
+**Features to highlight**: fabric
+
+### Image plan
+- **Hero (required)** white background, hero shot
+`;
 
 function buildCtx(overrides = {}) {
   return {
@@ -113,15 +128,17 @@ describe('product-designer', () => {
 
     const runnable = await productDesignerAgent.build(buildCtx());
     const output = await runnable.invoke({
-      messages: [{ role: 'user', content: 'brief' }],
-      params: { variantSpec, originalImageIds: [] },
+      messages: [{ role: 'user', content: briefMarkdown }],
+      params: { brief: briefMarkdown, refs: { language: 'zh-TW' } },
     });
 
     expect(output.awaitingApproval).toBe(true);
     expect(output.spawnTasks).toHaveLength(1);
     expect(output.spawnTasks![0]!.assignedAgent).toBe('shopify-publisher');
-    const content = output.spawnTasks![0]!.input.content as { title: string };
-    expect(content.title).toBe('Linen Oversized Shirt');
+    const content = output.spawnTasks![0]!.input.content as ProductContent;
+    expect(content.refs.title).toBe('Linen Oversized Shirt');
+    expect(content.body).toContain('180g 亞麻');
+    expect(content.refs.language).toBe('zh-TW');
   });
 
   it('preserves previous imageUrls when feedback does not trigger image generation', async () => {
@@ -130,16 +147,18 @@ describe('product-designer', () => {
     const runnable = await productDesignerAgent.build(buildCtx());
     const output = await runnable.invoke({
       messages: [
-        { role: 'user', content: 'brief' },
+        { role: 'user', content: briefMarkdown },
         { role: 'assistant', content: 'draft' },
         { role: 'user', content: 'copy tone is too formal' },
       ],
-      params: { variantSpec, originalImageIds: [] },
-      taskOutput: { payload: { content: { imageUrls: ['https://cdn.example.com/prev.jpg'] } } },
+      params: { brief: briefMarkdown, refs: { language: 'zh-TW' } },
+      taskOutput: {
+        payload: { content: { refs: { imageUrls: ['https://cdn.example.com/prev.jpg'] } } },
+      },
     });
 
-    const content = output.spawnTasks![0]!.input.content as { imageUrls: string[] };
-    expect(content.imageUrls).toEqual(['https://cdn.example.com/prev.jpg']);
+    const content = output.spawnTasks![0]!.input.content as ProductContent;
+    expect(content.refs.imageUrls).toEqual(['https://cdn.example.com/prev.jpg']);
   });
 
   it('replaces imageUrls when LLM generates new images on feedback', async () => {
@@ -160,14 +179,38 @@ describe('product-designer', () => {
     const runnable = await productDesignerAgent.build(buildCtx());
     const output = await runnable.invoke({
       messages: [{ role: 'user', content: 'change background to dark wood' }],
-      params: { variantSpec, originalImageIds: [] },
-      taskOutput: { payload: { content: { imageUrls: ['https://cdn.example.com/prev.jpg'] } } },
+      params: { brief: briefMarkdown, refs: { language: 'zh-TW' } },
+      taskOutput: {
+        payload: { content: { refs: { imageUrls: ['https://cdn.example.com/prev.jpg'] } } },
+      },
     });
 
-    const content = output.spawnTasks![0]!.input.content as { imageUrls: string[] };
-    expect(content.imageUrls).toEqual(['https://cdn.example.com/img-1.jpg']);
+    const content = output.spawnTasks![0]!.input.content as ProductContent;
+    expect(content.refs.imageUrls).toEqual(['https://cdn.example.com/img-1.jpg']);
 
     toolPassInvokeMock.mockImplementation(async () => ({ content: '', tool_calls: [] }));
     hop = 0;
+  });
+
+  it('emits an Artifact { report, body, refs }', async () => {
+    toolPassResponse = { content: '', tool_calls: [] };
+    const runnable = await productDesignerAgent.build(buildCtx());
+    const output = await runnable.invoke({
+      messages: [{ role: 'user', content: briefMarkdown }],
+      params: { brief: briefMarkdown, refs: { language: 'zh-TW' } },
+    });
+    const artifact = output.artifact;
+    expect(artifact).toHaveProperty('report');
+    expect(artifact).toHaveProperty('body');
+    expect(artifact).toHaveProperty('refs');
+    expect(artifact).not.toHaveProperty('kind');
+    expect(artifact).not.toHaveProperty('data');
+    if (artifact && 'refs' in artifact) {
+      expect(artifact.refs).toMatchObject({
+        title: 'Linen Oversized Shirt',
+        language: 'zh-TW',
+        imageUrls: expect.any(Array),
+      });
+    }
   });
 });

@@ -157,9 +157,15 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     // Designer Pass 2 = withStructuredOutput(ProductListingSchema)
     scriptStructured({
       title: 'Linen Oversized Shirt',
-      bodyHtml: '<p>輕薄亞麻，台灣夏天通勤首選。</p>',
+      body: '## 主特色\n\n輕薄亞麻，台灣夏天通勤首選。\n\n- 不悶熱\n- 可機洗',
       tags: ['linen', 'summer', 'taiwan'],
       vendor: 'Acme',
+      report: `## 我的切角
+
+機能透氣切「台灣濕熱通勤」實戰。文案直接連結痛點。
+
+## 為什麼選這個 vendor 跟 productType
+從 brief 推斷 Acme 為品牌；productType 留空（brief 未指定）。`,
       progressNote: '文案跟圖片都好了，老闆看一下',
     });
 

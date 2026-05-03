@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SHOPIFY_TOOL_IDS, buildShopifyTools } from '../../../integrations/shopify/tools.js';
+import { markdownToHtml } from '../../lib/markdown.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -50,41 +51,47 @@ export const shopifyPublisherAgent: IAgent = {
     const filtered = tools.filter((t) => t.id === 'shopify.create_product');
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
+      // TODO(task-8): publisher emits legacy artifact shape; rewrite to emit
+      // { report, body, refs } in Task 8. The reads below already handle the new
+      // content shape from product-designer.
       const content = input.params.content as ProductContent;
+      const { title, tags, vendor, productType, imageUrls, language } = content.refs;
+      const bodyHtml = markdownToHtml(content.body);
 
       await ctx.emitLog('agent.started', content.progressNote, {
-        title: content.title,
-        imageCount: content.imageUrls.length,
+        title,
+        imageCount: imageUrls.length,
       });
 
       const pendingToolCall = {
         id: 'shopify.create_product',
         args: {
-          title: content.title,
-          bodyHtml: content.bodyHtml,
-          tags: content.tags,
-          vendor: content.vendor,
-          ...(content.productType ? { productType: content.productType } : {}),
-          ...(content.imageUrls.length > 0
-            ? { images: content.imageUrls.map((url) => ({ url })) }
-            : {}),
+          title,
+          bodyHtml,
+          tags,
+          vendor,
+          ...(productType ? { productType } : {}),
+          ...(imageUrls.length > 0 ? { images: imageUrls.map((url) => ({ url })) } : {}),
         },
       };
 
+      // TODO(task-8): replace this legacy artifact with { report, body, refs }
+      // in Task 8. For now we keep the legacy `kind: 'product-content'` shape
+      // because downstream readers (kanban / artifact panel) still rely on it.
       return {
         message: content.progressNote,
         awaitingApproval: true,
         artifact: {
           kind: 'product-content',
           data: {
-            title: content.title,
-            bodyHtml: content.bodyHtml,
-            ...(content.summary ? { summary: content.summary } : {}),
-            tags: content.tags,
-            vendor: content.vendor,
-            ...(content.productType ? { productType: content.productType } : {}),
-            language: content.language,
-            imageUrls: content.imageUrls,
+            title,
+            bodyHtml,
+            ...(content.report ? { summary: content.report } : {}),
+            tags,
+            vendor,
+            ...(productType ? { productType } : {}),
+            language,
+            imageUrls,
           },
         },
         payload: { content },
