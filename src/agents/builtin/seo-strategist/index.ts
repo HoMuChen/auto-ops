@@ -104,7 +104,7 @@ const TopicSchema = z.object({
     .describe(
       'Self-contained zh-TW/zh-CN/en/ja/ko **Markdown** brief the writer agent will read directly. ' +
         'Embed all research findings as prose: search intent, top PAA questions, related searches to weave in, ' +
-        "competitor top angles, competitor gaps (the differentiation hook), target word count, " +
+        'competitor top angles, competitor gaps (the differentiation hook), target word count, ' +
         'and the most important E-E-A-T hook. Use ## / ### subheads + bullet lists. The writer ' +
         'reads this as the canonical context — be specific, not generic. ' +
         "The strategist's code wraps your brief inside `### {topic title}`, so do NOT start your " +

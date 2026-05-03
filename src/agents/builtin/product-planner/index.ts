@@ -70,7 +70,7 @@ const DesignerVariantSchema = z.object({
         'key messages (3–5 bullets), copy brief (tone, features to highlight, forbidden claims), ' +
         'image plan (each shot: purpose, style hint, required/optional). ' +
         "Use H3 (`###`) and H4 (`####`) sub-headings + bullet lists. The planner's code wraps " +
-        "your brief inside `### {variant title}`, so do NOT start with H1 (`#`) or H2 (`##`); " +
+        'your brief inside `### {variant title}`, so do NOT start with H1 (`#`) or H2 (`##`); ' +
         'start with prose or a bullet list. You may use H3 (`###`) and H4 (`####`) inside the brief ' +
         'for sub-sections — they nest correctly under the wrapping H3.',
     ),
@@ -221,10 +221,9 @@ export const productPlannerAgent: IAgent = {
         variantCount: capped.length,
       });
 
-      const report = [
-        plan.overview,
-        ...capped.map((v) => `### ${v.title}\n\n${v.brief}`),
-      ].join('\n\n');
+      const report = [plan.overview, ...capped.map((v) => `### ${v.title}\n\n${v.brief}`)].join(
+        '\n\n',
+      );
 
       return {
         message: plan.progressNote,

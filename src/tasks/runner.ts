@@ -112,9 +112,7 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
     const persistedOutput = finalState.lastOutput
       ? {
           ...(finalState.lastOutput.payload ?? {}),
-          ...(finalState.lastOutput.artifact
-            ? { artifact: finalState.lastOutput.artifact }
-            : {}),
+          ...(finalState.lastOutput.artifact ? { artifact: finalState.lastOutput.artifact } : {}),
           ...(finalState.lastOutput.spawnTasks
             ? { spawnTasks: finalState.lastOutput.spawnTasks }
             : {}),

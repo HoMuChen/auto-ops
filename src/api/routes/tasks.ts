@@ -12,8 +12,8 @@ import {
   getStreamCursor,
   getTask,
   listTaskLogs,
-  listTenantLogs,
   listTasks,
+  listTenantLogs,
   updateTaskStatus,
   upsertStreamCursor,
 } from '../../tasks/repository.js';

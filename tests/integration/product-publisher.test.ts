@@ -229,9 +229,7 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
 
     // Validate the publisher → Shopify HTTP binding directly via fetchMock —
     // proves the title/body got out the door over the wire.
-    const publishCall = fetchMock.mock.calls.find(([url]) =>
-      String(url).includes('products.json'),
-    );
+    const publishCall = fetchMock.mock.calls.find(([url]) => String(url).includes('products.json'));
     expect(publishCall).toBeDefined();
     const publishBody = JSON.parse(publishCall![1].body);
     expect(publishBody.product.title).toBe('Linen Oversized Shirt');

@@ -1,7 +1,7 @@
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
-import { agentRegistry } from '../agents/registry.js';
 import { invokeStructured } from '../agents/lib/invoke-structured.js';
+import { agentRegistry } from '../agents/registry.js';
 import type { ModelConfig } from '../llm/types.js';
 import { buildRuntimeContext } from './runtime-context.js';
 import type { GraphState } from './state.js';
