@@ -249,7 +249,7 @@ x-tenant-id: <UUID>
     "id": "seo-strategist",
     "name": "AI SEO Strategist",
     "description": "Plans SEO campaigns: turns a high-level brief into a list of focused article topics, each spawned as an independent execution task for the Shopify Blog Writer.",
-    "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.2 },
+    "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.2 },
     "toolIds": ["serper.search"],
     "requiredCredentials": [],
     "configSchema": {
@@ -266,7 +266,7 @@ x-tenant-id: <UUID>
     "id": "shopify-blog-writer",
     "name": "AI Shopify Blog Writer",
     "description": "Writes a single multilingual SEO blog article from a focused brief and publishes it to the tenant Shopify blog after human approval.",
-    "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.4 },
+    "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.4 },
     "toolIds": ["shopify.publish_article"],
     "requiredCredentials": [
       {
@@ -289,7 +289,7 @@ x-tenant-id: <UUID>
     "id": "product-planner",
     "name": "AI Product Planner",
     "description": "Plans product content strategy: researches competitor angles via Serper, produces N content variants (platform × language × audience), and spawns a Product Designer task for each variant.",
-    "defaultModel": { "model": "anthropic/claude-opus-4.7", "temperature": 0.2 },
+    "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.2 },
     "toolIds": ["serper.search"],
     "requiredCredentials": [],
     "configSchema": {
@@ -472,7 +472,8 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 3. 後端把圖片 IDs 存進第一條 user message；worker 跑任務時把圖片解析成 delivery URL 傳給支援 vision 的 agent
 
 **之後：**
-- worker（後端）會在 `WORKER_POLL_INTERVAL_MS`（dev=2s）內撿走
+- 沒有 `scheduledAt`（或 `scheduledAt` 已過）的任務，server 會**立即觸發** worker，不等 poll interval
+- 有未來 `scheduledAt` 的任務等到排程時間才執行
 - 跑完一輪後 status → `waiting` 或 `done`
 - UI 用 `GET /v1/tasks/:id` polling 或 `/v1/tasks/:id/stream` SSE
 
@@ -621,6 +622,28 @@ open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
 #### `GET /v1/stream`  ← **SSE（tenant-wide）**
 整個 tenant 所有任務的即時 log，合流在同一個 stream。每條事件多一個 `taskId` 欄位，讓前端知道這條 log 屬於哪張看板卡片。詳見下節。
 
+#### `GET /v1/logs?since=&until=&limit=`
+Tenant-wide 歷史 log **REST 查詢**（非 SSE）。適合初始載入或翻歷史。
+```
+?since=<ISO>    起點（exclusive）
+?until=<ISO>    終點（inclusive）
+?limit=<n>      最多幾筆，上限 1000，預設 500
+```
+每筆格式同 SSE `data` payload（多一個 `id` UUID 欄位）。
+
+#### `GET /v1/stream/cursor`
+回傳目前登入 user 在這個 tenant 的「已讀游標」：
+```json
+{ "cursor": "2026-05-03T10:00:00.000Z" }   // 或 null（第一次連線前）
+```
+
+#### `PUT /v1/stream/cursor`
+前端主動打點「我讀到這裡了」。Body：
+```json
+{ "cursor": "2026-05-03T10:00:00.000Z" }   // ISO 8601，必填
+```
+→ 204 No Content。之後 `GET /v1/stream` 無 `?since` 時會從這個時間點 replay。
+
 #### `POST /v1/tasks/:taskId/approve`
 HITL 核准。
 ```json
@@ -663,16 +686,27 @@ HITL 修改要求。會 append 一條 user message 到對話 thread，task → t
 Authorization: Bearer <JWT>
 x-tenant-id: <UUID>
 Accept: text/event-stream
-Last-Event-ID: <ISO timestamp>   ← 重連時帶，server 從此時間點之後 replay
+Last-Event-ID: <ISO timestamp>   ← 斷線重連時帶，server 從此時間點之後 replay
 ```
 
 **Query string：**
-- `?since=<ISO>` — 指定 replay 起點（等同 `Last-Event-ID`，二擇一）
+- `?since=<ISO>` — 指定 replay 起點（覆蓋 cursor 與 `Last-Event-ID`）
 
 **協定：**
-- Connect 時先 replay 歷史 log（從 `?since=` 或 `Last-Event-ID`，預設最近 500 筆）
-- 之後即時推送
+- Connect 時先 replay 歷史 log，replay 起點依優先順序：
+  1. `Last-Event-ID` header（斷線重連，瀏覽器 `EventSource` 自動帶）
+  2. `?since=<ISO>` query string
+  3. 該 user 的「已讀游標」（`PUT /v1/stream/cursor` 設定）
+  4. 最近 24 小時（首次連線，尚無游標）
+- **注意**：per-task stream（`/tasks/:taskId/stream`）無 cursor 機制，無 `?since` 時 replay 全部歷史（上限 500 筆）
+- 之後即時推送新事件
 - 每 15 秒一個 `: keep-alive` heartbeat 防 proxy 斷線
+
+**已讀游標（`GET /v1/stream` 專屬）：**
+
+「送到」≠「讀到」— server 不自動推進游標。前端在 user 實際看到一批 log 後，主動呼叫 `PUT /v1/stream/cursor` 打點。下次重開頁面 / 換裝置連線，server 從游標位置開始 replay，不會重送已讀內容。
+
+要查看更早的歷史：不需要重開 SSE，改打 `GET /v1/logs?since=<older-time>` REST 查詢，兩者獨立。
 
 **事件格式 — per-task stream：**
 ```
@@ -697,8 +731,10 @@ data: {"taskId":"abc-123","event":"agent.draft.ready","message":"草稿完成","
 | `agent.started` | 某 agent 開始跑 |
 | `agent.questions.asked` | Blog Writer Stage 1：EEAT 問題產生（task → waiting，`output.eeatPending` 已設） |
 | `agent.draft.ready` | Shopify Blog Writer Stage 2：草稿完成（task → waiting，`output.pendingToolCall` 已設） |
-| `agent.plan.ready` | SEO Strategist 計畫完成（父任務 → waiting） |
-| `agent.content.ready` | Product Strategist 商品文案完成（父任務 → waiting） |
+| `agent.plan.ready` | SEO Strategist / Product Planner 計畫完成（父任務 → waiting） |
+| `agent.draft.ready` (designer) | Product Designer 文案 + 圖片完成（子任務 → waiting） |
+| `tool.calling.<name>` | tool loop 呼叫某個 tool 前（e.g. `tool.calling.serper_search`） |
+| `tool.result.<name>` | tool loop 收到結果後 |
 | `task.waiting` | 進入 HITL gate |
 | `task.completed` | done |
 | `task.failed` | 失敗 |
@@ -722,6 +758,7 @@ const reader = res.body.getReader();
 
 **JS 範例 — tenant-wide（看板首頁用）：**
 ```js
+// 開連線 — server 自動從 cursor 或 24h 前 replay
 const res = await fetch(`${API_BASE}/v1/stream`, {
   headers: {
     Authorization: `Bearer ${jwt}`,
@@ -731,7 +768,20 @@ const res = await fetch(`${API_BASE}/v1/stream`, {
 });
 const reader = res.body.getReader();
 // data.taskId 告訴你這條 log 屬於哪張卡
-// e.g. { taskId: 'abc-123', event: 'agent.content.ready', message: '...', at: '...' }
+// e.g. { taskId: 'abc-123', event: 'agent.plan.ready', message: '...', at: '...' }
+
+// 當用戶滾動看完一批 log，打點已讀（e.g. 記錄最後一條的 at）
+await fetch(`${API_BASE}/v1/stream/cursor`, {
+  method: 'PUT',
+  headers: { Authorization: `Bearer ${jwt}`, 'x-tenant-id': tenantId, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ cursor: lastSeenAt }),  // ISO 8601
+});
+
+// 要翻歷史（不重開 SSE）
+const history = await fetch(
+  `${API_BASE}/v1/logs?since=2026-05-01T00:00:00Z&limit=200`,
+  { headers: { Authorization: `Bearer ${jwt}`, 'x-tenant-id': tenantId } },
+).then(r => r.json());
 ```
 
 ---
