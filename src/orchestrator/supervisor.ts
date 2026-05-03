@@ -1,7 +1,7 @@
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { agentRegistry } from '../agents/registry.js';
-import { buildModel } from '../llm/model-registry.js';
+import { invokeStructured } from '../agents/lib/invoke-structured.js';
 import type { ModelConfig } from '../llm/types.js';
 import { buildRuntimeContext } from './runtime-context.js';
 import type { GraphState } from './state.js';
@@ -67,17 +67,13 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
   const available = await agentRegistry.listForTenant(state.tenantId);
   const roster = available.map((a) => `- ${a.manifest.id}: ${a.manifest.description}`).join('\n');
 
-  const model = buildModel(SUPERVISOR_MODEL).withStructuredOutput(RouteSchema, {
-    name: 'route_decision',
-  });
-
   const userBrief =
     state.messages
       .filter((m) => m.getType() === 'human')
       .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
       .join('\n\n') || JSON.stringify(state.params);
 
-  const decision = await model.invoke([
+  const decision = await invokeStructured(SUPERVISOR_MODEL, RouteSchema, 'route_decision', [
     new SystemMessage(buildRuntimeContext() + SUPERVISOR_PROMPT),
     new HumanMessage(`Available employees:\n${roster}\n\nUser brief:\n${userBrief}`),
   ]);
