@@ -16,6 +16,152 @@ const NullableIsoDate = z.preprocess(
   z.string().datetime().nullable(),
 );
 
+/**
+ * Artifact + Output schemas — declared before TaskSchema so TaskSchema.output
+ * can reference them. UI dispatches on artifact.kind; flow-control fields
+ * (pendingToolCall, spawnTasks, eeatPending) drive Approve/Spawn buttons.
+ *
+ * `.passthrough()` on TaskOutputSchema lets older rows / extra agent payload
+ * keys survive serialization without forcing a schema migration.
+ */
+// `published` shapes are documented in API_GUIDE; schema kept loose so old
+// rows / partial mocks don't fail response serialization. Production code
+// produces the full shape.
+const BlogPublishedMetaSchema = z
+  .object({
+    articleId: z.number().optional(),
+    blogId: z.number().optional(),
+    blogHandle: z.string().optional(),
+    handle: z.string().optional(),
+    articleUrl: z.string().optional(),
+    publishedAt: z.string().nullable().optional(),
+    status: z.enum(['published', 'draft']).optional(),
+  })
+  .passthrough();
+
+const ProductPublishedMetaSchema = z
+  .object({
+    productId: z.number().optional(),
+    handle: z.string().optional(),
+    adminUrl: z.string().optional(),
+    status: z.enum(['active', 'draft']).optional(),
+  })
+  .passthrough();
+
+// Artifact response schema is a permissive union — UI dispatches on `kind`
+// but data fields are kept lenient so partial agent mocks (in tests) and any
+// older rows survive serialization. Producers in production emit the full
+// documented shape; see API_GUIDE §5.1 for the contract UI should expect.
+export const ArtifactSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('blog-article'),
+    data: z
+      .object({
+        title: z.string(),
+        bodyHtml: z.string(),
+        summaryHtml: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        language: z.string().optional(),
+        author: z.string().optional(),
+      })
+      .passthrough(),
+    published: BlogPublishedMetaSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('product-content'),
+    data: z
+      .object({
+        title: z.string(),
+        bodyHtml: z.string(),
+        tags: z.array(z.string()).optional(),
+        vendor: z.string().optional(),
+        productType: z.string().optional(),
+        language: z.string().optional(),
+        imageUrls: z.array(z.string()).optional(),
+      })
+      .passthrough(),
+    published: ProductPublishedMetaSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('seo-plan'),
+    data: z
+      .object({
+        reasoning: z.string().optional(),
+        summary: z.string().optional(),
+        topics: z.array(z.record(z.unknown())),
+      })
+      .passthrough(),
+  }),
+  z.object({
+    kind: z.literal('product-plan'),
+    data: z
+      .object({
+        reasoning: z.string().optional(),
+        summary: z.string().optional(),
+        variants: z.array(z.record(z.unknown())),
+      })
+      .passthrough(),
+  }),
+  z.object({
+    kind: z.literal('eeat-questions'),
+    data: z
+      .object({
+        questions: z.array(
+          z
+            .object({
+              question: z.string(),
+              hint: z.string().optional(),
+              optional: z.boolean().optional(),
+            })
+            .passthrough(),
+        ),
+        askedAt: z.string().optional(),
+      })
+      .passthrough(),
+  }),
+  z.object({
+    kind: z.literal('clarification'),
+    data: z.object({ question: z.string() }).passthrough(),
+  }),
+]);
+
+export const PendingToolCallSchema = z.object({
+  id: z.string(),
+  args: z.record(z.unknown()),
+});
+
+export const SpawnTaskRequestSchema = z.object({
+  title: z.string(),
+  description: z.string().optional(),
+  assignedAgent: z.string(),
+  input: z.record(z.unknown()),
+  scheduledAt: z.string().datetime().optional(),
+});
+
+export const TaskOutputSchema = z
+  .object({
+    artifact: ArtifactSchema.optional(),
+    pendingToolCall: PendingToolCallSchema.optional(),
+    spawnTasks: z.array(SpawnTaskRequestSchema).optional(),
+    spawnedAt: z.string().optional(),
+    spawnedTaskIds: z.array(z.string().uuid()).optional(),
+    toolExecutedAt: z.string().optional(),
+    eeatPending: z
+      .object({
+        questions: z.array(
+          z.object({
+            question: z.string(),
+            hint: z.string().optional(),
+            optional: z.boolean().optional(),
+          }),
+        ),
+        askedAt: z.string(),
+      })
+      .optional(),
+    generatedImageIds: z.array(z.string().uuid()).optional(),
+  })
+  .passthrough();
+
 export const TaskSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
@@ -26,7 +172,7 @@ export const TaskSchema = z.object({
   assignedAgent: z.string().nullable(),
   status: TaskStatusSchema,
   input: z.record(z.unknown()),
-  output: z.record(z.unknown()).nullable(),
+  output: TaskOutputSchema.nullable(),
   error: z.object({ message: z.string(), stack: z.string().optional() }).nullable().optional(),
   scheduledAt: NullableIsoDate,
   createdAt: IsoDate,
@@ -80,96 +226,6 @@ export const AgentManifestSchema = z.object({
   }),
   enabled: z.boolean(),
 });
-
-/**
- * Artifact — typed deliverable produced by an agent stage.
- *
- * UI dispatches on `kind` and renders one component per kind. This is the
- * single contract the frontend needs — every agent that produces an article
- * emits `kind: 'blog-article'` regardless of internal implementation.
- *
- * Lifecycle:
- *   - Set when the agent finishes a stage (e.g. eeat-questions → blog-article)
- *   - `published` is stamped by the framework after the post-HITL tool fires
- *     (e.g. shopify.publish_article success → BlogPublishedMeta on the article)
- */
-const BlogPublishedMetaSchema = z.object({
-  articleId: z.number(),
-  blogId: z.number(),
-  blogHandle: z.string(),
-  handle: z.string(),
-  articleUrl: z.string(),
-  publishedAt: z.string().nullable(),
-  status: z.enum(['published', 'draft']),
-});
-
-const ProductPublishedMetaSchema = z.object({
-  productId: z.number(),
-  handle: z.string(),
-  adminUrl: z.string(),
-  status: z.enum(['active', 'draft']),
-});
-
-export const ArtifactSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('blog-article'),
-    data: z.object({
-      title: z.string(),
-      bodyHtml: z.string(),
-      summaryHtml: z.string(),
-      tags: z.array(z.string()),
-      language: z.string(),
-      author: z.string().optional(),
-    }),
-    published: BlogPublishedMetaSchema.optional(),
-  }),
-  z.object({
-    kind: z.literal('product-content'),
-    data: z.object({
-      title: z.string(),
-      bodyHtml: z.string(),
-      tags: z.array(z.string()),
-      vendor: z.string(),
-      productType: z.string().optional(),
-      language: z.string(),
-      imageUrls: z.array(z.string()),
-    }),
-    published: ProductPublishedMetaSchema.optional(),
-  }),
-  z.object({
-    kind: z.literal('seo-plan'),
-    data: z.object({
-      reasoning: z.string(),
-      summary: z.string(),
-      topics: z.array(z.record(z.unknown())),
-    }),
-  }),
-  z.object({
-    kind: z.literal('product-plan'),
-    data: z.object({
-      reasoning: z.string(),
-      summary: z.string(),
-      variants: z.array(z.record(z.unknown())),
-    }),
-  }),
-  z.object({
-    kind: z.literal('eeat-questions'),
-    data: z.object({
-      questions: z.array(
-        z.object({
-          question: z.string(),
-          hint: z.string().optional(),
-          optional: z.boolean().optional(),
-        }),
-      ),
-      askedAt: z.string(),
-    }),
-  }),
-  z.object({
-    kind: z.literal('clarification'),
-    data: z.object({ question: z.string() }),
-  }),
-]);
 
 export const TaskLogSchema = z.object({
   id: z.string().uuid(),
