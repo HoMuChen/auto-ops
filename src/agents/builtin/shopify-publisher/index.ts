@@ -7,7 +7,7 @@ import type {
   AgentRunnable,
   IAgent,
 } from '../../types.js';
-import type { ProductContent } from '../product-strategist/content.js';
+import type { ProductContent } from './content.js';
 
 const configSchema = z.object({
   shopify: z

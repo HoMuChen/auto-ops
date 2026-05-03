@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ProductContent } from '../src/agents/builtin/product-strategist/content.js';
+import type { ProductContent } from '../src/agents/builtin/shopify-publisher/content.js';
 
 vi.mock('../src/integrations/shopify/tools.js', () => ({
   SHOPIFY_TOOL_IDS: ['shopify.create_product'],

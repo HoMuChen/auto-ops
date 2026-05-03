@@ -1,5 +1,5 @@
 /**
- * Platform-agnostic product content produced by product-strategist and
+ * Platform-agnostic product content produced by product-planner/product-designer and
  * consumed by all publisher agents (shopify-publisher, future woocommerce-publisher, etc.).
  *
  * This is the contract between content generation and platform publishing.

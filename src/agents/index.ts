@@ -1,4 +1,5 @@
-import { productStrategistAgent } from './builtin/product-strategist/index.js';
+import { productDesignerAgent } from './builtin/product-designer/index.js';
+import { productPlannerAgent } from './builtin/product-planner/index.js';
 import { seoStrategistAgent } from './builtin/seo-strategist/index.js';
 import { shopifyBlogWriterAgent } from './builtin/shopify-blog-writer/index.js';
 import { shopifyPublisherAgent } from './builtin/shopify-publisher/index.js';
@@ -13,7 +14,8 @@ export function bootstrapAgents(): void {
   if (bootstrapped) return;
   agentRegistry.register(seoStrategistAgent);
   agentRegistry.register(shopifyBlogWriterAgent);
-  agentRegistry.register(productStrategistAgent);
+  agentRegistry.register(productPlannerAgent);
+  agentRegistry.register(productDesignerAgent);
   agentRegistry.register(shopifyPublisherAgent);
   bootstrapped = true;
 }
