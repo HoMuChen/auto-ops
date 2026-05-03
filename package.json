@@ -45,6 +45,7 @@
     "fastify-type-provider-zod": "^4.0.2",
     "jose": "^5.9.6",
     "jsonrepair": "^3.14.0",
+    "marked": "^18.0.3",
     "pino": "^9.5.0",
     "postgres": "^3.4.5",
     "uuid": "^11.0.3",
