@@ -91,23 +91,33 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     // Planner Pass 2 = withStructuredOutput(PlanSchema)
     scriptStructured({
       reasoning: 'One Shopify variant for zh-TW e-commerce.',
-      summary: '規劃了 1 個電商版本，主打台灣市場通勤族，老闆確認一下',
+      overview: `## 市場觀察
+
+台灣夏季 SERP 對亞麻多半關注「悶熱」「縮水」恐懼，反向操作 → 主打 180g 不悶 + 可機洗。
+
+## 我的策略
+
+聚焦 1 個 variant：zh-TW 電商頁面，切「機能透氣」+ 在地實穿。`,
       progressNote: '規劃好了，1 個 variant，老闆看一下',
       variants: [
         {
           title: '亞麻短袖 - 電商版 (zh-TW)',
           platform: 'shopify',
           language: 'zh-TW',
-          marketingAngle: '機能透氣，台灣濕熱夏天通勤族',
-          keyMessages: ['180g 亞麻不悶熱', '可機洗'],
-          copyBrief: {
-            tone: 'warm, professional',
-            featuresToHighlight: ['fabric weight', 'washability'],
-            forbiddenClaims: [],
-          },
-          imagePlan: [
-            { purpose: 'hero shot', styleHint: 'clean white background', priority: 'required' },
-          ],
+          brief: `### Marketing angle
+台灣濕熱夏天通勤族，怕熱怕悶；切「機能透氣」+ 在地實穿。
+
+### Key messages
+- 180g 亞麻不悶熱
+- 可機洗
+
+### Copy brief
+**Tone**: warm, professional
+**Features to highlight**: fabric weight, washability
+**Forbidden claims**: 無
+
+### Image plan
+- **Hero (required)**：clean white background`,
           assignedAgent: 'product-designer',
         },
       ],

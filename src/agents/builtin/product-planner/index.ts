@@ -24,35 +24,32 @@ Your job: read a product brief and produce a set of content variants — one per
 platform/language/audience combination — each ready to hand off to a product designer.
 
 For every variant you MUST provide:
-- A clear marketing angle (one sentence: who this is for, what pain it solves).
-- The key messages (2–4 bullets the designer must weave into the copy).
-- A copy brief (tone, features to highlight, forbidden claims).
-- An image plan: list of shots with purpose and style hint. Do NOT specify ratios or
-  exact prompts — the designer's domain knowledge handles those.
-- The assignedAgent must always be "product-designer".
+- A short \`title\` for the kanban card.
+- The target \`platform\` (e.g. "shopify", "instagram", "facebook") and \`language\`.
+- The \`assignedAgent\` must always be "product-designer".
+- A self-contained Markdown \`brief\` the designer reads directly. Fold all the planning
+  details into prose with subheads:
+    - \`### Marketing angle\` — who this is for, what pain it solves.
+    - \`### Key messages\` — 3–5 bullets the designer must weave into the copy.
+    - \`### Copy brief\` — tone, features to highlight, forbidden claims.
+    - \`### Image plan\` — for each shot: purpose, style hint, required vs optional.
+      Do NOT specify ratios or exact prompts — the designer's domain knowledge handles those.
+  Write the brief as prose with subheads — not as a JSON-shaped list. Start with prose or
+  a bullet list (NOT with H1 / H2). The strategist's code wraps your brief inside
+  \`### {variant title}\`, so don't open with \`#\` or \`##\`. Use the variant's \`language\`
+  field's language for the entire brief content.
 
 Workflow:
 1. If serper_search is available, search 1–3 queries to understand competitor angles and
    trending keywords for this product category.
 2. Use SERP insights to identify differentiation gaps and audience angles.
-3. Produce the structured variant plan.
+3. Compose \`overview\` — your zh-TW Markdown report explaining the overall strategy.
+4. Produce the structured variant plan.
 
 Constraints:
 - Plan between 1 and {MAX_VARIANTS} variants.
 - Each variant targets a distinct audience/platform combination — do not duplicate angles.
 - Honor any brand tone or keyword constraints from the config.`;
-
-const ImageBriefSchema = z.object({
-  purpose: z
-    .string()
-    .min(2)
-    .describe('Shot type and scene, e.g. "hero shot" or "lifestyle - morning commute"'),
-  styleHint: z
-    .string()
-    .min(2)
-    .describe('Lighting, mood, background direction. No ratios or prompts.'),
-  priority: z.enum(['required', 'optional']),
-});
 
 const DesignerVariantSchema = z.object({
   title: z
@@ -64,32 +61,32 @@ const DesignerVariantSchema = z.object({
     .optional()
     .describe('Target platform: "shopify", "instagram", "facebook", etc.'),
   language: z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']),
-  marketingAngle: z
+  brief: z
     .string()
-    .min(10)
-    .describe('One sentence: who this is for and what pain it solves.'),
-  keyMessages: z.array(z.string().min(1)).min(1).max(5),
-  copyBrief: z.object({
-    tone: z.string().min(2),
-    featuresToHighlight: z.array(z.string()).min(1),
-    forbiddenClaims: z.array(z.string()).default([]),
-  }),
-  imagePlan: z.array(ImageBriefSchema).min(1).max(6),
+    .min(80)
+    .describe(
+      'Self-contained Markdown brief the Product Designer reads directly. ' +
+        'Embed all the planning details as prose: marketing angle (who this is for, what pain it solves), ' +
+        'key messages (3–5 bullets), copy brief (tone, features to highlight, forbidden claims), ' +
+        'image plan (each shot: purpose, style hint, required/optional). ' +
+        "Use H3 (`###`) and H4 (`####`) sub-headings + bullet lists. The strategist's code wraps " +
+        "your brief inside `### {variant title}`, so do NOT start with H1 (`#`) or H2 (`##`); " +
+        'start with prose or a bullet list.',
+    ),
   assignedAgent: z.literal('product-designer'),
   scheduledAt: z.string().datetime().optional(),
 });
 
 const PlanSchema = z.object({
-  summary: z
+  overview: z
     .string()
-    .min(20)
-    .max(2000)
+    .min(100)
+    .max(4000)
     .describe(
-      '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
-        '說明：你做了什麼研究（competitor SERP 看到什麼）、為什麼選這些 variants、' +
-        '差異化切角是什麼、特別考量的地方。可用 ## / ### 子標題、**粗體**、- 條列、表格。' +
-        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複每個 variant 細節（variants 陣列已有）。' +
-        '語氣像員工向老闆書面匯報。長度建議 200–800 字。',
+      '整體規劃匯報。**用 zh-TW 繁體中文 + Markdown**。要回答：你做了什麼研究（competitor SERP 看到什麼）、' +
+        '為什麼選這些 variants、差異化切角是什麼、特別考量。' +
+        '可用 ## / ### 子標題、**粗體**、- 條列、表格。300–1200 字。語氣像員工向老闆書面匯報。' +
+        '注意：每個 variant 自己的細節寫在 variant 的 brief 裡，這裡只放整體大局。',
     ),
   progressNote: z
     .string()
@@ -207,38 +204,32 @@ export const productPlannerAgent: IAgent = {
 
       const spawnTasks: SpawnTaskRequest[] = capped.map((v) => ({
         title: v.title,
-        description: `Product content — ${v.marketingAngle}`,
+        description: `Product content — ${v.title}`,
         assignedAgent: 'product-designer',
         input: {
-          variantSpec: v,
-          originalImageIds,
+          brief: v.brief,
+          refs: {
+            language: v.language,
+            ...(originalImageIds.length > 0 ? { originalImageIds } : {}),
+          },
         },
         ...(v.scheduledAt ? { scheduledAt: v.scheduledAt } : {}),
       }));
 
       await ctx.emitLog('agent.plan.ready', plan.progressNote, {
-        artifactKind: 'product-plan',
+        artifactShape: 'report',
         variantCount: capped.length,
       });
 
-      const variantsForArtifact = capped.map((v) => ({
-        ...v,
-        copyBrief: {
-          ...v.copyBrief,
-          forbiddenClaims: v.copyBrief.forbiddenClaims ?? [],
-        },
-      }));
+      const report = [
+        plan.overview,
+        ...capped.map((v) => `### ${v.title}\n\n${v.brief}`),
+      ].join('\n\n');
 
       return {
         message: plan.progressNote,
         awaitingApproval: true,
-        artifact: {
-          kind: 'product-plan',
-          data: {
-            summary: plan.summary,
-            variants: variantsForArtifact,
-          },
-        },
+        artifact: { report },
         spawnTasks,
       };
     };
