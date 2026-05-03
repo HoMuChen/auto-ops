@@ -199,6 +199,11 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
 
     const finalTask = await getTask(tenantId, publisherTaskId);
     expect(finalTask.status).toBe('done');
-    expect(finalTask.output).toMatchObject({ toolResult: expect.anything() });
+    expect(finalTask.output).toMatchObject({
+      artifact: {
+        kind: 'product-content',
+        published: expect.objectContaining({ productId: 456 }),
+      },
+    });
   });
 });

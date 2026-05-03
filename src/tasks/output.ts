@@ -1,5 +1,6 @@
 import type { PendingToolCall, SpawnTaskRequest } from '../agents/types.js';
 import type { Task } from '../db/schema/index.js';
+import type { Artifact } from './artifact.js';
 
 /**
  * The shape persisted on `tasks.output`. Drizzle types the column as
@@ -18,18 +19,28 @@ import type { Task } from '../db/schema/index.js';
  *     executeApprovedToolCall, replaces pendingToolCall)
  */
 export interface TaskOutput {
+  /** Typed deliverable. UI dispatches on artifact.kind. */
+  artifact?: Artifact;
+
+  /** HITL: agent declared children to spawn on approve(finalize=true). */
   spawnTasks?: SpawnTaskRequest[];
+  /** Stamped after finalizeStrategyTask spawns the children (idempotency). */
   spawnedAt?: string;
   spawnedTaskIds?: string[];
+
+  /** HITL: tool the framework will fire on approve(finalize=true). */
   pendingToolCall?: PendingToolCall;
-  toolResult?: unknown;
+  /** Stamped after the post-HITL tool execution (idempotency). */
   toolExecutedAt?: string;
-  generatedImageIds?: string[];
+
+  /** HITL: shopify-blog-writer Stage 1 — boss must answer EEAT questions. */
   eeatPending?: {
     questions: { question: string; hint?: string; optional?: boolean }[];
     askedAt: string;
   };
-  /** Agent payload keys (article, listing, plan, language…). */
+
+  generatedImageIds?: string[];
+  /** Escape hatch — should be empty in steady state. */
   [key: string]: unknown;
 }
 

@@ -214,27 +214,30 @@ export const productPlannerAgent: IAgent = {
         ...(v.scheduledAt ? { scheduledAt: v.scheduledAt } : {}),
       }));
 
-      const summary = [
-        `# Product Content Plan (${capped.length} variants)`,
-        '',
-        plan.summary,
-        '',
-        ...capped.map(
-          (v, i) =>
-            `${i + 1}. **${v.title}**${v.platform ? ` _(${v.platform})_` : ''} — ${v.marketingAngle}`,
-        ),
-        '',
-        '_Approve to spawn each variant as an independent designer task._',
-      ].join('\n');
-
       await ctx.emitLog('agent.plan.ready', plan.progressNote, {
+        artifactKind: 'product-plan',
         variantCount: capped.length,
       });
 
+      const variantsForArtifact = capped.map((v) => ({
+        ...v,
+        copyBrief: {
+          ...v.copyBrief,
+          forbiddenClaims: v.copyBrief.forbiddenClaims ?? [],
+        },
+      }));
+
       return {
-        message: summary,
+        message: plan.progressNote,
         awaitingApproval: true,
-        payload: { plan: { reasoning: plan.reasoning, variants: capped } },
+        artifact: {
+          kind: 'product-plan',
+          data: {
+            reasoning: plan.reasoning,
+            summary: plan.summary,
+            variants: variantsForArtifact,
+          },
+        },
         spawnTasks,
       };
     };

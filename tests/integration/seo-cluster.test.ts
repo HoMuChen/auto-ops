@@ -134,10 +134,13 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     expect(parent.status).toBe('waiting');
     expect(parent.kind).toBe('strategy');
     expect(parent.output).toMatchObject({
-      plan: {
-        topics: expect.arrayContaining([
-          expect.objectContaining({ primaryKeyword: 'linen shirt summer' }),
-        ]),
+      artifact: {
+        kind: 'seo-plan',
+        data: {
+          topics: expect.arrayContaining([
+            expect.objectContaining({ primaryKeyword: 'linen shirt summer' }),
+          ]),
+        },
       },
     });
 
@@ -225,7 +228,10 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     child = await getTask(tenantId, childId);
     expect(child.status).toBe('waiting');
     expect(child.output).toMatchObject({
-      article: { title: expect.stringContaining('Linen') },
+      artifact: {
+        kind: 'blog-article',
+        data: { title: expect.stringContaining('Linen') },
+      },
       pendingToolCall: { id: 'shopify.publish_article' },
     });
     expect(child.output).not.toHaveProperty('eeatPending');
@@ -242,7 +248,10 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     child = await getTask(tenantId, childId);
     expect(child.status).toBe('done');
     expect(child.output).toMatchObject({
-      toolResult: { articleId: 9001, blogId: 200, status: 'draft' },
+      artifact: {
+        kind: 'blog-article',
+        published: { articleId: 9001, blogId: 200, status: 'draft' },
+      },
       toolExecutedAt: expect.any(String),
     });
 
@@ -259,6 +268,7 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     expect(roles).toEqual(expect.arrayContaining(['user', 'assistant', 'user', 'assistant']));
     expect(messages.some((m) => m.content.includes('EEAT'))).toBe(true);
     expect(messages.some((m) => m.content.includes('10 次'))).toBe(true);
-    expect(messages.some((m) => m.content.includes('Linen'))).toBe(true);
+    // Article title check moved to the artifact assertion above (line ~233);
+    // messages now hold only short progressNotes, not the article preview.
   });
 });

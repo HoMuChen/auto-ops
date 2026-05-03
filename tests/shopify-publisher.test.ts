@@ -55,7 +55,14 @@ describe('shopify-publisher', () => {
         images: [{ url: 'https://media.autoffice.app/img-1.png' }],
       },
     });
-    expect(output.message).toContain('Linen Oversized Shirt');
+    expect(output.artifact).toEqual({
+      kind: 'product-content',
+      data: expect.objectContaining({
+        title: 'Linen Oversized Shirt',
+        vendor: 'Acme',
+        imageUrls: ['https://media.autoffice.app/img-1.png'],
+      }),
+    });
   });
 
   it('invoke() omits images key when imageUrls is empty', async () => {

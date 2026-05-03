@@ -91,7 +91,10 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
       lastOutput: {
         agentId: 'supervisor',
         message: decision.clarification,
-        payload: { kind: 'clarification' },
+        artifact: {
+          kind: 'clarification',
+          data: { question: decision.clarification },
+        },
       },
     };
   }

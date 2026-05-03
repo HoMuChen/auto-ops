@@ -2,6 +2,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { ZodType } from 'zod';
 import type { CredentialProvider } from '../db/schema/index.js';
 import type { ModelConfig } from '../llm/types.js';
+import type { Artifact } from '../tasks/artifact.js';
 
 /**
  * The pluggable Agent contract.
@@ -187,10 +188,16 @@ export interface PendingToolCall {
 }
 
 export interface AgentOutput {
-  /** Assistant message produced by the agent. */
+  /** Assistant message produced by the agent. Short progressNote, not artifact dumps. */
   message: string;
   /** Whether the agent is requesting a HITL gate (Waiting state). */
   awaitingApproval?: boolean;
+  /**
+   * The typed deliverable for this stage. UI dispatches on `artifact.kind` and
+   * renders the appropriate component. Updates per stage (e.g. eeat-questions
+   * → blog-article → blog-article + published).
+   */
+  artifact?: Artifact;
   /** Output payload to attach to the task (final or intermediate). */
   payload?: Record<string, unknown>;
   /** Tool calls the agent made, for audit. */

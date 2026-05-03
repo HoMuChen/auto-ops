@@ -81,6 +81,96 @@ export const AgentManifestSchema = z.object({
   enabled: z.boolean(),
 });
 
+/**
+ * Artifact — typed deliverable produced by an agent stage.
+ *
+ * UI dispatches on `kind` and renders one component per kind. This is the
+ * single contract the frontend needs — every agent that produces an article
+ * emits `kind: 'blog-article'` regardless of internal implementation.
+ *
+ * Lifecycle:
+ *   - Set when the agent finishes a stage (e.g. eeat-questions → blog-article)
+ *   - `published` is stamped by the framework after the post-HITL tool fires
+ *     (e.g. shopify.publish_article success → BlogPublishedMeta on the article)
+ */
+const BlogPublishedMetaSchema = z.object({
+  articleId: z.number(),
+  blogId: z.number(),
+  blogHandle: z.string(),
+  handle: z.string(),
+  articleUrl: z.string(),
+  publishedAt: z.string().nullable(),
+  status: z.enum(['published', 'draft']),
+});
+
+const ProductPublishedMetaSchema = z.object({
+  productId: z.number(),
+  handle: z.string(),
+  adminUrl: z.string(),
+  status: z.enum(['active', 'draft']),
+});
+
+export const ArtifactSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('blog-article'),
+    data: z.object({
+      title: z.string(),
+      bodyHtml: z.string(),
+      summaryHtml: z.string(),
+      tags: z.array(z.string()),
+      language: z.string(),
+      author: z.string().optional(),
+    }),
+    published: BlogPublishedMetaSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('product-content'),
+    data: z.object({
+      title: z.string(),
+      bodyHtml: z.string(),
+      tags: z.array(z.string()),
+      vendor: z.string(),
+      productType: z.string().optional(),
+      language: z.string(),
+      imageUrls: z.array(z.string()),
+    }),
+    published: ProductPublishedMetaSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('seo-plan'),
+    data: z.object({
+      reasoning: z.string(),
+      summary: z.string(),
+      topics: z.array(z.record(z.unknown())),
+    }),
+  }),
+  z.object({
+    kind: z.literal('product-plan'),
+    data: z.object({
+      reasoning: z.string(),
+      summary: z.string(),
+      variants: z.array(z.record(z.unknown())),
+    }),
+  }),
+  z.object({
+    kind: z.literal('eeat-questions'),
+    data: z.object({
+      questions: z.array(
+        z.object({
+          question: z.string(),
+          hint: z.string().optional(),
+          optional: z.boolean().optional(),
+        }),
+      ),
+      askedAt: z.string(),
+    }),
+  }),
+  z.object({
+    kind: z.literal('clarification'),
+    data: z.object({ question: z.string() }),
+  }),
+]);
+
 export const TaskLogSchema = z.object({
   id: z.string().uuid(),
   taskId: z.string().uuid(),

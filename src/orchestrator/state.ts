@@ -1,6 +1,7 @@
 import type { BaseMessage } from '@langchain/core/messages';
 import { Annotation, type StateGraphArgs } from '@langchain/langgraph';
 import type { PendingToolCall, SpawnTaskRequest } from '../agents/types.js';
+import type { Artifact } from '../tasks/artifact.js';
 
 /**
  * GraphState — the shared state passed between Supervisor and Worker nodes.
@@ -47,6 +48,8 @@ export const GraphStateAnnotation = Annotation.Root({
   lastOutput: Annotation<{
     agentId: string;
     message: string;
+    /** Typed deliverable rendered by the UI's artifact panel. */
+    artifact?: Artifact;
     payload?: Record<string, unknown>;
     /** Children the agent wants spawned when this task is finalised. */
     spawnTasks?: SpawnTaskRequest[];

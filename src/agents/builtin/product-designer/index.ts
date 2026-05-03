@@ -244,32 +244,28 @@ export const productDesignerAgent: IAgent = {
         input: { content },
       }));
 
-      const imageBlock = imageUrls.map((url) => `![商品圖片](${url})`).join('\n');
-      const message = [
-        `# ${listing.title}`,
-        '',
-        `**Vendor:** ${listing.vendor}　**Tags:** ${listing.tags.join(', ')}`,
-        ...(variantSpec?.platform ? [`**Platform:** ${variantSpec.platform}`] : []),
-        '',
-        ...(imageBlock ? [imageBlock, ''] : []),
-        `_準備送審上架 → ${publishers.map((p) => p.name).join(', ')}_`,
-        '',
-        '---',
-        '',
-        '```html',
-        listing.bodyHtml,
-        '```',
-      ].join('\n');
-
       await ctx.emitLog('agent.content.ready', listing.progressNote, {
+        artifactKind: 'product-content',
         title: listing.title,
         imageCount: imageUrls.length,
         publisherCount: spawnTasks.length,
       });
 
       return {
-        message,
+        message: listing.progressNote,
         awaitingApproval: true,
+        artifact: {
+          kind: 'product-content',
+          data: {
+            title: listing.title,
+            bodyHtml: listing.bodyHtml,
+            tags: listing.tags,
+            vendor: listing.vendor,
+            ...(listing.productType ? { productType: listing.productType } : {}),
+            language: content.language,
+            imageUrls,
+          },
+        },
         payload: { content },
         spawnTasks,
       };

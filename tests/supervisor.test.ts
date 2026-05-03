@@ -126,7 +126,10 @@ describe('runSupervisor — clarification path persists through lastOutput', () 
     expect(result.lastOutput).toEqual({
       agentId: 'supervisor',
       message: 'Could you clarify the target language?',
-      payload: { kind: 'clarification' },
+      artifact: {
+        kind: 'clarification',
+        data: { question: 'Could you clarify the target language?' },
+      },
     });
     expect(result.messages).toHaveLength(1);
     const [msg] = result.messages ?? [];

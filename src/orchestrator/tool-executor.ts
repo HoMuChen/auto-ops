@@ -5,6 +5,11 @@ import { db } from '../db/client.js';
 import { type Task, tasks } from '../db/schema/index.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import type {
+  Artifact,
+  BlogPublishedMeta,
+  ProductPublishedMeta,
+} from '../tasks/artifact.js';
 import { readTaskOutput } from '../tasks/output.js';
 import { appendTaskLog, getTask, updateTaskStatus } from '../tasks/repository.js';
 
@@ -108,16 +113,21 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
   await emitLog('tool.completed', '處理好了 ✓', {
     toolId: pending.id,
     resultPreview:
-      typeof result === 'string' ? result.slice(0, 200) : 'structured (see task.output.toolResult)',
+      typeof result === 'string'
+        ? result.slice(0, 200)
+        : 'structured (see task.output.artifact.published)',
   });
 
-  // Inline UPDATE — updateTaskStatus's typed patch surface doesn't yet allow
-  // arbitrary output merges, and we want to add toolResult/toolExecutedAt
-  // without dropping the existing payload (listing, language, etc).
+  // Stamp `artifact.published` with the tool result so the UI's artifact
+  // panel shows "已發布到 Shopify" without reading agent-specific fields.
+  // The artifact.kind stays the same (blog-article / product-content) — the
+  // deliverable is still an article/product, now with a publication record.
+  const nextArtifact = stampPublishedOnArtifact(output.artifact, pending.id, result);
+
   const nextOutput = {
     ...output,
     pendingToolCall: undefined,
-    toolResult: result,
+    ...(nextArtifact ? { artifact: nextArtifact } : {}),
     toolExecutedAt: new Date().toISOString(),
   };
 
@@ -145,4 +155,19 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
   });
 
   return updated;
+}
+
+function stampPublishedOnArtifact(
+  current: Artifact | undefined,
+  toolId: string,
+  result: unknown,
+): Artifact | undefined {
+  if (!current) return undefined;
+  if (toolId === 'shopify.publish_article' && current.kind === 'blog-article') {
+    return { ...current, published: result as BlogPublishedMeta };
+  }
+  if (toolId === 'shopify.create_product' && current.kind === 'product-content') {
+    return { ...current, published: result as ProductPublishedMeta };
+  }
+  return current;
 }

@@ -72,8 +72,20 @@ export const shopifyPublisherAgent: IAgent = {
       };
 
       return {
-        message: renderProductPreview(content, cfg.shopify.autoPublish),
+        message: content.progressNote,
         awaitingApproval: true,
+        artifact: {
+          kind: 'product-content',
+          data: {
+            title: content.title,
+            bodyHtml: content.bodyHtml,
+            tags: content.tags,
+            vendor: content.vendor,
+            ...(content.productType ? { productType: content.productType } : {}),
+            language: content.language,
+            imageUrls: content.imageUrls,
+          },
+        },
         payload: { content },
         pendingToolCall,
       };
@@ -82,23 +94,3 @@ export const shopifyPublisherAgent: IAgent = {
     return { tools: filtered, invoke };
   },
 };
-
-function renderProductPreview(content: ProductContent, autoPublish: boolean): string {
-  const imageBlock = content.imageUrls.map((url) => `![商品圖片](${url})`).join('\n');
-  return [
-    `# ${content.title}`,
-    '',
-    `**Vendor:** ${content.vendor}${content.productType ? ` · **Type:** ${content.productType}` : ''}　**Tags:** ${content.tags.join(', ')}`,
-    '',
-    ...(imageBlock ? [imageBlock, ''] : []),
-    `按 Approve 後將以 \`${autoPublish ? 'active' : 'draft'}\` 狀態上架到 Shopify。`,
-    '',
-    '---',
-    '',
-    '```html',
-    content.bodyHtml,
-    '```',
-    '',
-    '_Approve to push to Shopify; Discard to abandon._',
-  ].join('\n');
-}

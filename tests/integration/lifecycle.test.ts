@@ -93,7 +93,10 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('waiting');
     expect(task.output).toMatchObject({
-      article: { title: 'Summer Dresses Buying Guide' },
+      artifact: {
+        kind: 'blog-article',
+        data: { title: 'Summer Dresses Buying Guide' },
+      },
       pendingToolCall: { id: 'shopify.publish_article' },
     });
     expect(task.lockedBy).toBeNull();
@@ -157,11 +160,14 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
     expect(task.output).toMatchObject({
-      toolResult: {
-        articleId: 555,
-        blogId: 100,
-        handle: 'summer-dresses-buying-guide',
-        status: 'draft',
+      artifact: {
+        kind: 'blog-article',
+        published: {
+          articleId: 555,
+          blogId: 100,
+          handle: 'summer-dresses-buying-guide',
+          status: 'draft',
+        },
       },
     });
     expect(task.completedAt).not.toBeNull();
@@ -240,7 +246,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     // user (brief), assistant (the rendered preview from the agent), user (feedback)
     const contents = messages.map((m: { role: string; content: string }) => m.content);
     expect(contents[0]).toBe('first brief');
-    expect(contents[1]).toContain('First draft'); // markdown preview includes the title
+    expect(contents[1]).toContain('草稿好了'); // assistant progressNote
     expect(contents[2]).toBe('Make the tone more playful');
   });
 });

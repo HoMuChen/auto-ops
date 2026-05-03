@@ -104,7 +104,10 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     expect(task.status).toBe('waiting');
     expect(task.assignedAgent).toBe('shopify-blog-writer');
     expect(task.output).toMatchObject({
-      article: { title: '夏日穿搭 5 個必備單品', language: 'zh-TW' },
+      artifact: {
+        kind: 'blog-article',
+        data: { title: '夏日穿搭 5 個必備單品', language: 'zh-TW' },
+      },
       pendingToolCall: {
         id: 'shopify.publish_article',
         args: expect.objectContaining({
@@ -182,13 +185,16 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
     expect(task.output).toMatchObject({
-      toolResult: {
-        articleId: 4242,
-        blogId: 200,
-        blogHandle: 'editorial',
-        handle: 'xia-ri-chuan-da-5-ge-bi-bei-dan-pin',
-        articleUrl: 'https://demo-shop.myshopify.com/admin/articles/4242',
-        status: 'draft',
+      artifact: {
+        kind: 'blog-article',
+        published: {
+          articleId: 4242,
+          blogId: 200,
+          blogHandle: 'editorial',
+          handle: 'xia-ri-chuan-da-5-ge-bi-bei-dan-pin',
+          articleUrl: 'https://demo-shop.myshopify.com/admin/articles/4242',
+          status: 'draft',
+        },
       },
       toolExecutedAt: expect.any(String),
     });
@@ -235,7 +241,10 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     expect(task.status).toBe('waiting');
     expect(task.output).not.toHaveProperty('pendingToolCall');
     expect(task.output).toMatchObject({
-      article: { title: 'Drafts only mode' },
+      artifact: {
+        kind: 'blog-article',
+        data: { title: 'Drafts only mode' },
+      },
       publishToShopify: false,
     });
 

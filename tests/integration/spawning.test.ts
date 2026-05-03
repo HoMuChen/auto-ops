@@ -111,7 +111,10 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(parent.kind).toBe('strategy');
     // The plan and the pending children specs should both be in output.
     expect(parent.output).toMatchObject({
-      plan: { topics: expect.any(Array) },
+      artifact: {
+        kind: 'seo-plan',
+        data: { topics: expect.any(Array) },
+      },
       spawnTasks: expect.arrayContaining([
         expect.objectContaining({ assignedAgent: 'shopify-blog-writer' }),
       ]),
@@ -186,7 +189,10 @@ describe('Strategy → Spawn → Execution flow', () => {
       const refreshed = await getTask(tenantId, child.id);
       expect(refreshed.status).toBe('waiting');
       expect(refreshed.output).toMatchObject({
-        article: { title: expect.stringContaining('Article') },
+        artifact: {
+          kind: 'blog-article',
+          data: { title: expect.stringContaining('Article') },
+        },
         pendingToolCall: { id: 'shopify.publish_article' },
       });
     }
@@ -227,7 +233,10 @@ describe('Strategy → Spawn → Execution flow', () => {
       const final = await getTask(tenantId, child.id);
       expect(final.status).toBe('done');
       expect(final.output).toMatchObject({
-        toolResult: { blogId: 100, status: 'draft' },
+        artifact: {
+          kind: 'blog-article',
+          published: { blogId: 100, status: 'draft' },
+        },
       });
     }
     expect(fetchMock).toHaveBeenCalledTimes(children.length * 2);

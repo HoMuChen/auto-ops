@@ -139,7 +139,6 @@ const ArticleSchema = z.object({
     ),
 });
 
-type ArticleDraft = z.infer<typeof ArticleSchema>;
 
 const EeatQuestionsSchema = z.object({
   questions: z
@@ -164,8 +163,6 @@ const EeatQuestionsSchema = z.object({
   progressNote: z.string().min(10).max(200),
 });
 
-type EeatQuestions = z.infer<typeof EeatQuestionsSchema>;
-type EeatQuestion = EeatQuestions['questions'][number];
 
 /**
  * Stage 1 fires when the task has research from the strategist (eeatHook present)
@@ -291,14 +288,20 @@ export const shopifyBlogWriterAgent: IAgent = {
           'eeat_questions',
           messages,
         );
+        const askedAt = new Date().toISOString();
         await ctx.emitLog('agent.questions.asked', q.progressNote, {
+          artifactKind: 'eeat-questions',
           count: q.questions.length,
         });
         return {
-          message: renderQuestionsMarkdown(q.questions, q.summary),
+          message: q.progressNote,
           awaitingApproval: true,
+          artifact: {
+            kind: 'eeat-questions',
+            data: { questions: q.questions, askedAt },
+          },
           payload: {
-            eeatPending: { questions: q.questions, askedAt: new Date().toISOString() },
+            eeatPending: { questions: q.questions, askedAt },
           },
         };
       }
@@ -328,9 +331,8 @@ export const shopifyBlogWriterAgent: IAgent = {
         }
       }
 
-      const preview = renderArticleMarkdown(article, cfg);
-
       await ctx.emitLog('agent.draft.ready', article.progressNote, {
+        artifactKind: 'blog-article',
         title: article.title,
         language: article.language,
         bodyLength: article.bodyHtml.length,
@@ -338,9 +340,20 @@ export const shopifyBlogWriterAgent: IAgent = {
       });
 
       const result: AgentOutput = {
-        message: preview,
+        message: article.progressNote,
         awaitingApproval: true,
-        payload: { article, language: article.language, publishToShopify: cfg.publishToShopify },
+        artifact: {
+          kind: 'blog-article',
+          data: {
+            title: article.title,
+            bodyHtml: article.bodyHtml,
+            summaryHtml: article.summaryHtml,
+            tags: article.tags,
+            language: article.language,
+            ...(article.author ? { author: article.author } : {}),
+          },
+        },
+        payload: { publishToShopify: cfg.publishToShopify },
       };
 
       if (cfg.publishToShopify) {
@@ -364,54 +377,3 @@ export const shopifyBlogWriterAgent: IAgent = {
     return { tools: filteredTools, invoke };
   },
 };
-
-function renderQuestionsMarkdown(questions: EeatQuestion[], summary?: string): string {
-  return [
-    '## EEAT Experience Questions',
-    '',
-    ...(summary
-      ? [summary, '']
-      : [
-          'Before I draft the article, could you share a bit about your first-hand experience? ' +
-            "This helps ground the content in real expertise that competitors can't easily replicate.",
-          '',
-        ]),
-    ...questions.map(
-      (q, i) =>
-        `**${i + 1}. ${q.question}**${q.optional ? ' _(optional)_' : ''}${
-          q.hint ? `\n   _${q.hint}_` : ''
-        }`,
-    ),
-    '',
-    "_Reply with your answers (skip optional ones if short on time). I'll draft the full article once you reply._",
-  ].join('\n');
-}
-
-function renderArticleMarkdown(article: ArticleDraft, cfg: SeoWriterConfig): string {
-  const publishLine = cfg.publishToShopify
-    ? `**On approve:** publish to Shopify blog \`${cfg.blogHandle ?? '(first blog)'}\` as ${
-        cfg.publishImmediately ? '`published`' : '`draft`'
-      }`
-    : '**On approve:** task closes as done; no publishing — copy the body below to use elsewhere.';
-
-  return [
-    `# ${article.title}`,
-    '',
-    article.summary,
-    '',
-    `**Language:** ${article.language} · **Tags:** ${article.tags.join(', ')}${
-      article.author ? ` · **Author:** ${article.author}` : ''
-    }`,
-    publishLine,
-    '',
-    `> ${article.summaryHtml}`,
-    '',
-    '---',
-    '',
-    '```html',
-    article.bodyHtml,
-    '```',
-    '',
-    '_Approve to proceed; Feedback to ask for revisions._',
-  ].join('\n');
-}

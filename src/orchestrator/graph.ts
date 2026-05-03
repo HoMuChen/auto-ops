@@ -112,6 +112,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
           agentId: manifest.id,
           message: result.message,
           payload: result.payload,
+          ...(result.artifact ? { artifact: result.artifact } : {}),
           ...(result.spawnTasks ? { spawnTasks: result.spawnTasks } : {}),
           ...(result.pendingToolCall ? { pendingToolCall: result.pendingToolCall } : {}),
         },

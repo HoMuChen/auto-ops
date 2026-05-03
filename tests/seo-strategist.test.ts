@@ -138,14 +138,16 @@ describe('seoStrategistAgent.build → invoke', () => {
     expect(result.spawnTasks).toHaveLength(1);
   });
 
-  it('keeps the plan in payload for UI rendering', async () => {
+  it('emits a typed seo-plan artifact for UI rendering', async () => {
     const runnable = await seoStrategistAgent.build(ctx);
     const result = await runnable.invoke({
       messages: [{ role: 'user', content: 'plan summer SEO' }],
       params: {},
     });
-    expect(result.payload).toHaveProperty('plan');
-    expect((result.payload as { plan: { topics: unknown[] } }).plan.topics).toHaveLength(2);
+    expect(result.artifact?.kind).toBe('seo-plan');
+    if (result.artifact?.kind === 'seo-plan') {
+      expect(result.artifact.data.topics).toHaveLength(2);
+    }
   });
 
   it('throws at build time if no peer worker agents are available', async () => {

@@ -276,30 +276,17 @@ export const seoStrategistAgent: IAgent = {
         ...(t.scheduledAt ? { scheduledAt: t.scheduledAt } : {}),
       }));
 
-      const summary = [
-        `# SEO Content Plan (${capped.length} articles)`,
-        '',
-        plan.summary,
-        '',
-        ...capped.map(
-          (t: ContentTopic, i: number) =>
-            `${i + 1}. **${t.title}** _(${t.language}, kw: ${t.primaryKeyword}${
-              t.scheduledAt ? `, scheduled: ${t.scheduledAt}` : ''
-            })_`,
-        ),
-        '',
-        '_Approve to spawn each article as an independent writer task._',
-      ].join('\n');
-
       await ctx.emitLog('agent.plan.ready', plan.progressNote, {
+        artifactKind: 'seo-plan',
         topicCount: capped.length,
       });
 
       return {
-        message: summary,
+        message: plan.progressNote,
         awaitingApproval: true,
-        payload: {
-          plan: { reasoning: plan.reasoning, topics: capped },
+        artifact: {
+          kind: 'seo-plan',
+          data: { reasoning: plan.reasoning, summary: plan.summary, topics: capped },
         },
         spawnTasks,
       };

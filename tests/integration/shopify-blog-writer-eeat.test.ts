@@ -147,7 +147,10 @@ describe('Shopify Blog Writer EEAT two-stage flow', () => {
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('waiting');
     expect(task.output).toMatchObject({
-      article: { title: expect.stringContaining('亞麻') },
+      artifact: {
+        kind: 'blog-article',
+        data: { title: expect.stringContaining('亞麻') },
+      },
       pendingToolCall: { id: 'shopify.publish_article' },
     });
 
@@ -179,7 +182,10 @@ describe('Shopify Blog Writer EEAT two-stage flow', () => {
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('done');
     expect(task.output).toMatchObject({
-      toolResult: { articleId: 5000, status: 'draft' },
+      artifact: {
+        kind: 'blog-article',
+        published: { articleId: 5000, status: 'draft' },
+      },
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
