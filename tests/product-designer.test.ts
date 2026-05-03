@@ -46,6 +46,17 @@ vi.mock('../src/integrations/openai-images/tools.js', () => ({
   ]),
 }));
 
+vi.mock('../src/config/env.js', () => ({
+  env: {
+    CLOUDFLARE_ACCOUNT_ID: 'test-account',
+    CLOUDFLARE_R2_ACCESS_KEY_ID: 'test-access-key',
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'test-secret-key',
+    CLOUDFLARE_R2_BUCKET: 'test-bucket',
+    CLOUDFLARE_R2_PUBLIC_BASE_URL: 'https://cdn.example.com',
+    OPENAI_API_KEY: 'test-openai-key',
+  },
+}));
+
 vi.mock('../src/integrations/cloudflare/images-client.js', () => ({
   CloudflareImagesClient: vi.fn(() => ({})),
 }));
