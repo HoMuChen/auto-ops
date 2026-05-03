@@ -92,8 +92,7 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
         agentId: 'supervisor',
         message: decision.clarification,
         artifact: {
-          kind: 'clarification',
-          data: { question: decision.clarification },
+          report: `## 我需要再確認一下\n\n${decision.clarification}\n\n請補充更多資訊我才能往下做。`,
         },
       },
     };
