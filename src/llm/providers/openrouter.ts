@@ -24,7 +24,7 @@ export function createOpenRouterModel(config: ModelConfig): BaseChatModel {
     apiKey: env.OPENROUTER_API_KEY,
     model: config.model,
     temperature: config.temperature ?? 0.3,
-    maxTokens: config.maxTokens ?? 4096,
+    maxTokens: config.maxTokens ?? 16384,
     configuration: {
       baseURL: 'https://openrouter.ai/api/v1',
       defaultHeaders: {
