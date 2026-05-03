@@ -25,6 +25,8 @@ import {
   ErrorEnvelope,
   FeedbackBody,
   PaginationQuery,
+  StreamCursorSchema,
+  TaskLogSchema,
   TaskSchema,
 } from '../schemas.js';
 
@@ -176,13 +178,24 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   /** Tenant-wide historical log query (non-SSE). Supports ?since=, ?until=, ?limit=. */
   app.get<{ Querystring: { since?: string; until?: string; limit?: string } }>(
     '/logs',
-    { preHandler: [requireTenant] },
+    {
+      preHandler: [requireTenant],
+      schema: {
+        tags: ['stream'],
+        querystring: z.object({
+          since: z.string().datetime().optional(),
+          until: z.string().datetime().optional(),
+          limit: z.coerce.number().int().min(1).max(1000).optional(),
+        }),
+        response: { 200: z.array(TaskLogSchema) },
+      },
+    },
     async (req) => {
       const { tenantId } = authedTenantOf(req);
-      const q = req.query as { since?: string; until?: string; limit?: string };
+      const q = req.query as { since?: string; until?: string; limit?: number };
       const since = q.since ? new Date(q.since) : undefined;
       const until = q.until ? new Date(q.until) : undefined;
-      const limit = q.limit ? Math.min(Number(q.limit), 1000) : 500;
+      const limit = q.limit ?? 500;
       const logs = await listTenantLogs(tenantId, { since, until, limit });
       return logs.map((row) => ({
         ...row,
@@ -194,7 +207,13 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   /** Get the current stream cursor (last-read position) for the authenticated user. */
   app.get(
     '/stream/cursor',
-    { preHandler: [requireTenant] },
+    {
+      preHandler: [requireTenant],
+      schema: {
+        tags: ['stream'],
+        response: { 200: StreamCursorSchema },
+      },
+    },
     async (req) => {
       const { tenantId, user } = authedTenantOf(req);
       const cursor = await getStreamCursor(user.id, tenantId);
@@ -207,7 +226,11 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     '/stream/cursor',
     {
       preHandler: [requireTenant],
-      schema: { body: z.object({ cursor: z.string().datetime() }) },
+      schema: {
+        tags: ['stream'],
+        body: z.object({ cursor: z.string().datetime() }),
+        response: { 204: z.undefined() },
+      },
     },
     async (req, reply) => {
       const { tenantId, user } = authedTenantOf(req);

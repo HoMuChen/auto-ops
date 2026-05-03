@@ -81,6 +81,21 @@ export const AgentManifestSchema = z.object({
   enabled: z.boolean(),
 });
 
+export const TaskLogSchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  level: z.string(),
+  event: z.string(),
+  speaker: z.string().nullable(),
+  message: z.string(),
+  data: z.record(z.unknown()).nullable(),
+});
+
+export const StreamCursorSchema = z.object({
+  cursor: z.string().datetime().nullable(),
+});
+
 export const ErrorEnvelope = z.object({
   error: z.object({
     code: z.string(),
