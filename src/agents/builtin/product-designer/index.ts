@@ -137,6 +137,7 @@ export const productDesignerAgent: IAgent = {
         );
       }
 
+      // TODO(task-7): planner no longer emits variantSpec; rewrite to read from input.params.brief markdown
       const variantSpec = input.params.variantSpec as {
         platform?: string;
         language: string;
@@ -166,6 +167,7 @@ export const productDesignerAgent: IAgent = {
         `Default vendor: ${cfg.defaultVendor ?? '(must infer from brief)'}`,
       ];
 
+      // TODO(task-7): planner no longer emits variantSpec; rewrite to read from input.params.brief markdown
       if (variantSpec?.imagePlan) {
         constraints.push(
           `Image plan:\n${variantSpec.imagePlan
@@ -173,6 +175,7 @@ export const productDesignerAgent: IAgent = {
             .join('\n')}`,
         );
       }
+      // TODO(task-7): planner no longer emits variantSpec; rewrite to read from input.params.brief markdown
       if (variantSpec?.copyBrief) {
         constraints.push(`Tone: ${variantSpec.copyBrief.tone}`);
         constraints.push(

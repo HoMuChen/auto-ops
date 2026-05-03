@@ -69,9 +69,10 @@ const DesignerVariantSchema = z.object({
         'Embed all the planning details as prose: marketing angle (who this is for, what pain it solves), ' +
         'key messages (3–5 bullets), copy brief (tone, features to highlight, forbidden claims), ' +
         'image plan (each shot: purpose, style hint, required/optional). ' +
-        "Use H3 (`###`) and H4 (`####`) sub-headings + bullet lists. The strategist's code wraps " +
+        "Use H3 (`###`) and H4 (`####`) sub-headings + bullet lists. The planner's code wraps " +
         "your brief inside `### {variant title}`, so do NOT start with H1 (`#`) or H2 (`##`); " +
-        'start with prose or a bullet list.',
+        'start with prose or a bullet list. You may use H3 (`###`) and H4 (`####`) inside the brief ' +
+        'for sub-sections — they nest correctly under the wrapping H3.',
     ),
   assignedAgent: z.literal('product-designer'),
   scheduledAt: z.string().datetime().optional(),
@@ -95,7 +96,6 @@ const PlanSchema = z.object({
     .describe('一句話對老闆回報整體規劃思路。用 zh-TW 第一人稱，對話對象是「老闆」。'),
   variants: z.array(DesignerVariantSchema).min(1),
 });
-
 
 const configSchema = z.object({
   maxVariants: z
@@ -204,7 +204,7 @@ export const productPlannerAgent: IAgent = {
 
       const spawnTasks: SpawnTaskRequest[] = capped.map((v) => ({
         title: v.title,
-        description: `Product content — ${v.title}`,
+        description: v.title,
         assignedAgent: 'product-designer',
         input: {
           brief: v.brief,
