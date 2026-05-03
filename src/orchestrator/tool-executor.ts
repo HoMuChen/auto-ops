@@ -6,9 +6,8 @@ import { type Task, tasks } from '../db/schema/index.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import type {
-  Artifact,
+  AnyArtifact,
   BlogPublishedMeta,
-  LegacyArtifact,
   ProductPublishedMeta,
 } from '../tasks/artifact.js';
 import { readTaskOutput } from '../tasks/output.js';
@@ -159,10 +158,10 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
 }
 
 function stampPublishedOnArtifact(
-  current: Artifact | LegacyArtifact | undefined,
+  current: AnyArtifact | undefined,
   toolId: string,
   result: unknown,
-): Artifact | LegacyArtifact | undefined {
+): AnyArtifact | undefined {
   if (!current) return undefined;
   // Only legacy artifacts carry a `kind` discriminant. New flat artifacts
   // route publish stamps through `refs` and are migrated per-agent — they

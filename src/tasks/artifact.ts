@@ -30,6 +30,11 @@ export interface Artifact {
   refs?: Record<string, unknown>;
 }
 
+/** Transitional union accepted on the wire while agents migrate from the
+ *  discriminated `LegacyArtifact` to the flat `Artifact`. Task 10 collapses
+ *  this alias back to `Artifact` and removes the legacy half. */
+export type AnyArtifact = Artifact | LegacyArtifact;
+
 // ----- LEGACY (will be removed in Task 10) -----
 
 export interface BlogArticleData {
