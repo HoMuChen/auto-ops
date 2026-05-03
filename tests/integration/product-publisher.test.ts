@@ -227,5 +227,15 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
       }),
       toolExecutedAt: expect.any(String),
     });
+
+    // Until Task 9 restores refs.published stamping, validate the publisher → Shopify
+    // HTTP binding directly via fetchMock — proves the title/body got out the door.
+    const publishCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('products.json'),
+    );
+    expect(publishCall).toBeDefined();
+    const publishBody = JSON.parse(publishCall![1].body);
+    expect(publishBody.product.title).toBe('Linen Oversized Shirt');
+    expect(publishBody.product.body_html).toContain('<h2>主特色</h2>');
   });
 });
