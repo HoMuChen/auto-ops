@@ -57,7 +57,8 @@ describe('Strategy → Spawn → Execution flow', () => {
       done: false,
     });
     scriptStructured({
-      reasoning: 'Three-pronged plan covering core summer keyword clusters.',
+      overview:
+        '## 觀察\n\n夏季 SEO 主要兩條主軸：本地穿搭實戰、永續材質採購。台灣濕熱氣候是市場切角。\n\n## 策略\n\n選兩篇打不重疊：zh-TW 在地穿搭 + en 永續 buyer guide。',
       progressNote: '規劃了 2 個切角，主軸是夏季關鍵字，老闆過目',
       topics: [
         {
@@ -65,29 +66,16 @@ describe('Strategy → Spawn → Execution flow', () => {
           primaryKeyword: '夏季穿搭',
           language: 'zh-TW',
           writerBrief:
-            '1500 字 long-form article on layered summer styling for humid Taiwan climate.',
+            '## 主題：夏季穿搭 5 個必備單品\n\n**搜尋意圖**: commercial\n\n### PAA\n- Is linen good for summer?\n\n### 競品缺口\n沒有台灣濕熱氣候的穿搭建議。\n\n### 目標\n1500 字 long-form article on layered summer styling for humid Taiwan climate.',
           assignedAgent: 'shopify-blog-writer',
-          searchIntent: 'commercial',
-          paaQuestions: ['Is linen good for summer?'],
-          relatedSearches: ['linen vs cotton'],
-          competitorTopAngles: ['fabric guides'],
-          competitorGaps: ['no Taiwan-specific humidity advice'],
-          targetWordCount: 1200,
-          eeatHook: '',
         },
         {
           title: 'Sustainable summer fabrics buyer guide',
           primaryKeyword: 'sustainable fabrics summer',
           language: 'en',
-          writerBrief: 'Buyer guide comparing linen, organic cotton and Tencel for summer apparel.',
+          writerBrief:
+            '## Topic: Sustainable summer fabrics buyer guide\n\n**Search intent**: informational\n\n### PAA\n- What is the most sustainable fabric?\n\n### Competitor gap\nNo first-hand washing data.\n\n### Target\nBuyer guide comparing linen, organic cotton and Tencel for summer apparel.',
           assignedAgent: 'shopify-blog-writer',
-          searchIntent: 'informational',
-          paaQuestions: ['What is the most sustainable fabric?'],
-          relatedSearches: ['eco-friendly fabrics'],
-          competitorTopAngles: ['comparison tables'],
-          competitorGaps: ['no first-hand washing data'],
-          targetWordCount: 1500,
-          eeatHook: '',
         },
       ],
     });
@@ -109,11 +97,10 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(parent.status).toBe('waiting');
     // Runner should auto-promote kind because the agent emitted spawnTasks.
     expect(parent.kind).toBe('strategy');
-    // The plan and the pending children specs should both be in output.
+    // The plan (markdown report) and the pending children specs should both be in output.
     expect(parent.output).toMatchObject({
       artifact: {
-        kind: 'seo-plan',
-        data: { topics: expect.any(Array) },
+        report: expect.any(String),
       },
       spawnTasks: expect.arrayContaining([
         expect.objectContaining({ assignedAgent: 'shopify-blog-writer' }),
@@ -148,10 +135,11 @@ describe('Strategy → Spawn → Execution flow', () => {
       expect(child.assignedAgent).toBe('shopify-blog-writer');
       expect(child.status).toBe('todo');
       expect(child.input).toHaveProperty('brief');
-      expect(child.input).toHaveProperty('research');
-      expect(
-        (child.input as { research?: { targetWordCount?: number } }).research?.targetWordCount,
-      ).toBeGreaterThan(0);
+      expect((child.input as { brief: string }).brief).toEqual(expect.any(String));
+      expect(child.input).toHaveProperty('refs');
+      const refs = (child.input as { refs: Record<string, unknown> }).refs;
+      expect(refs).toHaveProperty('primaryKeyword');
+      expect(refs).toHaveProperty('language');
     }
 
     // ── Phase 3: idempotent re-approve (network retry) ─────────────────────

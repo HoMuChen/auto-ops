@@ -28,7 +28,6 @@ worker agent should handle each topic.
 For every topic in the plan you MUST provide:
 - A focused angle (single intent, single primary keyword cluster).
 - The target language for that piece.
-- Enough brief in "writerBrief" that a writer can start without asking questions.
 - The "assignedAgent" id of the worker that should produce the article.
   Pick from the "Available worker agents" list below — each entry shows the
   agent's id and what it can do. If no listed agent fits a topic, drop the topic.
@@ -47,18 +46,18 @@ Constraints:
 Workflow:
 1. Identify 1–3 seed keyword clusters from the brief.
 2. Call serper_search for each seed (and for any sub-cluster you want to validate).
-3. Use the SERP results — top 10 titles, peopleAlsoAsk, relatedSearches — to:
-   - Decide each topic's searchIntent.
-   - Set paaQuestions = the most relevant 3–8 PAA items per topic.
-   - Set relatedSearches = adjacent long-tail queries to weave in.
-   - Set competitorTopAngles = patterns in the top 10 (e.g. "listicle of 7",
-     "comparison guide", "tutorial").
-   - Set competitorGaps = angles the top 10 ignore (the differentiation hook).
-   - Set targetWordCount = roughly the median word count visible in top 10
-     snippets (estimate; default 1200 if uncertain).
-   - Set eeatHook = a 1-sentence note for the writer on which experience
-     dimension matters most for this topic.
-4. Only after research, build the structured plan.
+3. Use the SERP results — top 10 titles, peopleAlsoAsk, relatedSearches — to write
+   each topic's writerBrief. The writerBrief is **Markdown** that includes:
+   - Search intent (informational / commercial / transactional / navigational)
+   - The most relevant 3–8 PAA questions to address
+   - Adjacent long-tail queries (relatedSearches) to weave in
+   - Competitor top angles (e.g. "listicle of 7", "comparison guide")
+   - Competitor gaps — the differentiation hook
+   - Target word count (estimate from top-10 medians; default ~1200 if uncertain)
+   - One concrete E-E-A-T hook the writer should lean into
+   Write the brief as prose with subheads — not as a JSON-shaped list. The writer
+   reads it as natural language context.
+4. Compose \`overview\` — your zh-TW Markdown report explaining the overall strategy.
 
 When ready, return the plan as the structured output requested. The plan will be
 shown to the user for approval before any child article task is created.`;
@@ -101,66 +100,41 @@ const TopicSchema = z.object({
   language: z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']),
   writerBrief: z
     .string()
-    .min(20)
-    .describe('Self-contained brief the writer agent receives as task.input.brief.'),
-  assignedAgent: z
-    .string()
+    .min(80)
     .describe(
-      'Id of the worker agent that should produce this article. Must be one of the ids ' +
-        'listed in "Available worker agents" in the system prompt.',
+      'Self-contained zh-TW/zh-CN/en/ja/ko **Markdown** brief the writer agent will read directly. ' +
+        'Embed all research findings as prose: search intent, top PAA questions, related searches to weave in, ' +
+        "competitor top angles, competitor gaps (the differentiation hook), target word count, " +
+        'and the most important E-E-A-T hook. Use ## / ### subheads + bullet lists. The writer ' +
+        'reads this as the canonical context — be specific, not generic.',
     ),
-  scheduledAt: z
-    .string()
-    .datetime()
-    .optional()
-    .describe('Optional ISO timestamp if the article should be scheduled.'),
-  searchIntent: z.enum(['informational', 'commercial', 'transactional', 'navigational']),
-  paaQuestions: z.array(z.string()).max(8),
-  relatedSearches: z.array(z.string()).max(10),
-  competitorTopAngles: z.array(z.string()).max(5),
-  competitorGaps: z.array(z.string()).max(5),
-  targetWordCount: z.number().int().min(400).max(4000),
-  eeatHook: z.string().min(20).max(300),
+  assignedAgent: z.string().describe('Id of the worker agent that should produce this article.'),
+  scheduledAt: z.string().datetime().optional().describe('Optional ISO timestamp.'),
 });
 
 const PlanSchema = z.object({
-  summary: z
+  overview: z
     .string()
-    .min(20)
-    .max(2000)
+    .min(100)
+    .max(4000)
     .describe(
-      '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
-        '說明：你做了什麼研究、為什麼選這些主題、競品缺口在哪、特別考量的地方。' +
-        '可用 ## / ### 子標題、**粗體**、- 條列、表格。' +
-        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複每篇 topic 細節（topics 陣列已有）。' +
-        '語氣像員工向老闆書面匯報。長度建議 200–800 字。',
+      '整體規劃匯報。**用 zh-TW 繁體中文 + Markdown**。要回答：你做了什麼研究、市場觀察、為什麼選這幾個主題、競品缺口、整體策略、特別考量。' +
+        '可用 ## / ### 子標題、**粗體**、- 條列、表格。300–1200 字。語氣像員工向老闆書面匯報。' +
+        '注意：每個 topic 自己的細節寫在 topic 的 writerBrief 裡，這裡只放整體大局。',
     ),
   progressNote: z
     .string()
     .min(10)
     .max(200)
     .describe(
-      '一句話對老闆回報你的整體規劃思路（不要重複每篇文章細節）。' +
-        '例：「規劃了 5 個切角，主軸是把夏季穿搭跟商品做關聯，我覺得第 2 篇是流量主力」。' +
-        '用 zh-TW 第一人稱，對話對象是「老闆」。' +
-        '這段會直接顯示在看板的進度時間軸上。',
+      '一句話對老闆回報你的整體規劃思路。zh-TW 第一人稱，對話對象是「老闆」。' +
+        '會顯示在看板進度時間軸。',
     ),
   topics: z.array(TopicSchema).min(1),
 });
 
 type ContentPlan = z.infer<typeof PlanSchema>;
 type ContentTopic = ContentPlan['topics'][number];
-
-export type TopicResearch = Pick<
-  ContentTopic,
-  | 'searchIntent'
-  | 'paaQuestions'
-  | 'relatedSearches'
-  | 'competitorTopAngles'
-  | 'competitorGaps'
-  | 'targetWordCount'
-  | 'eeatHook'
->;
 
 export const seoStrategistAgent: IAgent = {
   manifest: {
@@ -260,33 +234,27 @@ export const seoStrategistAgent: IAgent = {
         assignedAgent: t.assignedAgent,
         input: {
           brief: t.writerBrief,
-          primaryKeyword: t.primaryKeyword,
-          language: t.language,
-          research: {
-            searchIntent: t.searchIntent,
-            paaQuestions: t.paaQuestions,
-            relatedSearches: t.relatedSearches,
-            competitorTopAngles: t.competitorTopAngles,
-            competitorGaps: t.competitorGaps,
-            targetWordCount: t.targetWordCount,
-            eeatHook: t.eeatHook,
-          } satisfies TopicResearch,
+          refs: {
+            primaryKeyword: t.primaryKeyword,
+            language: t.language,
+          },
         },
         ...(t.scheduledAt ? { scheduledAt: t.scheduledAt } : {}),
       }));
 
       await ctx.emitLog('agent.plan.ready', plan.progressNote, {
-        artifactKind: 'seo-plan',
         topicCount: capped.length,
       });
+
+      const report = [
+        plan.overview,
+        ...capped.map((t) => `### ${t.title}\n\n${t.writerBrief}`),
+      ].join('\n\n');
 
       return {
         message: plan.progressNote,
         awaitingApproval: true,
-        artifact: {
-          kind: 'seo-plan',
-          data: { summary: plan.summary, topics: capped },
-        },
+        artifact: { report },
         spawnTasks,
       };
     };

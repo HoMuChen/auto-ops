@@ -18,7 +18,22 @@ import type {
   IAgent,
   PendingToolCall,
 } from '../../types.js';
-import type { TopicResearch } from '../seo-strategist/index.js';
+/**
+ * Local type for the legacy `params.research` block — the seo-strategist used
+ * to forward this verbatim. After the markdown-first refactor (Task 4), the
+ * strategist no longer emits this shape; this type stays as a transitional
+ * decoder for any in-flight tasks until Task 6 rewrites the writer to read
+ * `input.brief` (markdown) directly.
+ */
+type TopicResearch = {
+  searchIntent: 'informational' | 'commercial' | 'transactional' | 'navigational';
+  paaQuestions: string[];
+  relatedSearches: string[];
+  competitorTopAngles: string[];
+  competitorGaps: string[];
+  targetWordCount: number;
+  eeatHook: string;
+};
 
 const DEFAULT_PROMPT = `You are an Shopify Blog Writer AI employee for an e-commerce business.
 Your job: produce ONE polished, multilingual blog article from a single brief

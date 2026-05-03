@@ -9,37 +9,72 @@ import { describe, expect, it, vi } from 'vitest';
  */
 
 const planFixture = {
-  reasoning: 'Three pillars covering top-of-funnel awareness for the summer campaign.',
+  overview: `## 市場觀察
+
+兩條主軸：夏季穿搭跟永續材質。台灣夏天又濕又熱，多數競品的內容都從歐美視角寫，缺乏在地實戰經驗。
+
+## 我的策略
+
+挑兩篇主打：一篇 zh-TW 切「在地穿搭實戰」，一篇英文 buyer guide 切「永續材質採購標準」，互不重疊。`,
   progressNote: '規劃了 2 個主軸，圍繞夏季 + 永續，老闆過目',
   topics: [
     {
       title: '夏季穿搭 5 個必備單品',
       primaryKeyword: '夏季穿搭',
       language: 'zh-TW' as const,
-      writerBrief: 'Long-form 1500 字文章, focus on layered styling for Taiwan humid summers.',
+      writerBrief: `## 主題：夏季穿搭 5 個必備單品
+
+**搜尋意圖**：commercial（讀者準備買，需要選品建議）
+
+### PAA 必答
+- Is linen good for summer?
+- How to care for linen?
+
+### 相關長尾
+- linen vs cotton
+- best linen shirts 2026
+
+### 競品切角
+listicle 7 件 / fabric 比較 / wash care guide
+
+### 競品缺口（我們的切點）
+沒有人從台灣濕熱氣候給穿搭建議。
+
+### 目標
+1500 字，layered styling for Taiwan humid summers。
+
+### E-E-A-T 切入
+老闆親身在台灣夏天試穿、洗滌的經驗，必入文。`,
       assignedAgent: 'shopify-blog-writer',
-      searchIntent: 'commercial' as const,
-      paaQuestions: ['Is linen good for summer?', 'How to care for linen?'],
-      relatedSearches: ['linen vs cotton', 'best linen shirts 2026'],
-      competitorTopAngles: ['fabric guides', 'comparison listicles'],
-      competitorGaps: ['no Taiwan-specific humidity advice'],
-      targetWordCount: 1200,
-      eeatHook: 'Boss should share own washing/wearing experience in tropical humidity',
     },
     {
       title: 'Sustainable summer fabrics buyer guide',
       primaryKeyword: 'sustainable fabrics summer',
       language: 'en' as const,
-      writerBrief: 'Buyer guide comparing linen, organic cotton, and Tencel for summer apparel.',
+      writerBrief: `## Topic: Sustainable summer fabrics buyer guide
+
+**Search intent**: informational
+
+### Must answer (PAA)
+- What is the most sustainable fabric?
+
+### Related queries
+- eco-friendly fabrics
+- sustainable summer clothing
+
+### Competitor angles
+comparison tables / sustainability scores
+
+### Competitor gap (our hook)
+No first-hand washing-durability evidence.
+
+### Target
+~1500 words. Compare linen, organic cotton, Tencel.
+
+### E-E-A-T hook
+Boss should mention sourcing relationships and certifications.`,
       assignedAgent: 'shopify-blog-writer',
       scheduledAt: '2026-06-01T09:00:00.000Z',
-      searchIntent: 'informational' as const,
-      paaQuestions: ['What is the most sustainable fabric?'],
-      relatedSearches: ['eco-friendly fabrics', 'sustainable summer clothing'],
-      competitorTopAngles: ['comparison tables', 'sustainability scores'],
-      competitorGaps: ['no first-hand washing durability data'],
-      targetWordCount: 1500,
-      eeatHook: 'Boss should mention their sourcing relationships and certifications',
     },
   ],
 };
@@ -92,24 +127,26 @@ describe('seoStrategistAgent.build → invoke', () => {
     for (const spawn of result.spawnTasks ?? []) {
       expect(spawn.assignedAgent).toBe('shopify-blog-writer');
       expect(spawn.input).toHaveProperty('brief');
-      expect(spawn.input).toHaveProperty('primaryKeyword');
-      expect(spawn.input).toHaveProperty('language');
-      expect(spawn.input).toHaveProperty('research');
+      expect(spawn.input).toHaveProperty('refs');
+      expect((spawn.input as { refs: Record<string, unknown> }).refs).toHaveProperty(
+        'primaryKeyword',
+      );
+      expect((spawn.input as { refs: Record<string, unknown> }).refs).toHaveProperty('language');
     }
   });
 
-  it('forwards SERP research fields into spawn input', async () => {
+  it('passes minimal refs alongside the markdown brief', async () => {
     const runnable = await seoStrategistAgent.build(ctx);
     const result = await runnable.invoke({
       messages: [{ role: 'user', content: 'plan summer SEO' }],
       params: {},
     });
     const first = result.spawnTasks?.[0];
-    const research = (first?.input as { research?: Record<string, unknown> }).research;
-    expect(research).toBeDefined();
-    expect(research?.searchIntent).toBe('commercial');
-    expect(research?.paaQuestions).toHaveLength(2);
-    expect(research?.targetWordCount).toBe(1200);
+    const refs = (first?.input as { refs?: Record<string, unknown> }).refs;
+    expect(refs).toEqual({
+      primaryKeyword: '夏季穿搭',
+      language: 'zh-TW',
+    });
   });
 
   it('forwards optional scheduledAt verbatim into the spawn spec', async () => {
@@ -138,16 +175,21 @@ describe('seoStrategistAgent.build → invoke', () => {
     expect(result.spawnTasks).toHaveLength(1);
   });
 
-  it('emits a typed seo-plan artifact for UI rendering', async () => {
+  it('emits an Artifact{report} with the overview and per-topic sections', async () => {
     const runnable = await seoStrategistAgent.build(ctx);
     const result = await runnable.invoke({
       messages: [{ role: 'user', content: 'plan summer SEO' }],
       params: {},
     });
     const artifact = result.artifact;
-    expect(artifact && 'kind' in artifact ? artifact.kind : undefined).toBe('seo-plan');
-    if (artifact && 'kind' in artifact && artifact.kind === 'seo-plan') {
-      expect(artifact.data.topics).toHaveLength(2);
+    expect(artifact).toBeDefined();
+    expect(artifact).toHaveProperty('report');
+    expect(artifact).not.toHaveProperty('kind');
+    expect(artifact).not.toHaveProperty('data');
+    if (artifact && 'report' in artifact) {
+      expect(artifact.report).toContain('## 市場觀察');
+      expect(artifact.report).toContain('### 夏季穿搭 5 個必備單品');
+      expect(artifact.report).toContain('### Sustainable summer fabrics buyer guide');
     }
   });
 
@@ -162,22 +204,17 @@ describe('seoStrategistAgent.build → invoke', () => {
 
   it('throws at invoke time if the LLM hallucinates an unknown assignedAgent', async () => {
     planPassInvokeMock.mockResolvedValueOnce({
-      reasoning: 'plan with bad assignee',
+      overview:
+        '## 觀察\n\n為了測試錯誤處理，這份規劃故意指派一個不存在的 worker，預期框架會擋下並丟錯。',
       progressNote: '計畫好了但 worker 名稱可能有誤',
       topics: [
         {
           title: 'whatever',
           primaryKeyword: 'kw',
           language: 'zh-TW',
-          writerBrief: 'something long enough to satisfy the schema minimum length.',
+          writerBrief:
+            '## Topic\n\nSomething long enough to satisfy the schema minimum length so the test reaches the worker-id validation step.',
           assignedAgent: 'nonexistent-writer',
-          searchIntent: 'commercial',
-          paaQuestions: [],
-          relatedSearches: [],
-          competitorTopAngles: [],
-          competitorGaps: [],
-          targetWordCount: 800,
-          eeatHook: 'Boss should share their direct product experience clearly.',
         },
       ],
     });

@@ -1,13 +1,18 @@
 /**
- * End-to-end integration test: full Strategist → Writer EEAT Q&A → draft → approve flow.
+ * End-to-end integration test: Strategist → Writer draft → approve flow.
+ *
+ * After the markdown-first refactor (Task 4), the strategist passes a markdown
+ * brief to the child via `input.brief` + `input.refs.{primaryKeyword,language}`.
+ * It no longer emits a structured `research` block — so the writer's Stage 1
+ * (EEAT Q&A) does not fire from this strategist-spawned path. EEAT coverage
+ * lives in `shopify-blog-writer-eeat.test.ts`, which exercises the writer in
+ * isolation with `params.research.eeatHook` injected directly.
  *
  * Flow:
  *   1. POST /v1/tasks (strategy brief) → drain → Strategist runs two-pass (bindTools + plan)
- *   2. approve(finalize=true) → 1 writer child spawned
- *   3. drain Writer → Stage 1 fires (research.eeatHook present) → task waiting with eeatPending
- *   4. POST /feedback with boss answers → task todo
- *   5. drain Writer → Stage 2 fires → task waiting with pendingToolCall
- *   6. approve(finalize=true) → shopify.publish_article fires → done
+ *   2. approve(finalize=true) → 1 writer child spawned with markdown brief + refs
+ *   3. drain Writer → Stage 2 fires (no EEAT path) → task waiting with pendingToolCall
+ *   4. approve(finalize=true) → shopify.publish_article fires → done
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -42,8 +47,8 @@ beforeEach(async () => {
   fetchMock.mockReset();
 });
 
-describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', () => {
-  it('full pipeline: research → questions → answers → article → publish', async () => {
+describe('SEO cluster: Strategist → Writer draft → approve', () => {
+  it('full pipeline: plan → spawn → article → publish', async () => {
     // ── Setup ────────────────────────────────────────────────────────────────
     const { tenantId, userId, email } = await seedTenantWithOwner({ plan: 'pro' });
     const jwt = await mintJwt({ userId, email });
@@ -98,22 +103,17 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     scriptStructured({ nextAgent: 'seo-strategist', clarification: null, done: false });
     // Strategist pass 2: structured plan (pass 1 = bindTools with no tool calls).
     scriptStructured({
-      reasoning: 'One focused linen article to validate the EEAT pipeline.',
+      overview:
+        '## 觀察\n\n聚焦亞麻襯衫單一主題，驗證 EEAT 流程。研究 SERP 後發現 PAA 主集中在保養與穿著體驗。\n\n## 策略\n\n切角放在台灣濕熱氣候下的真實穿著體驗，這是市場缺口。',
       progressNote: '規劃了 1 個主題，用來測試 EEAT 流程，老闆過目',
       topics: [
         {
           title: 'Linen shirts summer guide',
           primaryKeyword: 'linen shirt summer',
           language: 'en',
-          writerBrief: 'Comprehensive guide on linen shirts for humid summer climates.',
+          writerBrief:
+            '## Topic: Linen shirts summer guide\n\n**Search intent**: commercial\n\n### PAA\n- Is linen good for summer?\n- How to care for linen?\n\n### Related queries\n- linen vs cotton summer\n- best linen shirts 2026\n\n### Competitor gap\nNo Taiwan humidity specifics.\n\n### Target\n~1200 words. Comprehensive guide on linen shirts for humid summer climates.\n\n### E-E-A-T hook\nBoss should share washing experience and wearability in humid heat.',
           assignedAgent: 'shopify-blog-writer',
-          searchIntent: 'commercial',
-          paaQuestions: ['Is linen good for summer?', 'How to care for linen?'],
-          relatedSearches: ['linen vs cotton summer', 'best linen shirts 2026'],
-          competitorTopAngles: ['fabric comparison', 'care guides'],
-          competitorGaps: ['no Taiwan humidity specifics'],
-          targetWordCount: 1200,
-          eeatHook: 'Boss should share washing experience and wearability in humid heat.',
         },
       ],
     });
@@ -135,12 +135,7 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     expect(parent.kind).toBe('strategy');
     expect(parent.output).toMatchObject({
       artifact: {
-        kind: 'seo-plan',
-        data: {
-          topics: expect.arrayContaining([
-            expect.objectContaining({ primaryKeyword: 'linen shirt summer' }),
-          ]),
-        },
+        report: expect.stringContaining('Linen shirts summer guide'),
       },
     });
 
@@ -159,73 +154,31 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     if (!firstChild) throw new Error('Expected at least one child task');
     const childId = firstChild.id;
 
-    // Child carries full research block including eeatHook
+    // Child carries the markdown brief + minimal refs (post-Task-4 contract)
     expect(firstChild.input).toMatchObject({
-      research: {
-        searchIntent: 'commercial',
-        eeatHook: expect.stringContaining('washing'),
-        targetWordCount: 1200,
+      brief: expect.stringContaining('Linen shirts summer guide'),
+      refs: {
+        primaryKeyword: 'linen shirt summer',
+        language: 'en',
       },
     });
+    expect((firstChild.input as { brief: string }).brief).toContain('PAA');
 
-    // ── Phase 3: Writer Stage 1 — EEAT questions ──────────────────────────────
+    // ── Phase 3: Writer Stage 2 — draft article (no EEAT path from strategist) ─
     scriptStructured({
-      questions: [
-        {
-          question: 'How many times have you washed the linen shirt before pilling started?',
-          hint: 'Specific numbers build trust.',
-          optional: false,
-        },
-        {
-          question: "How did it feel in Taiwan's 35°C humid summer?",
-          optional: true,
-        },
-      ],
-      progressNote: '有兩個 EEAT 問題想請老闆先回答，這樣文章說服力更強',
-    });
-
-    const writerDrain1 = await drainNextTask();
-    expect(writerDrain1.taskId).toBe(childId);
-
-    let child = await getTask(tenantId, childId);
-    expect(child.status).toBe('waiting');
-    expect(child.output).toMatchObject({
-      eeatPending: {
-        questions: expect.arrayContaining([
-          expect.objectContaining({ question: expect.any(String) }),
-        ]),
-        askedAt: expect.any(String),
-      },
-    });
-    expect(child.output).not.toHaveProperty('pendingToolCall');
-
-    // ── Phase 4: Boss answers EEAT questions ──────────────────────────────────
-    const feedback = await app.inject({
-      method: 'POST',
-      url: `/v1/tasks/${childId}/feedback`,
-      headers: authHeaders(jwt, tenantId),
-      payload: { feedback: '洗了 10 次完全沒起球。台北 35 度穿，涼到不像麻，比想像中舒服。' },
-    });
-    expect(feedback.statusCode).toBe(200);
-
-    child = await getTask(tenantId, childId);
-    expect(child.status).toBe('todo');
-
-    // ── Phase 5: Writer Stage 2 — draft article ───────────────────────────────
-    scriptStructured({
-      title: 'Linen Shirts: The Ultimate Summer Guide (Tested in Taiwan Heat)',
+      title: 'Linen Shirts: The Ultimate Summer Guide',
       bodyHtml:
-        '<h2>Why Linen?</h2><p>After 10 washes with zero pilling, and wearing it in 35°C Taipei humidity — yes, linen delivers.</p>',
+        '<h2>Why Linen?</h2><p>Lightweight, breathable, and a perfect match for humid summers.</p>',
       summaryHtml: 'A first-hand guide to linen shirts for humid summer climates.',
       tags: ['linen', 'summer', 'fabric guide'],
       language: 'en',
-      progressNote: '草稿好了，開頭放了老闆親身體驗的數字，相信讀者會買單',
+      progressNote: '草稿好了，老闆過目',
     });
 
-    const writerDrain2 = await drainNextTask();
-    expect(writerDrain2.taskId).toBe(childId);
+    const writerDrain = await drainNextTask();
+    expect(writerDrain.taskId).toBe(childId);
 
-    child = await getTask(tenantId, childId);
+    let child = await getTask(tenantId, childId);
     expect(child.status).toBe('waiting');
     expect(child.output).toMatchObject({
       artifact: {
@@ -236,7 +189,7 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
     });
     expect(child.output).not.toHaveProperty('eeatPending');
 
-    // ── Phase 6: approve → publish_article fires ──────────────────────────────
+    // ── Phase 4: approve → publish_article fires ──────────────────────────────
     const approve = await app.inject({
       method: 'POST',
       url: `/v1/tasks/${childId}/approve`,
@@ -254,21 +207,5 @@ describe('SEO cluster: Strategist → Writer EEAT Q&A → draft → approve', ()
       },
       toolExecutedAt: expect.any(String),
     });
-
-    // Verify message thread: brief → EEAT questions (assistant) → boss answers → draft → done
-    const messages = (await app
-      .inject({
-        method: 'GET',
-        url: `/v1/tasks/${childId}/messages`,
-        headers: authHeaders(jwt, tenantId),
-      })
-      .then((r) => r.json())) as { role: string; content: string }[];
-
-    const roles = messages.map((m) => m.role);
-    expect(roles).toEqual(expect.arrayContaining(['user', 'assistant', 'user', 'assistant']));
-    expect(messages.some((m) => m.content.includes('EEAT'))).toBe(true);
-    expect(messages.some((m) => m.content.includes('10 次'))).toBe(true);
-    // Article title check moved to the artifact assertion above (line ~233);
-    // messages now hold only short progressNotes, not the article preview.
   });
 });
