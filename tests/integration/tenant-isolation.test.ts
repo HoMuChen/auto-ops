@@ -2,7 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
+import {
+  clearScript,
+  llmMockModule,
+  scriptStructured,
+  scriptToolCall,
+} from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
@@ -34,12 +39,14 @@ describe('Multi-tenant isolation', () => {
 
     // Tenant A creates a task and lets it advance to waiting.
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
-    scriptStructured({
+    scriptToolCall('submit_article', {
       title: 'A-only secret content',
-      bodyHtml: '<p>Confidential body for tenant A only.</p>',
+      body: '## Confidential\n\nConfidential body for tenant A only. Long enough to satisfy schema body.min(50).',
       summaryHtml: 'Confidential summary for tenant A.',
       tags: ['confidential'],
       language: 'zh-TW',
+      report:
+        '## 切角\n\nConfidential draft for tenant A — used to verify isolation between tenants. Schema-valid stub for the integration test.',
       progressNote: 'Draft ready, awaiting review.',
     });
 

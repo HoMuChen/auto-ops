@@ -2,7 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
+import {
+  clearScript,
+  llmMockModule,
+  scriptStructured,
+  scriptToolCall,
+} from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
@@ -78,7 +83,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
 
     // Supervisor → routes to shopify-blog-writer; writer → produces structured article.
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
-    scriptStructured({
+    scriptToolCall('submit_article', {
       title: '夏日穿搭 5 個必備單品',
       body: '## 選對材質讓夏天更舒服\n\n今年夏天必備的 5 個單品讓妳在 35 度高溫也能保持優雅。\n\n- 機能麻襯衫\n- 寬版亞麻褲\n- 透氣涼鞋',
       summaryHtml: '5 個夏季必備單品挑選指南，含材質與搭配建議。',
@@ -86,7 +91,9 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
       language: 'zh-TW',
       author: 'Editorial Team',
       report:
-        '## 切角\n\n從「機能性」切入而不是純穿搭潮流，理由是讀者更在意涼感與抗皺。E-E-A-T 部分引用了店家的實穿經驗。',
+        '## 切角\n\n從「機能性」切入而不是純穿搭潮流，理由是讀者更在意涼感與抗皺。' +
+        'E-E-A-T 部分引用了店家的實穿經驗，特別是台灣濕熱通勤的真實感受。' +
+        '長度控制在 1500 字內，把實穿數據放在開頭做差異化。',
       progressNote: '草稿好了，這篇我從機能性切入而不是純穿搭，老闆看一下',
     });
 
@@ -232,7 +239,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     });
 
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
-    scriptStructured({
+    scriptToolCall('submit_article', {
       title: 'Drafts only mode',
       body: 'This article should never reach Shopify because publishing is disabled by config.',
       summaryHtml: 'A draft to be exported manually.',
@@ -302,7 +309,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     });
 
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
-    scriptStructured({
+    scriptToolCall('submit_article', {
       title: 'Will fail to publish',
       body: 'Long enough body to satisfy the schema minimum length — even after the markdown migration.',
       summaryHtml: 'A summary that will never be published.',
@@ -371,16 +378,20 @@ describe('Shopify Blog Writer — cover image generation in Stage 2', () => {
     });
 
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
-    scriptStructured({
+    scriptToolCall('submit_article', {
       title: '夏日穿搭指南',
-      body: '## 夏日風格\n\n輕鬆穿出夏日風格 — 機能、透氣、寬鬆是三大關鍵。內文示範 5 個搭配。',
-      summaryHtml: '夏日穿搭指南',
+      body:
+        '## 夏日風格\n\n輕鬆穿出夏日風格 — 機能、透氣、寬鬆是三大關鍵。' +
+        '內文示範 5 個搭配，從通勤、約會到週末出遊都涵蓋到。',
+      summaryHtml: '夏日穿搭完整指南，含 5 套實穿示範，從通勤到週末通通有。',
       tags: ['夏季', '穿搭'],
       language: 'zh-TW',
       author: 'Auto',
       report:
-        '## 切角\n\n從機能 + 涼感切入。封面圖會用 editorial 風格，與主視覺一致。E-E-A-T 部分引用了實穿經驗。',
-      progressNote: '草稿完成了',
+        '## 切角\n\n從機能 + 涼感切入。封面圖會用 editorial 風格，與主視覺一致。' +
+        'E-E-A-T 部分引用了實穿經驗，特別是台灣濕熱季節的真實穿著數據。' +
+        '長度控制在 1200 字內，避免冗長。',
+      progressNote: '草稿完成了，附上封面圖建議，老闆過目',
     });
 
     // fetchMock handles: 1) OpenAI image generation, 2) CF upload

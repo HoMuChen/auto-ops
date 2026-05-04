@@ -19,7 +19,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
+import {
+  clearScript,
+  llmMockModule,
+  scriptStructured,
+  scriptToolCall,
+} from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
@@ -102,10 +107,12 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
     // ── Phase 1: Strategist runs (supervisor + two-pass tool+plan) ────────────
     // Supervisor routes to seo-strategist (structured).
     scriptStructured({ nextAgent: 'seo-strategist', clarification: null, done: false });
-    // Strategist pass 2: structured plan (pass 1 = bindTools with no tool calls).
-    scriptStructured({
+    // Strategist now submits the plan via the submit_plan tool (single-pass).
+    scriptToolCall('submit_plan', {
       overview:
-        '## 觀察\n\n聚焦亞麻襯衫單一主題，驗證 EEAT 流程。研究 SERP 後發現 PAA 主集中在保養與穿著體驗。\n\n## 策略\n\n切角放在台灣濕熱氣候下的真實穿著體驗，這是市場缺口。',
+        '## 觀察\n\n聚焦亞麻襯衫單一主題，驗證 EEAT 流程。研究 SERP 後發現 PAA 主集中在保養' +
+        '與穿著體驗，related searches 圍繞「縮水」與「洗滌方式」。\n\n## 策略\n\n切角放在' +
+        '台灣濕熱氣候下的真實穿著體驗與第一手洗滌數據，這是市場缺口。',
       progressNote: '規劃了 1 個主題，用來測試 EEAT 流程，老闆過目',
       topics: [
         {
@@ -199,8 +206,8 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
     });
     expect(feedback.statusCode).toBe(200);
 
-    // ── Phase 5: Writer Stage 2 — draft article ─────────────────────────────
-    scriptStructured({
+    // ── Phase 5: Writer Stage 2 — draft article (single-pass via submit_article)
+    scriptToolCall('submit_article', {
       title: 'Linen Shirts: The Ultimate Summer Guide',
       body: '## Why Linen?\n\nLightweight, breathable, and a perfect match for humid summers. Washed it 12 times without pilling.',
       summaryHtml: 'A first-hand guide to linen shirts for humid summer climates.',
@@ -208,7 +215,7 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
       language: 'en',
       report:
         '## Decision\n\nOpening paragraph leads with the boss-provided 12-wash data point — strongest EEAT signal we have. Comparison table left out to keep length under 1200 words.',
-      progressNote: '草稿好了，老闆過目',
+      progressNote: '草稿好了，已用老闆親身穿著體驗開場，老闆過目',
     });
 
     const writerDrain = await drainNextTask();

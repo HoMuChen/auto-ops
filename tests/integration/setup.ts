@@ -10,6 +10,15 @@
 import 'dotenv/config';
 import postgres from 'postgres';
 
+// Integration tests don't hit Serper. Strip the key so any agent that
+// conditionally builds serper tools (seo-strategist, product-planner, blog-writer)
+// sees them as empty, which makes minToolHops fall to 0 and lets scripted
+// `submit_*` tool calls pass without a research-hop precondition.
+// `delete` (not `= undefined`) because process.env coerces values to strings,
+// and `'undefined'` would still be truthy in agent code.
+// biome-ignore lint/performance/noDelete: process.env requires actual deletion to absent the key.
+delete process.env.SERPER_API_KEY;
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error(

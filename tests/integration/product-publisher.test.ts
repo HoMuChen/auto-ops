@@ -12,7 +12,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
+import {
+  clearScript,
+  llmMockModule,
+  scriptStructured,
+  scriptToolCall,
+} from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
@@ -87,9 +92,9 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     // ── Phase 1: product-planner runs ────────────────────────────────────────
     // Supervisor routes to product-planner (structured).
     scriptStructured({ nextAgent: 'product-planner', clarification: null, done: false });
-    // Planner Pass 1 = bindTools (no serper key → empty tools, returns no tool_calls automatically)
-    // Planner Pass 2 = withStructuredOutput(PlanSchema)
-    scriptStructured({
+    // Planner is single-pass now: tool-loop with finalAnswer:PlanSchema, model
+    // submits via the submit_plan tool. No second structured-output round-trip.
+    scriptToolCall('submit_plan', {
       reasoning: 'One Shopify variant for zh-TW e-commerce.',
       overview: `## 市場觀察
 
@@ -153,9 +158,10 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     expect(plannerChildren[0]!.assignedAgent).toBe('product-designer');
 
     // ── Phase 3: product-designer runs ───────────────────────────────────────
-    // Designer Pass 1 = bindTools (no tool_calls scripted → loop exits immediately, no images generated)
-    // Designer Pass 2 = withStructuredOutput(ProductListingSchema)
-    scriptStructured({
+    // Designer is single-pass: tool-loop with finalAnswer:ProductListingSchema,
+    // model submits via submit_listing. No images scripted → no images_generate
+    // hop, model goes straight to submit.
+    scriptToolCall('submit_listing', {
       title: 'Linen Oversized Shirt',
       body: '## 主特色\n\n輕薄亞麻，台灣夏天通勤首選。\n\n- 不悶熱\n- 可機洗',
       tags: ['linen', 'summer', 'taiwan'],

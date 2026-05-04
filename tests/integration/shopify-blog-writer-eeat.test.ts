@@ -8,7 +8,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
+import {
+  clearScript,
+  llmMockModule,
+  scriptStructured,
+  scriptToolCall,
+} from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
@@ -137,15 +142,17 @@ describe('Shopify Blog Writer EEAT two-stage flow', () => {
     task = await getTask(tenantId, taskId);
     expect(task.status).toBe('todo');
 
-    // Script Stage 2 article (markdown body + report)
-    scriptStructured({
+    // Script Stage 2 article — Stage 2 now uses runToolLoop with submit_article.
+    scriptToolCall('submit_article', {
       title: '亞麻襯衫夏天穿著指南：親身體驗告訴你為什麼值得',
       body: '## 為什麼亞麻是夏天最好的材質\n\n洗了 10 次不起球，穿在台北 35 度感覺涼到不像麻。\n\n- 機能：透氣、抗皺\n- 保養：少水機洗\n- 搭配：白色為基底',
       summaryHtml: '完整亞麻襯衫選購與保養指南，附親身使用心得。',
       tags: ['亞麻', '夏季穿搭', '永續材質'],
       language: 'zh-TW',
       report:
-        '## 切角\n\n用老闆「洗 10 次不起球」這個具體數字當開頭，把 EEAT 寫在最前面。Boss 的實穿經驗是這篇與其他通泛文章的差異化。',
+        '## 切角\n\n用老闆「洗 10 次不起球」這個具體數字當開頭，把 EEAT 寫在最前面。' +
+        'Boss 的實穿經驗是這篇與其他通泛文章的差異化，能直接說服讀者。' +
+        '保養段落保持精簡避免冗長，整體控制在 1500 字內。',
       progressNote: '草稿好了，開頭我用了老闆親身體驗的數字，應該很有說服力',
     });
 

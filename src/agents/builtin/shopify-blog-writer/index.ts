@@ -6,11 +6,15 @@ import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-
 import { insertImage } from '../../../integrations/cloudflare/images-repository.js';
 import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
 import { buildImageTools } from '../../../integrations/openai-images/tools.js';
+import { SerpCache } from '../../../integrations/serper/cache.js';
+import { SerperClient } from '../../../integrations/serper/client.js';
+import { buildSerperTools } from '../../../integrations/serper/tools.js';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { invokeStructured } from '../../lib/invoke-structured.js';
 import { markdownToHtml } from '../../lib/markdown.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
+import { runToolLoop } from '../../lib/tool-loop.js';
 import type {
   AgentBuildContext,
   AgentInput,
@@ -35,6 +39,15 @@ Requirements:
 - Stay focused on the single topic — do NOT propose other articles.
 - progressNote is one short sentence for the kanban timeline. report is the
   full memo for the boss-review panel. Don't duplicate them.
+
+Research workflow (when serper_search is available):
+- If the brief already contains keyword research (PAA questions, related
+  searches, competitor angles, target word count) — typically when spawned
+  by an SEO Strategist — skip serper_search and call submit_article directly.
+- If the brief is a raw user request without research, call serper_search
+  1–3 times to learn the SERP landscape (top-10 titles, PAA, related searches)
+  before writing. Use findings to shape the article angle.
+- Submit the final article via the submit_article tool when ready.
 
 When the task is Stage 1 (EEAT questions), the agent prompt will explicitly ask you for questions; otherwise produce the article.`;
 
@@ -247,6 +260,18 @@ export const shopifyBlogWriterAgent: IAgent = {
     });
     const filteredTools = tools.filter((t) => t.id === 'shopify.publish_article');
 
+    // SERP research tools — used during Stage 2 article writing when the
+    // brief lacks keyword research (direct user path). Strategy-spawned
+    // children typically already have research baked into the writerBrief
+    // and the model will skip serper_search per the prompt instructions.
+    const serperKey = env.SERPER_API_KEY;
+    const serperTools = serperKey
+      ? buildSerperTools({
+          tenantId: ctx.tenantId,
+          cache: new SerpCache(new SerperClient({ apiKey: serperKey })),
+        })
+      : [];
+
     const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
     const packsBlock = await loadPacks(packsDir, cfg.skills);
     const systemPrompt = packsBlock ? `${packsBlock}\n\n${ctx.systemPrompt}` : ctx.systemPrompt;
@@ -322,12 +347,32 @@ ${questionList}
         constraints,
         input.imageResolver,
       );
-      const article = await invokeStructured(
-        ctx.modelConfig,
-        ArticleSchema,
-        'seo_blog_article',
+
+      // Single-pass tool loop. serper_search is optional research; when the
+      // brief is comprehensive (strategy-spawned), the model goes straight to
+      // submit_article. Direct-path tasks (no upstream research) trigger 1–3
+      // search calls before submission. minToolHops=0 lets the model decide.
+      const articleResult = await runToolLoop({
+        modelConfig: ctx.modelConfig,
         messages,
-      );
+        tools: serperTools,
+        maxHops: 8,
+        emitLog: ctx.emitLog,
+        finalAnswer: {
+          schema: ArticleSchema,
+          name: 'submit_article',
+          description:
+            'Call this exactly once when the article is ready. The args ARE the final blog article — title, body (Markdown), summaryHtml, tags, language, optional author, plus your boss-review report and progressNote.',
+          minToolHops: 0,
+        },
+      });
+
+      if (articleResult.kind !== 'submitted') {
+        throw new Error(
+          'Shopify Blog Writer did not submit an article within the tool loop budget — model emitted free-form content without calling submit_article.',
+        );
+      }
+      const article = articleResult.value;
 
       let coverImageUrl: string | undefined;
       if (cfg.generateCoverImage && imageTools.length > 0) {

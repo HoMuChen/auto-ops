@@ -2,7 +2,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, pendingScript, scriptStructured } from './helpers/llm-mock.js';
+import {
+  clearScript,
+  llmMockModule,
+  pendingScript,
+  scriptStructured,
+  scriptToolCall,
+} from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
@@ -47,18 +53,18 @@ describe('Strategy → Spawn → Execution flow', () => {
     });
 
     // ── Phase 1: parent strategy task ──────────────────────────────────────
-    // Supervisor picks the strategist (one structured call), then the
-    // strategist itself returns a structured content plan (second structured
-    // call). No text completion is needed because the agent uses
-    // withStructuredOutput end-to-end.
+    // Supervisor picks the strategist (structured), then the strategist
+    // submits its plan via the submit_plan tool (single-pass tool-loop).
     scriptStructured({
       nextAgent: 'seo-strategist',
       clarification: null,
       done: false,
     });
-    scriptStructured({
+    scriptToolCall('submit_plan', {
       overview:
-        '## 觀察\n\n夏季 SEO 主要兩條主軸：本地穿搭實戰、永續材質採購。台灣濕熱氣候是市場切角。\n\n## 策略\n\n選兩篇打不重疊：zh-TW 在地穿搭 + en 永續 buyer guide。',
+        '## 觀察\n\n夏季 SEO 主要兩條主軸：本地穿搭實戰、永續材質採購。台灣濕熱氣候是市場切角，' +
+        '競品多半從歐美觀點寫，缺少在地實穿與洗滌經驗。\n\n## 策略\n\n選兩篇打不重疊：' +
+        'zh-TW 在地穿搭主打台灣通勤痛點，en 永續 buyer guide 主打採購標準與第一手洗滌數據。',
       progressNote: '規劃了 2 個切角，主軸是夏季關鍵字，老闆過目',
       topics: [
         {
@@ -204,9 +210,9 @@ describe('Strategy → Spawn → Execution flow', () => {
       expect(fb.statusCode).toBe(200);
     }
 
-    // Script Stage 2 (article draft) for each child.
+    // Script Stage 2 (article draft) for each child — Stage 2 now submits via submit_article.
     for (let i = 0; i < children.length; i++) {
-      scriptStructured({
+      scriptToolCall('submit_article', {
         title: `Article ${i + 1} draft`,
         body: `## Section ${i + 1}\n\nBody ${i + 1} long enough to satisfy the schema minimum after the markdown migration.`,
         summaryHtml: `Summary ${i + 1} for the article excerpt and meta description.`,

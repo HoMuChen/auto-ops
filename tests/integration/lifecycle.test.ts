@@ -2,7 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
-import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
+import {
+  clearScript,
+  llmMockModule,
+  scriptStructured,
+  scriptToolCall,
+} from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 // Replace the real model registry BEFORE any module under test imports it.
@@ -47,7 +52,9 @@ function article(overrides: Partial<Record<string, unknown>> = {}): Record<strin
     summaryHtml: 'A short guide to summer dresses for hot, humid weather.',
     tags: ['summer', 'dresses', 'guide'],
     language: 'zh-TW',
-    report: '## 切角\n\n從輕薄涼感切入，避開純穿搭潮流。E-E-A-T 部分引用了店家親穿經驗。',
+    report:
+      '## 切角\n\n從輕薄涼感切入，避開純穿搭潮流。E-E-A-T 部分引用了店家親穿經驗，特別是台灣濕熱通勤的真實感受。' +
+      '長度控制在 1200 字以內，把實穿經驗放在開頭做差異化。',
     progressNote: '草稿好了，這篇我著重在輕薄涼感面料，老闆看一下開頭那段',
     ...overrides,
   };
@@ -73,7 +80,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     //   1. Supervisor routes to shopify-blog-writer.
     //   2. shopify-blog-writer returns a structured article via withStructuredOutput.
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
-    scriptStructured(article());
+    scriptToolCall('submit_article', article());
 
     // 1. Dispatch the brief.
     const create = await app.inject({
@@ -188,7 +195,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     await bindShopifyCredential(tenantId);
 
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
-    scriptStructured(article({ title: 'First draft' }));
+    scriptToolCall('submit_article', article({ title: 'First draft' }));
 
     const create = await app.inject({
       method: 'POST',
@@ -223,7 +230,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     await bindShopifyCredential(tenantId);
 
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
-    scriptStructured(article({ title: 'First draft' }));
+    scriptToolCall('submit_article', article({ title: 'First draft' }));
 
     const create = await app.inject({
       method: 'POST',
