@@ -127,8 +127,8 @@ export const productPlannerAgent: IAgent = {
     id: 'product-planner',
     name: '產品企劃師',
     description:
-      '規劃產品內容策略：透過 Serper 研究競品切角，' +
-      '產出多組內容變體（平台 × 語言 × 受眾），' +
+      '新商品上架的入口；規劃產品內容策略：' +
+      '透過 Serper 研究競品切角，產出多組內容變體（平台 × 語言 × 受眾），' +
       '並為每個變體派發一筆產品設計師任務。',
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.2 },
     defaultPrompt: DEFAULT_PROMPT,
