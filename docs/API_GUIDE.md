@@ -575,6 +575,7 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 |---|---|---|
 | `POST /v1/tasks` | 老闆已經想清楚了，brief 一句話講完就能跑 | 直接建 task → `todo` → worker 撿走 |
 | `POST /v1/intakes` | 老闆只有模糊念頭，需要先聊一下才知道要做什麼 | 跟 intake agent 對話到 readyToFinalize → `/finalize` 才建 task |
+| `POST /v1/tasks/:id/continue` | 從一個 done 任務接續下去做新事 | 後端把前任務的 `artifact.report` 當 context 串進新 brief → 建獨立新 task |
 
 兩個流程**不會混淆**：intake 對話是獨立實體（`task_intakes` 表），不會出現在看板上；只有 finalize 之後 spawn 的 task 才會。
 
@@ -804,6 +805,29 @@ HITL 修改要求。會 append 一條 user message 到對話 thread，task → t
 
 #### `POST /v1/tasks/:taskId/discard`
 直接 fail 任務。`output` 保留，`error.message='Discarded by user'`。
+
+#### `POST /v1/tasks/:taskId/continue`
+從一個 `done` task 接續開新任務 — 把前 task 的 `output.artifact.report` 當作 context 串到新 brief 前面，自動建一筆獨立的 todo task。
+典型用例：market-researcher 產出市場報告 → 老闆看完 → 點「接著規劃文章」→ 後端以新 brief + 前報告 spawn 一筆給 supervisor 路由（多半會落在 `seo-strategist`）。
+
+```json
+// 請求
+{
+  "brief": "用這份研究幫我規劃 3 篇 SEO 文章",
+  "preferredAgent": "seo-strategist",   // 可選；不填讓 supervisor 自己挑
+  "params": {},                          // 可選
+  "scheduledAt": null,                   // 可選；ISO datetime
+  "imageIds": []                         // 可選
+}
+```
+- 回 201 + 新 task 物件（status='todo'）。
+- 新 task 的 `parentTaskId` **不**會指回前 task（那欄是 spawn 子任務專用，混用會破壞 `listTasks({parentTaskId})` 的 spawn idempotency 語意）。
+- 血緣記在 `task.input.priorTaskId`，UI 想做「任務系譜」可以從這裡讀。
+- 約束：
+  - 前 task 必須是 `done`，否則 422。
+  - 前 task 必須有 `output.artifact.report`，否則 422（沒產出可接的東西）。
+
+第一則 user message 由後端合成（前報告 + 「請接著處理：<brief>」），所以 supervisor 路由時看得到完整脈絡，不需要前端再拼。
 
 ---
 

@@ -4,6 +4,7 @@ import { eventBus } from '../../events/event-bus.js';
 import { streamTaskLogs, streamTenantLogs } from '../../events/sse.js';
 import { IllegalStateError } from '../../lib/errors.js';
 import { executeApprovedToolCall } from '../../orchestrator/tool-executor.js';
+import { buildContinuation } from '../../tasks/continue.js';
 import { appendMessage, listMessages } from '../../tasks/messages.js';
 import { readTaskOutput } from '../../tasks/output.js';
 import {
@@ -21,6 +22,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { authedTenantOf, requireTenant, tenantOf } from '../middleware/tenant.js';
 import {
   ApproveBody,
+  ContinueTaskBody,
   CreateTaskBody,
   ErrorEnvelope,
   FeedbackBody,
@@ -96,6 +98,75 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
         taskId: task.id,
         role: 'user',
         content: body.brief,
+        ...(body.imageIds?.length ? { data: { imageIds: body.imageIds } } : {}),
+        createdBy: user.id,
+      });
+
+      reply.code(201);
+      return task;
+    },
+  );
+
+  /**
+   * Continue from a done task. Creates a NEW task (own thread, own HITL,
+   * own checkpoint) whose seed user message threads the prior task's
+   * artifact.report forward as context. The supervisor then routes the
+   * follow-up brief with that report visible in the conversation history,
+   * so e.g. a market-research deliverable can flow into a "now plan
+   * articles" follow-up without the user having to copy-paste.
+   *
+   * The new task's parentTaskId is NOT set — that column carries
+   * spawn-child semantics (strategy → execution children) and reusing it
+   * would muddle listTasks({parentTaskId}) for spawn idempotency. The
+   * lineage is recorded in input.params.priorTaskId for traceability.
+   */
+  app.post(
+    '/tasks/:taskId/continue',
+    {
+      schema: {
+        tags: ['tasks'],
+        params: z.object({ taskId: z.string().uuid() }),
+        body: ContinueTaskBody,
+        response: {
+          201: TaskSchema,
+          400: ErrorEnvelope,
+          404: ErrorEnvelope,
+          422: ErrorEnvelope,
+        },
+      },
+    },
+    async (req, reply) => {
+      const { tenantId, user } = authedTenantOf(req);
+      const { taskId } = req.params as { taskId: string };
+      const body = req.body as z.infer<typeof ContinueTaskBody>;
+
+      const prior = await getTask(tenantId, taskId);
+      const { synthesizedBrief } = buildContinuation(prior, body.brief);
+
+      const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : undefined;
+
+      const task = await createTask({
+        tenantId,
+        title: body.brief.slice(0, 120),
+        description: body.brief,
+        assignedAgent: body.preferredAgent,
+        input: { brief: body.brief, priorTaskId: prior.id, ...(body.params ?? {}) },
+        scheduledAt,
+        createdBy: user.id,
+      });
+
+      if (!scheduledAt || scheduledAt <= new Date()) {
+        eventBus.signal('task.ready');
+      }
+
+      // Seed the synthesized brief (prior report + follow-up) as the first
+      // user message — supervisor only reads human messages, so this is
+      // what actually drives routing.
+      await appendMessage({
+        tenantId,
+        taskId: task.id,
+        role: 'user',
+        content: synthesizedBrief,
         ...(body.imageIds?.length ? { data: { imageIds: body.imageIds } } : {}),
         createdBy: user.id,
       });

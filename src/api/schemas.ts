@@ -98,6 +98,15 @@ export const CreateTaskBody = z.object({
 });
 export type CreateTaskBody = z.infer<typeof CreateTaskBody>;
 
+export const ContinueTaskBody = z.object({
+  brief: z.string().min(1, 'brief is required'),
+  preferredAgent: z.string().optional(),
+  params: z.record(z.unknown()).optional(),
+  scheduledAt: z.string().datetime().optional(),
+  imageIds: z.array(z.string().uuid()).optional(),
+});
+export type ContinueTaskBody = z.infer<typeof ContinueTaskBody>;
+
 export const FeedbackBody = z.object({
   feedback: z.string().min(1),
 });
