@@ -58,7 +58,7 @@ const DesignerVariantSchema = z.object({
     .describe('Short label for the kanban card, e.g. "亞麻短袖 - 電商版 (zh-TW)"'),
   platform: z
     .string()
-    .optional()
+    .nullish()
     .describe('Target platform: "shopify", "instagram", "facebook", etc.'),
   language: z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']),
   brief: z
@@ -75,7 +75,8 @@ const DesignerVariantSchema = z.object({
         'for sub-sections — they nest correctly under the wrapping H3.',
     ),
   assignedAgent: z.literal('product-designer'),
-  scheduledAt: z.string().datetime().optional(),
+  // .nullish() not .optional() — see seo-strategist scheduledAt for the rationale.
+  scheduledAt: z.string().datetime().nullish(),
 });
 
 const PlanSchema = z.object({

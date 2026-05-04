@@ -122,7 +122,7 @@ const ArticleSchema = z.object({
   language: z
     .enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko'])
     .describe('The language the article is written in.'),
-  author: z.string().optional().describe('Author byline. Leave blank to use the agent default.'),
+  author: z.string().nullish().describe('Author byline. Leave blank to use the agent default.'),
   report: z
     .string()
     .min(80)
@@ -151,8 +151,8 @@ const EeatQuestionsSchema = z.object({
     .array(
       z.object({
         question: z.string().min(5).describe('Concrete experience question to the boss.'),
-        hint: z.string().optional().describe('Optional hint shown under the question.'),
-        optional: z.boolean().optional().describe('If true, boss may skip without blocking.'),
+        hint: z.string().nullish().describe('Optional hint shown under the question.'),
+        optional: z.boolean().nullish().describe('If true, boss may skip without blocking.'),
       }),
     )
     .min(1)

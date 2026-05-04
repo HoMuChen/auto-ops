@@ -64,7 +64,7 @@ const ProductListingSchema = z.object({
     ),
   tags: z.array(z.string().min(1)).min(1).max(20),
   vendor: z.string().min(1),
-  productType: z.string().optional(),
+  productType: z.string().nullish(),
   report: z
     .string()
     .min(80)
