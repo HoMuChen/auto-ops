@@ -45,8 +45,35 @@
 | Local dev | `http://127.0.0.1:8080` |
 | Swagger UI | `http://127.0.0.1:8080/docs` |
 | OpenAPI JSON | `http://127.0.0.1:8080/docs/json` |
+| Production API | `https://api.autoffice.app` |
+| Production Web App | `https://app.autoffice.app` |
 
 UI 開發時可以從 OpenAPI JSON 自動產 client（推薦 `openapi-typescript` 產 types，或 `openapi-fetch` 產 typed client）。
+
+### CORS
+
+Web app 與 API 跑在不同子網域（`app.autoffice.app` ↔ `api.autoffice.app`），
+瀏覽器視為跨域，所以 API 端用 `@fastify/cors` 配 allowlist：
+
+| Env | 行為 |
+|---|---|
+| `CORS_ALLOWED_ORIGINS` 留空 | reflect 任意 origin（local dev 方便） |
+| 設成 comma-separated list | 嚴格 exact-match allowlist |
+
+Production 設定範例：
+
+```
+CORS_ALLOWED_ORIGINS=https://app.autoffice.app,https://autoffice.app
+```
+
+允許的 headers 只有三個：`authorization`、`content-type`、`x-tenant-id` —
+都是 middleware 真的會讀的。其他自訂 header 會被 preflight 擋掉，要送先加進
+`src/server.ts` 的 `allowedHeaders`。
+
+**沒有用 cookie**，所以 `credentials` 沒開：UI 端 `fetch()` 不要帶
+`credentials: 'include'`，token 一律走 `Authorization: Bearer <jwt>`。preflight
+（`OPTIONS`）會被 browser 在「非 simple header」（含 `Authorization`、`x-tenant-id`）
+時自動觸發，server 端快取 10 分鐘（`maxAge: 600`）以省往返。
 
 ---
 
