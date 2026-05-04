@@ -85,6 +85,14 @@ const envSchema = z.object({
    * Optional; emails skip the link block when not set.
    */
   APP_BASE_URL: z.string().url().optional(),
+
+  /**
+   * Comma-separated list of origins permitted by CORS, e.g.
+   * "https://app.autoffice.app,https://autoffice.app". When unset the server
+   * reflects any origin — convenient for local dev, unsafe for production.
+   * Trailing slashes are stripped on parse; entries are matched exactly.
+   */
+  CORS_ALLOWED_ORIGINS: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -13,7 +13,18 @@ import {
 } from 'fastify-type-provider-zod';
 import { errorHandler } from './api/middleware/error.js';
 import { registerRoutes } from './api/routes/index.js';
+import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
+
+function parseCorsOrigins(): boolean | string[] {
+  const raw = env.CORS_ALLOWED_ORIGINS;
+  if (!raw) return true;
+  const list = raw
+    .split(',')
+    .map((s) => s.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+  return list.length > 0 ? list : true;
+}
 
 export async function createServer(): Promise<FastifyInstance> {
   const baseApp = Fastify({
@@ -31,7 +42,12 @@ export async function createServer(): Promise<FastifyInstance> {
   baseApp.setErrorHandler(errorHandler);
 
   await baseApp.register(helmet, { contentSecurityPolicy: false });
-  await baseApp.register(cors, { origin: true, credentials: true });
+  await baseApp.register(cors, {
+    origin: parseCorsOrigins(),
+    allowedHeaders: ['authorization', 'content-type', 'x-tenant-id'],
+    exposedHeaders: ['x-request-id'],
+    maxAge: 600,
+  });
   await baseApp.register(sensible);
   await baseApp.register(multipart);
 
