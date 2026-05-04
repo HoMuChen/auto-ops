@@ -1,15 +1,44 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
+*.tsbuildinfo
+
+# Stale generated configs (vitest sometimes leaves these next to its TS source)
 /vitest.config.js
 /vitest.config.d.ts
+
+# Environment files (real secrets — never commit)
 .env
+.env.prod
 .env.local
 .env.*.local
+
+# Logs
 *.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Editors / IDEs
 .vscode
 .idea
+*.swp
+*.swo
+*~
+
+# Test / tooling caches
 coverage
+.nyc_output
 .vitest-cache
 .turbo
+.cache
+.eslintcache
+
+# Git worktrees scratch area
 .worktrees
