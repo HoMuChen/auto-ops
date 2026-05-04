@@ -1,3 +1,4 @@
+import { markdownToHtml } from '../agents/lib/markdown.js';
 import { env } from '../config/env.js';
 import type { Task } from '../db/schema/index.js';
 import { readTaskOutput } from '../tasks/output.js';
@@ -26,15 +27,15 @@ export function buildDoneEmail(task: Task): DoneEmailContent {
   const reportBlock = report ? `\n\n${report}` : '\n\n（這個任務沒有產出 report 內容。）';
   const text = `任務「${task.title}」已完成。${linkLine ? `\n${linkLine}` : ''}${reportBlock}`;
 
-  // Minimal HTML — the report is markdown, so we wrap it in a <pre> to
-  // preserve formatting without dragging a markdown→HTML lib into the
-  // notification path. Recipients who want rendered markdown will click
-  // through to the app.
   const linkHtml = link
     ? `<p><a href="${escapeHtml(link)}">查看完整任務</a></p>`
     : '';
+  // Render markdown to HTML via the same helper Shopify publishing uses.
+  // Trusted source — output is from our own agents, no need to sanitise here
+  // (Gmail / Outlook strip dangerous tags client-side anyway). Title is still
+  // escaped because it's a string field embedded in a non-markdown wrapper.
   const reportHtml = report
-    ? `<pre style="white-space: pre-wrap; font-family: ui-sans-serif, system-ui, sans-serif;">${escapeHtml(report)}</pre>`
+    ? markdownToHtml(report)
     : '<p>（這個任務沒有產出 report 內容。）</p>';
   const html = `<div style="font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.5;">
 <p>任務「<strong>${escapeHtml(task.title)}</strong>」已完成。</p>

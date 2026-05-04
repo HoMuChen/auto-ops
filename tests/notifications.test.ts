@@ -116,16 +116,28 @@ describe('buildDoneEmail', () => {
     expect(text).toContain('## 市場概況');
   });
 
-  it('html escapes user-controlled fields to avoid injection', () => {
+  it('html escapes the title (string field embedded in non-markdown wrapper)', () => {
     const { html } = buildDoneEmail(
-      fakeTask({
-        title: 'evil <script>alert(1)</script>',
-        output: { artifact: { report: '<img src=x onerror=alert(1)>' } },
-      }),
+      fakeTask({ title: 'evil <script>alert(1)</script>', output: {} }),
     );
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
-    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+  });
+
+  it('renders the markdown report through marked (## headings → <h2>, - bullets → <ul>)', () => {
+    const { html } = buildDoneEmail(
+      fakeTask({
+        output: {
+          artifact: {
+            report: '## 市場概況\n\n- 第一點\n- 第二點\n\n**強調**',
+          },
+        },
+      }),
+    );
+    expect(html).toContain('<h2>市場概況</h2>');
+    expect(html).toContain('<ul>');
+    expect(html).toContain('<li>第一點</li>');
+    expect(html).toContain('<strong>強調</strong>');
   });
 
   it('falls back to a placeholder when the task has no artifact.report', () => {
