@@ -10,6 +10,8 @@ import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
+import { WebFetchClient } from '../../../integrations/web/client.js';
+import { buildWebFetchTools } from '../../../integrations/web/tools.js';
 import { invokeStructured } from '../../lib/invoke-structured.js';
 import { markdownToHtml } from '../../lib/markdown.js';
 import { buildAgentMessages } from '../../lib/messages.js';
@@ -40,13 +42,20 @@ Requirements:
 - progressNote is one short sentence for the kanban timeline. report is the
   full memo for the boss-review panel. Don't duplicate them.
 
-Research workflow (when serper_search is available):
+Research workflow:
 - If the brief already contains keyword research (PAA questions, related
   searches, competitor angles, target word count) — typically when spawned
-  by an SEO Strategist — skip serper_search and call submit_article directly.
-- If the brief is a raw user request without research, call serper_search
-  1–3 times to learn the SERP landscape (top-10 titles, PAA, related searches)
-  before writing. Use findings to shape the article angle.
+  by an SEO Strategist — skip research and call submit_article directly.
+- If the brief is a raw user request without research, do search-then-read:
+  1. Call serper_search 1–3 times to learn the SERP landscape (top-10 titles,
+     PAA, related searches).
+  2. Pick 2–3 of the most relevant organic URLs (NOT all 10) and call
+     web_fetch on each to read their full content. Look at structure, depth,
+     examples, and any data a 150-char snippet cannot give. This is what
+     lets the article actually compete — snippets are too thin to ground a
+     polished long-form post.
+  3. Skip web_fetch when the snippet alone is enough (e.g. a quick keyword
+     intent check). Every fetch costs latency and tokens, so be selective.
 - Submit the final article via the submit_article tool when ready.
 
 When the task is Stage 1 (EEAT questions), the agent prompt will explicitly ask you for questions; otherwise produce the article.`;
@@ -272,6 +281,11 @@ export const shopifyBlogWriterAgent: IAgent = {
         })
       : [];
 
+    // Read-side companion to serper: pick 2-3 organic URLs from a search
+    // result, fetch each for full body text, then ground the article on
+    // real competitor content. No credential gate — pure outbound HTTP.
+    const webFetchTools = buildWebFetchTools({ client: new WebFetchClient() });
+
     const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
     const packsBlock = await loadPacks(packsDir, cfg.skills);
     const systemPrompt = packsBlock ? `${packsBlock}\n\n${ctx.systemPrompt}` : ctx.systemPrompt;
@@ -348,15 +362,18 @@ ${questionList}
         input.imageResolver,
       );
 
-      // Single-pass tool loop. serper_search is optional research; when the
-      // brief is comprehensive (strategy-spawned), the model goes straight to
-      // submit_article. Direct-path tasks (no upstream research) trigger 1–3
-      // search calls before submission. minToolHops=0 lets the model decide.
+      // Single-pass tool loop. serper_search + web_fetch are optional
+      // research; when the brief is comprehensive (strategy-spawned), the
+      // model goes straight to submit_article. Direct-path tasks (no upstream
+      // research) follow search-then-read per the prompt: 1–3 search calls,
+      // then 2–3 web_fetch calls on the most relevant URLs, then submit.
+      // minToolHops=0 lets the model decide. maxHops bumped to 10 so the
+      // search + fetch budget doesn't crowd out submit_article.
       const articleResult = await runToolLoop({
         modelConfig: ctx.modelConfig,
         messages,
-        tools: serperTools,
-        maxHops: 8,
+        tools: [...serperTools, ...webFetchTools],
+        maxHops: 10,
         emitLog: ctx.emitLog,
         finalAnswer: {
           schema: ArticleSchema,

@@ -56,6 +56,19 @@ const DEFAULT_FORMATTERS: Record<string, Partial<ToolLogFormatter>> = {
       data: { url: (result as { url?: string }).url },
     }),
   },
+  web_fetch: {
+    calling: (args) => ({
+      message: `讀取網頁 ${(args as { url?: string }).url ?? ''}`,
+      data: { url: (args as { url?: string }).url },
+    }),
+    result: (_args, result) => {
+      const r = result as { title?: string; text?: string; truncated?: boolean };
+      return {
+        message: r.title ? `讀完「${r.title}」` : '網頁讀取完成',
+        data: { textLength: r.text?.length, truncated: r.truncated },
+      };
+    },
+  },
 };
 
 export interface ToolCall {
