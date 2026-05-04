@@ -183,3 +183,53 @@ describe('runSupervisor — runtime context injected into system message', () =>
     expect(systemMsg.content).toContain('You are the Supervisor');
   });
 });
+
+/**
+ * Orchestrator awareness: when an agent has produced lastOutput, the
+ * supervisor must surface that progress in its prompt so it can decide
+ * "done" or "next agent" — instead of re-dispatching the same agent based
+ * on the unchanged user brief.
+ */
+describe('runSupervisor — post-execution progress awareness', () => {
+  it('includes lastOutput in the prompt and finishes when the LLM says done', async () => {
+    listForTenantMock.mockReset();
+    buildModelMock.mockReset();
+    listForTenantMock.mockResolvedValueOnce([
+      { manifest: { id: 'market-researcher', description: 'fake' } },
+    ] as never);
+
+    let capturedMessages: { content: string }[] | null = null;
+    const invokeMock = vi.fn(async (msgs: { content: string }[]) => {
+      capturedMessages = msgs;
+      return { nextAgent: null, clarification: null, done: true };
+    });
+    buildModelMock.mockImplementation(
+      () =>
+        ({
+          withStructuredOutput: () => ({ invoke: invokeMock }),
+        }) as never,
+    );
+
+    const result = await runSupervisor({
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      taskId: '00000000-0000-0000-0000-000000000002',
+      messages: [],
+      params: { brief: '調查寵物用品市場' },
+      nextAgent: null,
+      pinnedAgent: null,
+      lastOutput: {
+        agentId: 'market-researcher',
+        message: '已產出市場研究報告，涵蓋競品分析與市場缺口。',
+      },
+      awaitingApproval: false,
+      currentTaskOutput: null,
+      taskImageIds: null,
+    });
+
+    expect(invokeMock).toHaveBeenCalledOnce();
+    const humanMsg = capturedMessages![1]!;
+    expect(humanMsg.content).toContain('Work done so far:');
+    expect(humanMsg.content).toContain('market-researcher: 已產出市場研究報告');
+    expect(result).toEqual({ nextAgent: null, awaitingApproval: false });
+  });
+});

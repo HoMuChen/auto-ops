@@ -7,7 +7,8 @@ import { buildRuntimeContext } from './runtime-context.js';
 import type { GraphState } from './state.js';
 
 const SUPERVISOR_PROMPT = `You are the Supervisor of a team of AI digital employees for an e-commerce business.
-Your job: read the user's brief, decide which employee to dispatch next, or ask for clarification if the brief is ambiguous.
+Your job: read the user's brief and any work already produced in this task, then decide
+which employee to dispatch next, finish the task, or ask for clarification.
 
 Routing rules:
 - Choose exactly one employee from the available list, by their id.
@@ -21,6 +22,16 @@ Routing rules:
   to null and write a clarifying question into "clarification".
 - If the work is complete and no further employee should be dispatched, set "nextAgent" to null and
   "done" to true.
+
+Post-execution rules (apply only when "Work done so far" is present):
+- The listed agent has already produced its output for this task. Do NOT re-dispatch the same
+  agent unless the user's brief explicitly asks for further iteration on its output.
+- Decide whether the user's brief is now satisfied:
+    * If yes, finish: set "nextAgent" to null and "done" to true.
+    * If another agent must run to complete the brief, pick that agent's id.
+    * If you genuinely need user input to choose, write a clarification.
+- Bias toward "done": only chain to another agent when the brief clearly requires it. Do not
+  invent extra steps the user did not ask for.
 
 Output strictly the JSON schema requested.`;
 
@@ -73,9 +84,16 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
       .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
       .join('\n\n') || JSON.stringify(state.params);
 
+  // When an agent has already produced output for this task, surface a short
+  // progress block so the supervisor can decide "done" / "next agent" instead
+  // of looping on the original brief and re-dispatching the same agent.
+  const progressBlock = state.lastOutput
+    ? `\n\nWork done so far:\n- ${state.lastOutput.agentId}: ${state.lastOutput.message}`
+    : '';
+
   const decision = await invokeStructured(SUPERVISOR_MODEL, RouteSchema, 'route_decision', [
     new SystemMessage(buildRuntimeContext() + SUPERVISOR_PROMPT),
-    new HumanMessage(`Available employees:\n${roster}\n\nUser brief:\n${userBrief}`),
+    new HumanMessage(`Available employees:\n${roster}\n\nUser brief:\n${userBrief}${progressBlock}`),
   ]);
 
   if (decision.clarification) {
