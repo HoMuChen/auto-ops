@@ -6,6 +6,7 @@ import {
 } from '@langchain/core/messages';
 import { tool } from '@langchain/core/tools';
 import type { ZodType } from 'zod';
+import { logger } from '../../lib/logger.js';
 import { buildModel } from '../../llm/model-registry.js';
 import type { ModelConfig } from '../../llm/types.js';
 import type { AgentTool } from '../types.js';
@@ -169,16 +170,15 @@ export async function runToolLoop<T = never>({
     const res = (await toolModel.invoke(collected)) as AIMessage;
     collected.push(res);
 
-    // Diagnostic: log per-hop content size and tool_calls so we can tell whether
-    // the model is writing the answer as content (instead of via the submit tool).
-    // Pipes through emitLog so the line appears in the dev terminal AND task_logs table.
+    // Diagnostic: pino-only (NOT emitLog — would pollute the kanban timeline).
+    // Lets us tell whether the model is writing the answer as content rather
+    // than via the submit tool. Visible in dev terminal at LOG_LEVEL=debug.
     const contentLen =
       typeof res.content === 'string' ? res.content.length : JSON.stringify(res.content).length;
     const toolNames = (res.tool_calls ?? []).map((c) => c.name);
-    await emitLog(
-      'toolloop.hop',
-      `hop ${hop}: ${toolNames.length} tool_calls, ${contentLen} content chars`,
+    logger.debug(
       {
+        component: 'tool-loop',
         hop,
         contentChars: contentLen,
         toolCalls: toolNames,
@@ -186,6 +186,7 @@ export async function runToolLoop<T = never>({
           ? { contentPreview: typeof res.content === 'string' ? res.content : '' }
           : {}),
       },
+      `hop ${hop}: ${toolNames.length} tool_calls, ${contentLen} content chars`,
     );
 
     if (!res.tool_calls?.length) {
@@ -193,6 +194,10 @@ export async function runToolLoop<T = never>({
       // If a final-answer tool is registered, nudge the model to use it
       // instead of accepting a free-form tail (the doubling pattern we want to avoid).
       if (finalAnswer && hop < maxHops - 1) {
+        logger.warn(
+          { component: 'tool-loop', hop, contentChars: contentLen },
+          `coercion: hop ${hop} had no tool_calls but ${contentLen} content chars — nudging model to call ${submitName}`,
+        );
         collected.push(
           new HumanMessage(
             `Please call the \`${submitName}\` tool now with your final structured answer.`,
@@ -210,6 +215,10 @@ export async function runToolLoop<T = never>({
 
       if (calls.length < minHops) {
         // Reject early submission: tell model to do more research, then continue.
+        logger.warn(
+          { component: 'tool-loop', hop, callsSoFar: calls.length, minHops },
+          `submit rejected: model called ${submitName} after only ${calls.length} research call(s), need ${minHops}`,
+        );
         collected.push(
           new ToolMessage({
             tool_call_id: submitCall.id ?? '',
@@ -222,6 +231,19 @@ export async function runToolLoop<T = never>({
       // Validate; if Zod rejects, surface as a tool error so the model can retry.
       const parsed = finalAnswer.schema.safeParse(argsObj);
       if (!parsed.success) {
+        const issuePreview = parsed.error.issues
+          .slice(0, 3)
+          .map((i) => `${i.path.join('.')}: ${i.message}`)
+          .join('; ');
+        logger.warn(
+          {
+            component: 'tool-loop',
+            hop,
+            issueCount: parsed.error.issues.length,
+            issues: parsed.error.issues.slice(0, 5),
+          },
+          `submit rejected (schema): ${issuePreview}`,
+        );
         collected.push(
           new ToolMessage({
             tool_call_id: submitCall.id ?? '',

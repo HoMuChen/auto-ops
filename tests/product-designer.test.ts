@@ -63,6 +63,8 @@ vi.mock('../src/integrations/openai-images/tools.js', () => ({
 
 vi.mock('../src/config/env.js', () => ({
   env: {
+    NODE_ENV: 'test',
+    LOG_LEVEL: 'error',
     CLOUDFLARE_ACCOUNT_ID: 'test-account',
     CLOUDFLARE_R2_ACCESS_KEY_ID: 'test-access-key',
     CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'test-secret-key',
