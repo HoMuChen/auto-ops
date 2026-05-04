@@ -65,6 +65,26 @@ const envSchema = z.object({
 
   /** Serper.dev SERP API key. Optional — client throws at first call if missing. */
   SERPER_API_KEY: z.string().min(1).optional(),
+
+  /**
+   * Resend API key for transactional notifications. Optional — when missing
+   * the mailer factory returns null and the dispatcher silently no-ops.
+   */
+  RESEND_API_KEY: z.string().min(1).optional(),
+  /**
+   * From-address used on every outgoing notification. Plain "x@y.com" or
+   * display-name form "auto-ops <noreply@yourdomain.com>" both accepted —
+   * we don't z.string().email() since Resend supports the display-name form
+   * and that fails strict email validation.
+   * Required when RESEND_API_KEY is set; the mailer factory throws if missing.
+   */
+  NOTIFICATION_FROM_EMAIL: z.string().min(3).optional(),
+  /**
+   * Public base URL of the consumer UI, used to embed clickable task links
+   * in notification emails (e.g. https://app.example.com → /tasks/<id>).
+   * Optional; emails skip the link block when not set.
+   */
+  APP_BASE_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
