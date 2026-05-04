@@ -208,10 +208,10 @@ function shouldDoStage1(
 export const shopifyBlogWriterAgent: IAgent = {
   manifest: {
     id: 'shopify-blog-writer',
-    name: 'Shopify Blog Writer',
+    name: 'Shopify 部落格寫手',
     description:
-      'Writes a single multilingual SEO blog article from a focused brief and ' +
-      'publishes it to the tenant Shopify blog after human approval.',
+      '依聚焦 brief 撰寫一篇多語 SEO 部落格文章，' +
+      '待人工核准後發布到租戶的 Shopify 部落格。',
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.4 },
     defaultPrompt: DEFAULT_PROMPT,
     toolIds: ['shopify.publish_article'],

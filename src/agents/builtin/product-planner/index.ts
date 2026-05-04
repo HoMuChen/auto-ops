@@ -125,11 +125,11 @@ type ProductPlannerConfig = z.infer<typeof configSchema>;
 export const productPlannerAgent: IAgent = {
   manifest: {
     id: 'product-planner',
-    name: 'Product Planner',
+    name: '產品企劃師',
     description:
-      'Plans product content strategy: researches competitor angles via Serper, ' +
-      'produces N content variants (platform × language × audience), ' +
-      'and spawns a Product Designer task for each variant.',
+      '規劃產品內容策略：透過 Serper 研究競品切角，' +
+      '產出多組內容變體（平台 × 語言 × 受眾），' +
+      '並為每個變體派發一筆產品設計師任務。',
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.2 },
     defaultPrompt: DEFAULT_PROMPT,
     toolIds: ['serper.search'],

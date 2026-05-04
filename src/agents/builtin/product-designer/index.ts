@@ -100,10 +100,10 @@ type ProductDesignerConfig = z.infer<typeof configSchema>;
 export const productDesignerAgent: IAgent = {
   manifest: {
     id: 'product-designer',
-    name: 'Product Designer',
+    name: '產品設計師',
     description:
-      'Generates product images and copy from a markdown brief produced by the Product Planner, ' +
-      'then spawns publisher agents to distribute to enabled platforms.',
+      '依產品企劃師產出的 markdown brief 生成產品圖片與文案，' +
+      '再派發發布員 agent 上架到已啟用的平台。',
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.3 },
     defaultPrompt: DEFAULT_PROMPT,
     toolIds: ['images.generate', 'images.edit'],

@@ -24,10 +24,10 @@ type ShopifyPublisherConfig = z.infer<typeof configSchema>;
 export const shopifyPublisherAgent: IAgent = {
   manifest: {
     id: 'shopify-publisher',
-    name: 'Shopify Product Publisher',
+    name: 'Shopify 商品發布員',
     description:
-      'Publishes a ready-made ProductContent package to the tenant Shopify store. ' +
-      'Expects task.input.params.content to be a ProductContent object.',
+      '把現成的 ProductContent 包上架到租戶的 Shopify 商店；' +
+      '預期 task.input.params.content 為 ProductContent 物件。',
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0 },
     defaultPrompt: '',
     toolIds: SHOPIFY_TOOL_IDS,

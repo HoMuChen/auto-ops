@@ -150,10 +150,10 @@ type ContentTopic = ContentPlan['topics'][number];
 export const seoStrategistAgent: IAgent = {
   manifest: {
     id: 'seo-strategist',
-    name: 'SEO Strategist',
+    name: 'SEO 策略師',
     description:
-      'Plans SEO campaigns: turns a high-level brief into a list of focused article topics, ' +
-      'each spawned as an independent execution task for the Shopify Blog Writer.',
+      '規劃 SEO 內容戰略：把高層 brief 拆成多個聚焦主題，' +
+      '每個主題都派發為獨立的 Shopify 部落格寫手執行任務。',
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.2 },
     defaultPrompt: DEFAULT_PROMPT,
     toolIds: ['serper.search'],
