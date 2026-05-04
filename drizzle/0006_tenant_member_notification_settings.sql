@@ -1,2 +1,2 @@
 ALTER TABLE "tenant_members"
-  ADD COLUMN "notification_settings" jsonb;
+  ADD COLUMN IF NOT EXISTS "notification_settings" jsonb;

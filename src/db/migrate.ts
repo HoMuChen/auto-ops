@@ -10,10 +10,16 @@ import { db } from './client.js';
 /**
  * Migration runner.
  *
- * 1. Runs Drizzle's auto-generated migrations from ./drizzle.
+ * 1. Runs Drizzle's auto-generated migrations from ./drizzle (journal-tracked).
  * 2. Applies any hand-written *.sql files in ./drizzle that aren't in the
- *    Drizzle journal (e.g. RLS policies). These are idempotent enough for MVP;
- *    once we have many of them we'll formalize a manual_migrations journal.
+ *    Drizzle journal (e.g. RLS policies, schema patches Drizzle can't express).
+ *
+ * Handwritten files have NO journal — they're re-run on every `pnpm db:migrate`.
+ * Therefore each handwritten file MUST be idempotent: use `CREATE TABLE IF NOT
+ * EXISTS`, `ADD COLUMN IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, etc.
+ * Each file is also wrapped in a single transaction here, so a partial failure
+ * (one statement throws after another succeeded) rolls back atomically instead
+ * of leaving the DB half-migrated.
  */
 async function main() {
   logger.info('Running Drizzle migrations…');
@@ -38,7 +44,11 @@ async function main() {
       const path = join(dir, file);
       const content = await readFile(path, 'utf8');
       logger.info({ file }, 'Applying SQL file');
-      await sqlClient.unsafe(content);
+      // BEGIN/COMMIT around each file so a multi-statement file is atomic.
+      // postgres-js's `unsafe` happily runs multiple statements in one call;
+      // wrapping in a tx means a later statement's failure rolls back earlier
+      // ones, instead of leaving the DB half-applied.
+      await sqlClient.unsafe(`BEGIN;\n${content}\nCOMMIT;`);
     }
   } finally {
     await sqlClient.end();

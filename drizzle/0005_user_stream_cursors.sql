@@ -1,4 +1,4 @@
-CREATE TABLE "user_stream_cursors" (
+CREATE TABLE IF NOT EXISTS "user_stream_cursors" (
   "user_id"    uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "tenant_id"  uuid NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE,
   "cursor_at"  timestamptz NOT NULL,
