@@ -1,0 +1,62 @@
+# Fly.io configuration — auto-ops API service.
+#
+# Bootstrap (run once, in this order):
+#   fly launch --copy-config --no-deploy
+#   fly secrets set \
+#     DATABASE_URL='...' \
+#     SUPABASE_URL='...' \
+#     OPENROUTER_API_KEY='...' \
+#     CORS_ALLOWED_ORIGINS='https://app.autoffice.app,https://autoffice.app'
+#   pnpm db:migrate                              # run from local against prod DATABASE_URL
+#   fly deploy
+#   fly certs create api.autoffice.app           # provision TLS for the custom domain
+#
+# IMPORTANT — keep this single-instance until the in-process SSE EventBus
+# is replaced by Postgres LISTEN/NOTIFY (see CLAUDE.md "What's NOT done yet").
+# Task claiming is already multi-machine safe (`FOR UPDATE SKIP LOCKED`),
+# but log events emitted on machine A won't reach an SSE client on B.
+
+app = 'auto-ops-api'
+
+# Pick the same region as your Supabase project to minimise DB round-trip.
+# nrt = Tokyo. Other APAC choices: hkg, sin. Run `fly platform regions` for the list.
+primary_region = 'nrt'
+
+# src/index.ts handles SIGTERM → worker.stop() + app.close(). 30s gives in-flight
+# task ticks time to drain before Fly force-kills the machine on deploy/restart.
+kill_signal  = 'SIGTERM'
+kill_timeout = '30s'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+# Non-secret env only. Real secrets (DATABASE_URL, OPENROUTER_API_KEY, etc.)
+# go via `fly secrets set` so they end up encrypted, not in this file.
+[env]
+  NODE_ENV  = 'production'
+  PORT      = '8080'
+  LOG_LEVEL = 'info'
+
+[http_service]
+  internal_port        = 8080
+  force_https          = true
+  auto_stop_machines   = 'off'   # TaskWorker polls the DB; machine must stay up.
+  auto_start_machines  = false
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type       = 'connections'
+    soft_limit = 200
+    hard_limit = 250
+
+[[http_service.checks]]
+  method       = 'GET'
+  path         = '/health'
+  interval     = '15s'
+  timeout      = '3s'
+  grace_period = '15s'
+
+[[vm]]
+  cpu_kind  = 'shared'
+  cpus      = 1
+  memory_mb = 1024
