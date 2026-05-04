@@ -835,6 +835,19 @@ Tenant-wide 歷史 log **REST 查詢**（非 SSE）。適合初始載入或翻�
 ```
 → 204 No Content。之後 `GET /v1/stream` 無 `?since` 時會從這個時間點 replay。
 
+#### `PATCH /v1/tasks/:taskId`
+重新排程一筆 `todo` 任務（僅支援 `scheduledAt` 一個欄位）。
+```json
+// Body — 兩種值：
+{ "scheduledAt": "2026-05-10T08:00:00Z" }   // 移到指定 ISO 時間
+{ "scheduledAt": null }                       // 清掉排程，下一個 worker tick 立即跑
+```
+- 200 → 回新的 `task` 物件
+- 422 → 任務已不在 `todo`（已被 worker 撿走、已 done/failed/waiting），或正被 worker claim 中
+- 404 → 任務不存在或不屬於這個 tenant
+
+注意：清掉排程或設成已過時間時，server 會立即觸發 worker（同 `POST /v1/tasks` 行為）。
+
 #### `POST /v1/tasks/:taskId/approve`
 HITL 核准。
 ```json

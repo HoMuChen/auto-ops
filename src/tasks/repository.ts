@@ -10,7 +10,7 @@ import {
   userStreamCursors,
 } from '../db/schema/index.js';
 import { eventBus } from '../events/event-bus.js';
-import { NotFoundError, ValidationError } from '../lib/errors.js';
+import { IllegalStateError, NotFoundError, ValidationError } from '../lib/errors.js';
 import type { TaskOutput } from './output.js';
 import { assertTransition } from './state-machine.js';
 
@@ -99,6 +99,41 @@ export async function updateTaskStatus(
     eventBus.publishTaskCompleted({ taskId: updated.id, tenantId: updated.tenantId });
   }
   return updated;
+}
+
+/**
+ * Reschedule a `todo` task. Pass a future Date to defer, or null to clear the
+ * schedule so the worker picks it up on the next tick.
+ *
+ * Refuses (422) if the task is no longer pending or has been claimed by a
+ * worker — the conditional UPDATE is the source of truth, and we re-read on
+ * miss to surface a precise reason.
+ */
+export async function rescheduleTask(
+  tenantId: string,
+  taskId: string,
+  scheduledAt: Date | null,
+): Promise<Task> {
+  const [updated] = await db
+    .update(tasks)
+    .set({ scheduledAt, updatedAt: new Date() })
+    .where(
+      and(
+        eq(tasks.id, taskId),
+        eq(tasks.tenantId, tenantId),
+        eq(tasks.status, 'todo'),
+        isNull(tasks.lockedBy),
+      ),
+    )
+    .returning();
+
+  if (updated) return updated;
+
+  const current = await getTask(tenantId, taskId);
+  if (current.status !== 'todo') {
+    throw new IllegalStateError(`Task is in '${current.status}' state, not 'todo'`);
+  }
+  throw new IllegalStateError('Task is being processed by a worker, cannot reschedule');
 }
 
 /**

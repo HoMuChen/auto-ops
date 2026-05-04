@@ -112,6 +112,12 @@ export const FeedbackBody = z.object({
 });
 export type FeedbackBody = z.infer<typeof FeedbackBody>;
 
+export const RescheduleTaskBody = z.object({
+  /** ISO datetime to reschedule to, or null to clear (run immediately). */
+  scheduledAt: z.string().datetime().nullable(),
+});
+export type RescheduleTaskBody = z.infer<typeof RescheduleTaskBody>;
+
 export const ApproveBody = z
   .object({
     /** If true, the task is finalised as 'done'; otherwise it resumes for the next step. */

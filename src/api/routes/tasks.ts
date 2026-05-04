@@ -15,6 +15,7 @@ import {
   listTaskLogs,
   listTasks,
   listTenantLogs,
+  rescheduleTask,
   updateTaskStatus,
   upsertStreamCursor,
 } from '../../tasks/repository.js';
@@ -27,6 +28,7 @@ import {
   ErrorEnvelope,
   FeedbackBody,
   PaginationQuery,
+  RescheduleTaskBody,
   StreamCursorSchema,
   TaskLogSchema,
   TaskSchema,
@@ -189,6 +191,42 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       const tenantId = tenantOf(req);
       const { taskId } = req.params as { taskId: string };
       return getTask(tenantId, taskId);
+    },
+  );
+
+  /**
+   * Reschedule a `todo` task. Body `{ scheduledAt }` accepts an ISO datetime
+   * (move/set the schedule) or null (clear it; worker picks up on next tick).
+   * 422 if the task is not in 'todo' or has already been claimed by a worker.
+   */
+  app.patch(
+    '/tasks/:taskId',
+    {
+      schema: {
+        tags: ['tasks'],
+        params: z.object({ taskId: z.string().uuid() }),
+        body: RescheduleTaskBody,
+        response: {
+          200: TaskSchema,
+          404: ErrorEnvelope,
+          422: ErrorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      const { taskId } = req.params as { taskId: string };
+      const body = req.body as z.infer<typeof RescheduleTaskBody>;
+      const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+
+      const task = await rescheduleTask(tenantId, taskId, scheduledAt);
+
+      // Mirror POST /tasks: if the new schedule is due (or cleared), nudge the
+      // worker so it doesn't sit idle until the next poll interval.
+      if (!scheduledAt || scheduledAt <= new Date()) {
+        eventBus.signal('task.ready');
+      }
+      return task;
     },
   );
 
