@@ -57,6 +57,22 @@ class EventBus {
     this.emitter.on(ch, cb);
     return () => this.emitter.off(ch, cb);
   }
+
+  /**
+   * Typed domain event for task lifecycle. Fires once per terminal `done`
+   * transition (regular agent completion, strategy spawn finalize, approve
+   * (finalize=true)). Listeners are fire-and-forget — they MUST NOT throw
+   * back into the emitter, since failures (e.g. notifications) must never
+   * roll back the task transition itself.
+   */
+  publishTaskCompleted(payload: { taskId: string; tenantId: string }): void {
+    this.emitter.emit('task.completed', payload);
+  }
+
+  onTaskCompleted(cb: (payload: { taskId: string; tenantId: string }) => void): () => void {
+    this.emitter.on('task.completed', cb);
+    return () => this.emitter.off('task.completed', cb);
+  }
 }
 
 export const eventBus = new EventBus();

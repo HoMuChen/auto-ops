@@ -1,5 +1,14 @@
-import { pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants.js';
+
+/**
+ * Per-(user, tenant) notification preferences. Null = defaults (off).
+ * Currently just one switch; shaped as jsonb so future channels (Slack,
+ * webhooks) and trigger types (failed, waiting) don't need migrations.
+ */
+export interface NotificationSettings {
+  notifyOnDone?: boolean;
+}
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey(),
@@ -21,6 +30,7 @@ export const tenantMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     role: text('role', { enum: userRoleEnum }).notNull().default('operator'),
+    notificationSettings: jsonb('notification_settings').$type<NotificationSettings>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

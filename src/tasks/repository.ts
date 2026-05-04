@@ -91,6 +91,13 @@ export async function updateTaskStatus(
     .returning();
 
   if (!updated) throw new NotFoundError(`Task ${taskId}`);
+
+  // Domain event for downstream listeners (notifications, future webhooks…).
+  // Emitted AFTER the row update so a listener never reacts to a transition
+  // that the DB ultimately rejected.
+  if (to === 'done') {
+    eventBus.publishTaskCompleted({ taskId: updated.id, tenantId: updated.tenantId });
+  }
   return updated;
 }
 
@@ -273,6 +280,15 @@ export async function finalizeStrategyTask(
       message: `已建立 ${result.children.length} 張子任務，員工陸續開工中`,
       data: { childTaskIds: result.children.map((c) => c.id) },
     });
+  }
+
+  // Strategy parent itself transitioned to done as part of finalize — fire
+  // the same domain event updateTaskStatus emits, so notification dispatch
+  // covers both regular completion and strategy spawn-finalize uniformly.
+  // Skip on the idempotent retry path (already-spawned) so a flaky network
+  // retry doesn't double-fire emails.
+  if (!result.alreadySpawned) {
+    eventBus.publishTaskCompleted({ taskId: result.parent.id, tenantId: result.parent.tenantId });
   }
 
   return { parent: result.parent, children: result.children };

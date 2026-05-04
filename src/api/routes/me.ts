@@ -1,9 +1,19 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { db } from '../../db/client.js';
-import { tenantMembers, tenants } from '../../db/schema/index.js';
-import { UnauthorizedError } from '../../lib/errors.js';
+import { type NotificationSettings, tenantMembers, tenants } from '../../db/schema/index.js';
+import { NotFoundError, UnauthorizedError } from '../../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
+import { authedTenantOf, requireTenant } from '../middleware/tenant.js';
+import { ErrorEnvelope } from '../schemas.js';
+
+const NotificationSettingsSchema = z.object({
+  notifyOnDone: z.boolean().default(false),
+});
+const NotificationSettingsPatchSchema = z.object({
+  notifyOnDone: z.boolean().optional(),
+});
 
 /**
  * GET /v1/me
@@ -41,4 +51,69 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       tenants: memberships,
     };
   });
+
+  /**
+   * Per-(user, tenant) notification preferences. Both endpoints require
+   * tenant context (x-tenant-id header) — settings are tenant-scoped so a
+   * user serving multiple workspaces can opt in to notifications on one
+   * without bleeding into the others.
+   *
+   * Storage is jsonb on tenant_members.notification_settings. Null row
+   * value is treated as defaults (notifyOnDone: false).
+   */
+  app.get(
+    '/me/notification-settings',
+    {
+      preHandler: requireTenant,
+      schema: {
+        tags: ['system'],
+        response: { 200: NotificationSettingsSchema, 401: ErrorEnvelope, 403: ErrorEnvelope },
+      },
+    },
+    async (req) => {
+      const { tenantId, user } = authedTenantOf(req);
+      const [member] = await db
+        .select({ notificationSettings: tenantMembers.notificationSettings })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, user.id)))
+        .limit(1);
+      if (!member) throw new NotFoundError('tenant membership');
+      const settings: NotificationSettings = member.notificationSettings ?? {};
+      return { notifyOnDone: settings.notifyOnDone ?? false };
+    },
+  );
+
+  app.patch(
+    '/me/notification-settings',
+    {
+      preHandler: requireTenant,
+      schema: {
+        tags: ['system'],
+        body: NotificationSettingsPatchSchema,
+        response: { 200: NotificationSettingsSchema, 401: ErrorEnvelope, 403: ErrorEnvelope },
+      },
+    },
+    async (req) => {
+      const { tenantId, user } = authedTenantOf(req);
+      const body = req.body as z.infer<typeof NotificationSettingsPatchSchema>;
+      const [existing] = await db
+        .select({ notificationSettings: tenantMembers.notificationSettings })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, user.id)))
+        .limit(1);
+      if (!existing) throw new NotFoundError('tenant membership');
+
+      const merged: NotificationSettings = {
+        ...(existing.notificationSettings ?? {}),
+        ...(body.notifyOnDone !== undefined ? { notifyOnDone: body.notifyOnDone } : {}),
+      };
+
+      await db
+        .update(tenantMembers)
+        .set({ notificationSettings: merged })
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, user.id)));
+
+      return { notifyOnDone: merged.notifyOnDone ?? false };
+    },
+  );
 }
