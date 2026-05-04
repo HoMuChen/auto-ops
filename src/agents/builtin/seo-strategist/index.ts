@@ -1,12 +1,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HumanMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { env } from '../../../config/env.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
-import { invokeStructured } from '../../lib/invoke-structured.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
@@ -113,7 +111,16 @@ const TopicSchema = z.object({
         'under the wrapping H3.',
     ),
   assignedAgent: z.string().describe('Id of the worker agent that should produce this article.'),
-  scheduledAt: z.string().datetime().optional().describe('Optional ISO timestamp.'),
+  scheduledAt: z
+    .string()
+    .datetime()
+    .nullish()
+    .describe(
+      'Optional ISO timestamp. Use `.nullish()` (accepts null + undefined) because ' +
+        'OpenAI/Anthropic structured-output specs require optional fields to also be ' +
+        'nullable; Sonnet sends `null` for unscheduled topics, and `optional()` alone ' +
+        'rejects null in Zod validation, jamming the submit retry loop.',
+    ),
 });
 
 const PlanSchema = z.object({
@@ -191,7 +198,10 @@ export const seoStrategistAgent: IAgent = {
       const promptWithRoster = `${basePrompt}\n\nAvailable worker agents (pick one id per topic for the "assignedAgent" field):\n${workerRoster}`;
       const systemPrompt = packsBlock ? `${packsBlock}\n\n${promptWithRoster}` : promptWithRoster;
 
-      // Pass 1: gather SERP data via tool-calling loop (max 6 hops)
+      // Single pass: tool-calling loop with the plan schema bound as the
+      // submit tool. Model researches via serper_search and finalizes by
+      // calling submit_plan with the structured deliverable. No second
+      // round-trip — answer is generated exactly once.
       const serperKey = env.SERPER_API_KEY;
       const serperTools = serperKey
         ? buildSerperTools({
@@ -207,19 +217,27 @@ export const seoStrategistAgent: IAgent = {
         input.imageResolver,
       );
 
-      const { collected } = await runToolLoop({
+      const result = await runToolLoop({
         modelConfig: ctx.modelConfig,
         messages: baseMessages,
         tools: serperTools,
-        maxHops: 6,
+        maxHops: 8,
         emitLog: ctx.emitLog,
+        finalAnswer: {
+          schema: PlanSchema,
+          name: 'submit_plan',
+          description:
+            'Call this exactly once when your research is complete. The args ARE the final SEO content plan that will be shown to the user for approval.',
+          minToolHops: serperTools.length > 0 ? 1 : 0,
+        },
       });
 
-      // Pass 2: produce the structured plan from the enriched conversation
-      const plan = await invokeStructured(ctx.modelConfig, PlanSchema, 'seo_content_plan', [
-        ...collected,
-        new HumanMessage('Now produce the final structured plan.'),
-      ]);
+      if (result.kind !== 'submitted') {
+        throw new Error(
+          'SEO Strategist did not submit a plan within the tool loop budget — model emitted free-form content without calling submit_plan.',
+        );
+      }
+      const plan = result.value;
 
       const capped: ContentTopic[] = plan.topics.slice(0, cfg.maxTopics);
 

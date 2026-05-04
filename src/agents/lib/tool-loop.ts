@@ -1,4 +1,11 @@
-import { type AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
+import {
+  type AIMessage,
+  type BaseMessage,
+  HumanMessage,
+  ToolMessage,
+} from '@langchain/core/messages';
+import { tool } from '@langchain/core/tools';
+import type { ZodType } from 'zod';
 import { buildModel } from '../../llm/model-registry.js';
 import type { ModelConfig } from '../../llm/types.js';
 import type { AgentTool } from '../types.js';
@@ -56,7 +63,32 @@ export interface ToolCall {
   result: unknown;
 }
 
-export interface ToolLoopOptions {
+/**
+ * Synthetic "submit" tool config — when the model calls this tool, the loop
+ * treats its args as the final structured answer and terminates. The tool's
+ * handler is never executed; we intercept the call in the loop.
+ *
+ * This is the unified pattern for tool-calling agents that also need to
+ * deliver structured output: instead of running the loop to collect research
+ * and then re-invoking the model with `withStructuredOutput` (which makes the
+ * model write the answer twice), the schema becomes a tool the model calls
+ * once it's ready to finalize.
+ */
+export interface FinalAnswerConfig<T> {
+  schema: ZodType<T>;
+  /** Tool name exposed to the model. Defaults to 'submit'. */
+  name?: string;
+  /** Description nudging the model when to call it. */
+  description?: string;
+  /**
+   * Refuse `submit` until the model has invoked at least this many other tools.
+   * If the model submits early, we reply with a tool error and let it continue.
+   * Default 0 (no minimum).
+   */
+  minToolHops?: number;
+}
+
+export interface ToolLoopOptions<T = never> {
   modelConfig: ModelConfig;
   messages: BaseMessage[];
   tools: AgentTool[];
@@ -64,45 +96,155 @@ export interface ToolLoopOptions {
   emitLog: EmitLog;
   /** Per-tool overrides merged on top of DEFAULT_FORMATTERS. Keyed by tool.name. */
   logFormatters?: Record<string, Partial<ToolLogFormatter>>;
+  /**
+   * If set, registers a synthetic submit tool from the schema. Calling that
+   * tool terminates the loop and returns the parsed args as `value`. Without
+   * this, the loop exits when the model emits content with no tool_calls
+   * (legacy behaviour).
+   */
+  finalAnswer?: FinalAnswerConfig<T>;
 }
 
-export interface ToolLoopResult {
-  /** Full message history including all assistant + tool messages from the loop. */
+interface BaseResult {
   collected: BaseMessage[];
-  /** Every tool call that fired, in order. */
   calls: ToolCall[];
 }
+
+export type ToolLoopResult<T = never> =
+  | (BaseResult & { kind: 'submitted'; value: T })
+  | (BaseResult & { kind: 'plain' });
 
 /**
  * Runs a tool-calling loop up to `maxHops` rounds, emitting a task log before
  * and after every tool invocation so the user can follow along in real time.
+ *
+ * When `finalAnswer` is provided, the schema is bound as an additional tool;
+ * the model calling it terminates the loop with the parsed args. This avoids
+ * the wasteful "tool loop → withStructuredOutput" double-generation pattern,
+ * where the model first emits a free-form analysis (Pass 1's tail) and is
+ * then prompted to re-derive the same answer as JSON (Pass 2).
  */
-export async function runToolLoop({
+export async function runToolLoop<T = never>({
   modelConfig,
   messages,
   tools,
   maxHops = 6,
   emitLog,
   logFormatters = {},
-}: ToolLoopOptions): Promise<ToolLoopResult> {
+  finalAnswer,
+}: ToolLoopOptions<T>): Promise<ToolLoopResult<T>> {
   const formatters = { ...DEFAULT_FORMATTERS, ...logFormatters };
+
+  const submitName = finalAnswer?.name ?? 'submit';
+  const submitTool = finalAnswer
+    ? tool(
+        // Never invoked — we intercept the call before LangChain dispatches it.
+        async () => 'submitted',
+        {
+          name: submitName,
+          description:
+            finalAnswer.description ??
+            'Call this exactly once when your work is complete. The args ARE your final structured deliverable.',
+          schema: finalAnswer.schema as ZodType<unknown>,
+        },
+      )
+    : null;
+
+  const allTools: AgentTool[] = submitTool
+    ? [...tools, { id: `__final__.${submitName}`, tool: submitTool }]
+    : tools;
 
   const toolModel = (
     buildModel(modelConfig) as unknown as {
       bindTools: (tools: unknown[]) => { invoke: (msgs: BaseMessage[]) => Promise<AIMessage> };
     }
-  ).bindTools(tools.map((t) => t.tool));
+  ).bindTools(allTools.map((t) => t.tool));
 
   const collected: BaseMessage[] = [...messages];
   const calls: ToolCall[] = [];
+  let submittedValue: T | undefined;
+  const minHops = finalAnswer?.minToolHops ?? 0;
 
   for (let hop = 0; hop < maxHops; hop++) {
     const res = (await toolModel.invoke(collected)) as AIMessage;
     collected.push(res);
-    if (!res.tool_calls?.length) break;
+
+    // Diagnostic: log per-hop content size and tool_calls so we can tell whether
+    // the model is writing the answer as content (instead of via the submit tool).
+    // Pipes through emitLog so the line appears in the dev terminal AND task_logs table.
+    const contentLen =
+      typeof res.content === 'string' ? res.content.length : JSON.stringify(res.content).length;
+    const toolNames = (res.tool_calls ?? []).map((c) => c.name);
+    await emitLog(
+      'toolloop.hop',
+      `hop ${hop}: ${toolNames.length} tool_calls, ${contentLen} content chars`,
+      {
+        hop,
+        contentChars: contentLen,
+        toolCalls: toolNames,
+        ...(contentLen > 0 && contentLen < 300
+          ? { contentPreview: typeof res.content === 'string' ? res.content : '' }
+          : {}),
+      },
+    );
+
+    if (!res.tool_calls?.length) {
+      // Legacy exit: model emitted content with no tool_calls.
+      // If a final-answer tool is registered, nudge the model to use it
+      // instead of accepting a free-form tail (the doubling pattern we want to avoid).
+      if (finalAnswer && hop < maxHops - 1) {
+        collected.push(
+          new HumanMessage(
+            `Please call the \`${submitName}\` tool now with your final structured answer.`,
+          ),
+        );
+        continue;
+      }
+      break;
+    }
+
+    const submitCall = finalAnswer ? res.tool_calls.find((c) => c.name === submitName) : undefined;
+
+    if (submitCall && finalAnswer) {
+      const argsObj = (submitCall.args ?? {}) as Record<string, unknown>;
+
+      if (calls.length < minHops) {
+        // Reject early submission: tell model to do more research, then continue.
+        collected.push(
+          new ToolMessage({
+            tool_call_id: submitCall.id ?? '',
+            content: `Error: research first. You've called ${calls.length} non-submit tool(s); call at least ${minHops} before submitting.`,
+          }),
+        );
+        continue;
+      }
+
+      // Validate; if Zod rejects, surface as a tool error so the model can retry.
+      const parsed = finalAnswer.schema.safeParse(argsObj);
+      if (!parsed.success) {
+        collected.push(
+          new ToolMessage({
+            tool_call_id: submitCall.id ?? '',
+            content: `Error: submit args failed schema validation. ${parsed.error.message}. Fix and call ${submitName} again.`,
+          }),
+        );
+        continue;
+      }
+
+      submittedValue = parsed.data;
+      // Acknowledge the submit so any other tool_calls in this same hop don't
+      // hang as orphans — but we break right after to skip them.
+      collected.push(
+        new ToolMessage({
+          tool_call_id: submitCall.id ?? '',
+          content: 'submitted',
+        }),
+      );
+      break;
+    }
 
     for (const call of res.tool_calls) {
-      const agentTool = tools.find((x) => x.tool.name === call.name);
+      const agentTool = allTools.find((x) => x.tool.name === call.name);
       if (!agentTool) continue;
 
       const args = call.args as Record<string, unknown>;
@@ -129,5 +271,8 @@ export async function runToolLoop({
     }
   }
 
-  return { collected, calls };
+  if (submittedValue !== undefined) {
+    return { kind: 'submitted', value: submittedValue, collected, calls };
+  }
+  return { kind: 'plain', collected, calls };
 }

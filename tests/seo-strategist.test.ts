@@ -75,18 +75,22 @@ Boss should mention sourcing relationships and certifications.`,
   ],
 };
 
-// Pass 1: tool-calling model — returns AIMessage with no tool_calls so the loop exits immediately
-const toolPassInvokeMock = vi.fn(async () => ({ content: '', tool_calls: [] }));
+// Single-pass mock: the model immediately submits the plan via the synthetic
+// `submit_plan` tool. runToolLoop intercepts the tool_call, validates args
+// against PlanSchema, and returns { kind: 'submitted', value: planFixture }.
+//
+// Each test can override the next return via toolPassInvokeMock.mockResolvedValueOnce
+// to simulate alternative model behaviour (early submit rejection, schema fail, …).
+const toolPassInvokeMock = vi.fn();
+toolPassInvokeMock.mockResolvedValue({
+  content: '',
+  tool_calls: [{ id: 'call_submit_1', name: 'submit_plan', args: planFixture }],
+});
 const bindToolsMock = vi.fn(() => ({ invoke: toolPassInvokeMock }));
-
-// Pass 2: structured plan model — returns the fixture
-const planPassInvokeMock = vi.fn(async () => planFixture);
-const withStructuredOutputMock = vi.fn(() => ({ invoke: planPassInvokeMock }));
 
 vi.mock('../src/llm/model-registry.js', () => ({
   buildModel: vi.fn(() => ({
     bindTools: bindToolsMock,
-    withStructuredOutput: withStructuredOutputMock,
   })),
 }));
 
@@ -199,18 +203,28 @@ describe('seoStrategistAgent.build → invoke', () => {
   });
 
   it('throws at invoke time if the LLM hallucinates an unknown assignedAgent', async () => {
-    planPassInvokeMock.mockResolvedValueOnce({
-      overview:
-        '## 觀察\n\n為了測試錯誤處理，這份規劃故意指派一個不存在的 worker，預期框架會擋下並丟錯。',
-      progressNote: '計畫好了但 worker 名稱可能有誤',
-      topics: [
+    toolPassInvokeMock.mockResolvedValueOnce({
+      content: '',
+      tool_calls: [
         {
-          title: 'whatever',
-          primaryKeyword: 'kw',
-          language: 'zh-TW',
-          writerBrief:
-            '## Topic\n\nSomething long enough to satisfy the schema minimum length so the test reaches the worker-id validation step.',
-          assignedAgent: 'nonexistent-writer',
+          id: 'call_submit_bad',
+          name: 'submit_plan',
+          args: {
+            overview:
+              '## 觀察\n\n為了測試錯誤處理，這份規劃故意指派一個不存在的 worker，預期框架會擋下並丟錯。' +
+              '本段 overview 必須夠長（≥100 字元）才能通過 Zod 的 min(100) 驗證；不然 runToolLoop 會把 submit 視為無效並重新 prompt 模型，走進 default fixture path。',
+            progressNote: '計畫好了但 worker 名稱可能有誤',
+            topics: [
+              {
+                title: 'whatever',
+                primaryKeyword: 'kw',
+                language: 'zh-TW',
+                writerBrief:
+                  '## Topic\n\nSomething long enough to satisfy the schema minimum length so the test reaches the worker-id validation step.',
+                assignedAgent: 'nonexistent-writer',
+              },
+            ],
+          },
         },
       ],
     });
@@ -243,10 +257,9 @@ describe('seoStrategistAgent.build → invoke', () => {
       messages: [{ role: 'user', content: 'plan' }],
       params: {},
     });
-    // buildAgentMessages is called with the enriched systemPrompt; check it was passed
-    // to both the tool-call model (bindTools) and the plan model (withStructuredOutput).
-    // We verify by inspecting what was passed to planPassInvokeMock.
-    const calls = planPassInvokeMock.mock.calls as unknown[][];
+    // Single-pass: buildAgentMessages feeds the system prompt straight into
+    // the tool-call model. Inspect the messages passed to toolPassInvokeMock.
+    const calls = toolPassInvokeMock.mock.calls as unknown[][];
     const lastCallArgs = calls[calls.length - 1]?.[0] as { content?: string }[] | undefined;
     const systemMsg = lastCallArgs?.find((m) => 'content' in m);
     expect(JSON.stringify(systemMsg)).toContain('SEO Fundamentals');
