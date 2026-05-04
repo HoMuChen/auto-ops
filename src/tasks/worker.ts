@@ -91,7 +91,11 @@ export class TaskWorker {
           });
       }
 
-      this.log.debug({ claimed: claimedThisTick, inflight: this.inflight }, 'tick');
+      // Quiet by default — only log when something actually moved on this tick.
+      // Idle ticks every WORKER_POLL_INTERVAL_MS would otherwise dominate dev output.
+      if (claimedThisTick > 0) {
+        this.log.debug({ claimed: claimedThisTick, inflight: this.inflight }, 'tick');
+      }
     } finally {
       this.scheduleNext();
     }

@@ -22,13 +22,18 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
   // graph wrapper auto-fills `speaker`. Framework events here pass speaker
   // explicitly ('system' / 'supervisor'). appendTaskLog handles fan-out to
   // the EventBus, so this is just a positional-args adapter.
+  //
+  // Mirror to pino at debug so dev terminals can watch supervisor / agent /
+  // tool activity without subscribing to SSE. PREFIX_KEYS in logger.ts lifts
+  // event/speaker/agentId into the bracket prefix.
   const emitLog = (
     event: string,
     message: string,
     data?: Record<string, unknown>,
     speaker?: string,
-  ): Promise<void> =>
-    appendTaskLog({
+  ): Promise<void> => {
+    log.debug({ event, ...(speaker ? { speaker } : {}), ...(data ? { data } : {}) }, message);
+    return appendTaskLog({
       tenantId: task.tenantId,
       taskId: task.id,
       event,
@@ -36,6 +41,7 @@ export async function runTaskThroughGraph(task: Task): Promise<void> {
       ...(speaker ? { speaker } : {}),
       ...(data ? { data } : {}),
     });
+  };
 
   try {
     // No "task.started" — pre-agent framework noise; the agent's own first

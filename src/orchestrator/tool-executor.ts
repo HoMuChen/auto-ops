@@ -61,8 +61,16 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
   // Tool execution is the agent acting on the boss's approval — speaker is
   // the agent that prepared the call, not 'system'.
   const speaker = agent.manifest.id;
-  const emitLog = (event: string, message: string, data?: Record<string, unknown>): Promise<void> =>
-    appendTaskLog({ tenantId, taskId, event, message, speaker, ...(data ? { data } : {}) });
+  // Mirror to pino at debug so dev terminals see post-approval tool activity
+  // without subscribing to the SSE stream. Same shape as runner.ts emitLog.
+  const emitLog = (
+    event: string,
+    message: string,
+    data?: Record<string, unknown>,
+  ): Promise<void> => {
+    log.debug({ event, speaker, agentId: speaker, ...(data ? { data } : {}) }, message);
+    return appendTaskLog({ tenantId, taskId, event, message, speaker, ...(data ? { data } : {}) });
+  };
 
   await emitLog('tool.started', '收到指示，我來執行', {
     toolId: pending.id,
