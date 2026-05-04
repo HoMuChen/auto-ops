@@ -63,18 +63,18 @@ const planFixture = {
   ],
 };
 
-// Pass 1: tool-calling (serper search) — no tool_calls so loop exits immediately
-const toolPassInvokeMock = vi.fn(async () => ({ content: '', tool_calls: [] }));
+// Single-pass mock: model immediately submits the plan via submit_plan tool.
+// runToolLoop intercepts, validates against PlanSchema, returns submitted.
+const toolPassInvokeMock = vi.fn();
+toolPassInvokeMock.mockResolvedValue({
+  content: '',
+  tool_calls: [{ id: 'call_submit_1', name: 'submit_plan', args: planFixture }],
+});
 const bindToolsMock = vi.fn(() => ({ invoke: toolPassInvokeMock }));
-
-// Pass 2: structured plan output
-const planPassInvokeMock = vi.fn(async () => planFixture);
-const withStructuredOutputMock = vi.fn(() => ({ invoke: planPassInvokeMock }));
 
 vi.mock('../src/llm/model-registry.js', () => ({
   buildModel: vi.fn(() => ({
     bindTools: bindToolsMock,
-    withStructuredOutput: withStructuredOutputMock,
   })),
 }));
 

@@ -1,12 +1,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HumanMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { env } from '../../../config/env.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
-import { invokeStructured } from '../../lib/invoke-structured.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
@@ -184,20 +182,29 @@ export const productPlannerAgent: IAgent = {
         input.imageResolver,
       );
 
-      // Pass 1: serper research loop
-      const { collected } = await runToolLoop({
+      // Single pass: research via serper_search, finalize via submit_plan.
+      // Same finalAnswer pattern as seo-strategist — no second LLM round-trip.
+      const result = await runToolLoop({
         modelConfig: ctx.modelConfig,
         messages: baseMessages,
         tools: serperTools,
-        maxHops: 6,
+        maxHops: 8,
         emitLog: ctx.emitLog,
+        finalAnswer: {
+          schema: PlanSchema,
+          name: 'submit_plan',
+          description:
+            'Call this exactly once when your research is complete. The args ARE the final product content plan that will be shown to the user for approval.',
+          minToolHops: serperTools.length > 0 ? 1 : 0,
+        },
       });
 
-      // Pass 2: structured variant plan
-      const plan = await invokeStructured(ctx.modelConfig, PlanSchema, 'product_content_plan', [
-        ...collected,
-        new HumanMessage('Now produce the final structured content plan.'),
-      ]);
+      if (result.kind !== 'submitted') {
+        throw new Error(
+          'Product planner did not submit a plan within the tool loop budget — model emitted free-form content without calling submit_plan.',
+        );
+      }
+      const plan = result.value;
 
       const capped = plan.variants.slice(0, cfg.maxVariants);
 

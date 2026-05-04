@@ -1,13 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HumanMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { env } from '../../../config/env.js';
 import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-client.js';
 import { getImageById, insertImage } from '../../../integrations/cloudflare/images-repository.js';
 import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
 import { buildImageTools } from '../../../integrations/openai-images/tools.js';
-import { invokeStructured } from '../../lib/invoke-structured.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
@@ -203,36 +201,43 @@ export const productDesignerAgent: IAgent = {
         input.imageResolver,
       );
 
-      // Pass 1: image generation tool loop
-      let collectedMessages = baseMessages;
-      if (imageTools.length > 0) {
-        const { collected, calls } = await runToolLoop({
-          modelConfig: ctx.modelConfig,
-          messages: baseMessages,
-          tools: imageTools,
-          maxHops: 4,
-          emitLog: ctx.emitLog,
-        });
-        collectedMessages = collected;
+      // Single pass: image generation (optional) + structured copy via the
+      // submit_listing tool. Same finalAnswer pattern as seo-strategist;
+      // model can call image tools any number of times then submit. If
+      // imageTools is empty (no Cloudflare config), the loop runs with just
+      // the submit tool — model goes straight to copy.
+      const result = await runToolLoop({
+        modelConfig: ctx.modelConfig,
+        messages: baseMessages,
+        tools: imageTools,
+        maxHops: 6,
+        emitLog: ctx.emitLog,
+        finalAnswer: {
+          schema: ProductListingSchema,
+          name: 'submit_listing',
+          description:
+            'Call this exactly once when ready. The args ARE the final product listing copy that will be shown to the user for approval.',
+          // Images are optional — feedback rounds may keep the existing imageUrls.
+          minToolHops: 0,
+        },
+      });
 
-        const toolGeneratedUrls = calls
-          .map((c) => (c.result as { url?: string }).url)
-          .filter((u): u is string => Boolean(u));
-
-        if (toolGeneratedUrls.length > 0) {
-          imageUrls.length = 0;
-          imageUrls.push(...toolGeneratedUrls);
-        }
-        // If no tools called: imageUrls retains previousImageUrls (copy-only feedback)
+      if (result.kind !== 'submitted') {
+        throw new Error(
+          'Product designer did not submit a listing within the tool loop budget — model emitted free-form content without calling submit_listing.',
+        );
       }
+      const listing = result.value;
 
-      // Pass 2: structured copy
-      const listing = await invokeStructured(
-        ctx.modelConfig,
-        ProductListingSchema,
-        'product_listing',
-        [...collectedMessages, new HumanMessage('Now produce the structured product listing.')],
-      );
+      const toolGeneratedUrls = result.calls
+        .map((c) => (c.result as { url?: string }).url)
+        .filter((u): u is string => Boolean(u));
+
+      if (toolGeneratedUrls.length > 0) {
+        imageUrls.length = 0;
+        imageUrls.push(...toolGeneratedUrls);
+      }
+      // If no tools called: imageUrls retains previousImageUrls (copy-only feedback).
 
       const refsOut: ProductContent['refs'] = {
         title: listing.title,

@@ -27,22 +27,20 @@ const listingFixture = {
   progressNote: '文案好了，老闆看一下',
 };
 
-// Pass 1 mock: no tool calls by default (overridden per test)
-let toolPassResponse: {
-  content: string;
-  tool_calls: { name: string; id: string; args: Record<string, unknown> }[];
-} = { content: '', tool_calls: [] };
-const toolPassInvokeMock = vi.fn(async () => toolPassResponse);
+// Single-pass mock: by default the model immediately calls submit_listing
+// with the fixture. Tests that need a different sequence (e.g., generate
+// images first then submit) override via mockImplementation.
+const submitListingResponse = {
+  content: '',
+  tool_calls: [{ name: 'submit_listing', id: 'call_submit_listing', args: listingFixture }],
+};
+const toolPassInvokeMock = vi.fn();
+toolPassInvokeMock.mockResolvedValue(submitListingResponse);
 const bindToolsMock = vi.fn(() => ({ invoke: toolPassInvokeMock }));
-
-// Pass 2 mock
-const listingPassInvokeMock = vi.fn(async () => listingFixture);
-const withStructuredOutputMock = vi.fn(() => ({ invoke: listingPassInvokeMock }));
 
 vi.mock('../src/llm/model-registry.js', () => ({
   buildModel: vi.fn(() => ({
     bindTools: bindToolsMock,
-    withStructuredOutput: withStructuredOutputMock,
   })),
 }));
 
@@ -126,7 +124,7 @@ function buildCtx(overrides = {}) {
 
 describe('product-designer', () => {
   it('spawns shopify-publisher with ProductContent on first run', async () => {
-    toolPassResponse = { content: '', tool_calls: [] };
+    toolPassInvokeMock.mockResolvedValue(submitListingResponse);
 
     const runnable = await productDesignerAgent.build(buildCtx());
     const output = await runnable.invoke({
@@ -144,7 +142,7 @@ describe('product-designer', () => {
   });
 
   it('preserves previous imageUrls when feedback does not trigger image generation', async () => {
-    toolPassResponse = { content: '', tool_calls: [] };
+    toolPassInvokeMock.mockResolvedValue(submitListingResponse);
 
     const runnable = await productDesignerAgent.build(buildCtx());
     const output = await runnable.invoke({
@@ -164,6 +162,8 @@ describe('product-designer', () => {
   });
 
   it('replaces imageUrls when LLM generates new images on feedback', async () => {
+    // Hop 0: model calls images_generate.
+    // Hop 1: model submits the listing — submit_listing tool_call terminates the loop.
     let hop = 0;
     toolPassInvokeMock.mockImplementation(async () => {
       if (hop === 0) {
@@ -175,7 +175,7 @@ describe('product-designer', () => {
           ],
         };
       }
-      return { content: '', tool_calls: [] };
+      return submitListingResponse;
     });
 
     const runnable = await productDesignerAgent.build(buildCtx());
@@ -194,12 +194,12 @@ describe('product-designer', () => {
     expect(artifact.report).toContain('## 生成的圖片');
     expect(artifact.report).toContain('![圖 1](https://cdn.example.com/img-1.jpg)');
 
-    toolPassInvokeMock.mockImplementation(async () => ({ content: '', tool_calls: [] }));
+    toolPassInvokeMock.mockResolvedValue(submitListingResponse);
     hop = 0;
   });
 
   it('emits an Artifact { report, body, refs }', async () => {
-    toolPassResponse = { content: '', tool_calls: [] };
+    toolPassInvokeMock.mockResolvedValue(submitListingResponse);
     const runnable = await productDesignerAgent.build(buildCtx());
     const output = await runnable.invoke({
       messages: [{ role: 'user', content: briefMarkdown }],
