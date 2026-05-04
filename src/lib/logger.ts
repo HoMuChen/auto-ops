@@ -1,4 +1,5 @@
 import pino, { type Logger } from 'pino';
+import pretty from 'pino-pretty';
 import { env } from '../config/env.js';
 
 const isDev = env.NODE_ENV === 'development';
@@ -32,46 +33,43 @@ function formatPrefix(log: Record<string, unknown>): string {
   return parts.length ? `[${parts.join(' ')}] ` : '';
 }
 
-export const logger: Logger = pino({
-  level: env.LOG_LEVEL,
-  base: { service: 'auto-ops' },
-  timestamp: pino.stdTimeFunctions.isoTime,
-  redact: {
-    paths: [
-      'req.headers.authorization',
-      'req.headers.cookie',
-      '*.secret',
-      '*.password',
-      '*.token',
-      '*.apiKey',
-      '*.api_key',
-    ],
-    censor: '[REDACTED]',
+// pino-pretty as an in-process stream — `transport` would spawn a worker
+// thread that structuredClone()s its options, which rejects function-valued
+// `messageFormat`. The downside is synchronous formatting on the main thread;
+// fine for dev, and prod skips this branch entirely.
+const prettyStream = isDev
+  ? pretty({
+      colorize: true,
+      translateTime: 'HH:MM:ss.l',
+      singleLine: true,
+      ignore: ['pid', 'hostname', 'service', 'tenantId', 'workerId', 'op', ...PREFIX_KEYS].join(
+        ',',
+      ),
+      messageFormat: (log, messageKey) =>
+        `${formatPrefix(log as Record<string, unknown>)}${(log as Record<string, unknown>)[messageKey] ?? ''}`,
+    })
+  : undefined;
+
+export const logger: Logger = pino(
+  {
+    level: env.LOG_LEVEL,
+    base: { service: 'auto-ops' },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    redact: {
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        '*.secret',
+        '*.password',
+        '*.token',
+        '*.apiKey',
+        '*.api_key',
+      ],
+      censor: '[REDACTED]',
+    },
   },
-  ...(isDev
-    ? {
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'HH:MM:ss.l',
-            singleLine: true,
-            ignore: [
-              'pid',
-              'hostname',
-              'service',
-              'tenantId',
-              'workerId',
-              'op',
-              ...PREFIX_KEYS,
-            ].join(','),
-            messageFormat: (log: Record<string, unknown>, messageKey: string) =>
-              `${formatPrefix(log)}${log[messageKey] ?? ''}`,
-          },
-        },
-      }
-    : {}),
-});
+  prettyStream,
+);
 
 export function childLogger(bindings: Record<string, unknown>): Logger {
   return logger.child(bindings);
