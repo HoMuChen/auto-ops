@@ -10,6 +10,7 @@ import {
   taskIntakes,
   tasks,
 } from '../db/schema/index.js';
+import { eventBus } from '../events/event-bus.js';
 import { IllegalStateError, NotFoundError } from '../lib/errors.js';
 
 export interface CreateIntakeInput {
@@ -136,8 +137,9 @@ export async function appendTurn(
  * pair instead of creating a duplicate. Callers (POST /intakes/:id/finalize)
  * can therefore retry safely on network jitter.
  *
- * The created task lands in `todo` status — the polling worker will pick it
- * up on the next tick and run it through the supervisor graph as usual.
+ * The created task lands in `todo` status; we emit `task.ready` after the
+ * transaction commits so the worker kicks immediately instead of waiting
+ * for the next poll tick (consistent with POST /v1/tasks behaviour).
  */
 export async function finalizeIntake(
   tenantId: string,
@@ -149,7 +151,11 @@ export async function finalizeIntake(
     createdBy?: string;
   },
 ): Promise<{ intake: TaskIntake; task: Task }> {
-  return db.transaction(async (tx) => {
+  // Track whether the transaction actually created a new task — the idempotent
+  // fast-path (already finalized) returns the existing task without spawning,
+  // so we must not signal again in that case.
+  let createdNewTask = false;
+  const result = await db.transaction(async (tx) => {
     const [intake] = await tx
       .select()
       .from(taskIntakes)
@@ -194,6 +200,7 @@ export async function finalizeIntake(
       })
       .returning();
     if (!task) throw new Error('Failed to spawn task from intake');
+    createdNewTask = true;
 
     // Seed the task's first user message so the runner has a message history
     // (consistent with tasks created via POST /v1/tasks). Carry any image IDs
@@ -226,6 +233,15 @@ export async function finalizeIntake(
 
     return { intake: updated, task };
   });
+
+  // Signal AFTER commit so we never wake the worker for a transaction that
+  // ultimately rolled back. Skip on the idempotent retry path — that task is
+  // already in flight or done; an extra signal is harmless but pointless.
+  if (createdNewTask) {
+    eventBus.signal('task.ready');
+  }
+
+  return result;
 }
 
 export async function abandonIntake(tenantId: string, intakeId: string): Promise<TaskIntake> {
