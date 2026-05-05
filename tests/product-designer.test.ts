@@ -89,6 +89,15 @@ vi.mock('../src/agents/skill-packs-repository.js', () => ({
   listPacksForAgent: vi.fn(async () => []),
 }));
 
+vi.mock('../src/tenants/profile-repository.js', () => ({
+  getTenantProfile: vi.fn(async () => ({
+    profileMd: '',
+    timezone: 'UTC',
+    imageStyleSuffix: '',
+    imageStyleReferenceImageIds: [],
+  })),
+}));
+
 const { productDesignerAgent } = await import('../src/agents/builtin/product-designer/index.js');
 
 const publisherPeer = {

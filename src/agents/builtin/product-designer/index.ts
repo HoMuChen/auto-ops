@@ -6,6 +6,7 @@ import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-
 import { getImageById, insertImage } from '../../../integrations/cloudflare/images-repository.js';
 import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
 import { buildImageTools } from '../../../integrations/openai-images/tools.js';
+import { getTenantProfile } from '../../../tenants/profile-repository.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { skillsToggleSchema } from '../../lib/skills-schema.js';
@@ -127,6 +128,7 @@ export const productDesignerAgent: IAgent = {
     const r2PublicBaseUrl = env.CLOUDFLARE_R2_PUBLIC_BASE_URL;
     const openaiKey = env.OPENAI_API_KEY;
 
+    const profile = await getTenantProfile(ctx.tenantId);
     const r2Ready = accountId && r2AccessKey && r2SecretKey && r2Bucket && r2PublicBaseUrl;
     const imageTools =
       r2Ready && openaiKey
@@ -143,6 +145,7 @@ export const productDesignerAgent: IAgent = {
             getImageById,
             fetchImageBuffer: async (url) => Buffer.from(await (await fetch(url)).arrayBuffer()),
             taskId: ctx.taskId,
+            styleSuffix: profile.imageStyleSuffix || undefined,
           })
         : [];
 
