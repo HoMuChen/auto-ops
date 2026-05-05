@@ -6,16 +6,27 @@ import { NotFoundError } from '../lib/errors.js';
 export interface TenantProfile {
   profileMd: string;
   timezone: string;
+  imageStyleSuffix: string;
+  imageStyleReferenceImageIds: string[];
 }
 
 export interface UpdateTenantProfileInput {
   profileMd?: string;
   timezone?: string;
+  imageStyleSuffix?: string;
+  imageStyleReferenceImageIds?: string[];
 }
+
+const profileColumns = {
+  profileMd: tenants.profileMd,
+  timezone: tenants.timezone,
+  imageStyleSuffix: tenants.imageStyleSuffix,
+  imageStyleReferenceImageIds: tenants.imageStyleReferenceImageIds,
+};
 
 export async function getTenantProfile(tenantId: string): Promise<TenantProfile> {
   const [row] = await db
-    .select({ profileMd: tenants.profileMd, timezone: tenants.timezone })
+    .select(profileColumns)
     .from(tenants)
     .where(eq(tenants.id, tenantId))
     .limit(1);
@@ -30,12 +41,16 @@ export async function updateTenantProfile(
   const set: Record<string, unknown> = { updatedAt: sql`now()` };
   if (input.profileMd !== undefined) set.profileMd = input.profileMd;
   if (input.timezone !== undefined) set.timezone = input.timezone;
+  if (input.imageStyleSuffix !== undefined) set.imageStyleSuffix = input.imageStyleSuffix;
+  if (input.imageStyleReferenceImageIds !== undefined) {
+    set.imageStyleReferenceImageIds = input.imageStyleReferenceImageIds;
+  }
 
   const [row] = await db
     .update(tenants)
     .set(set)
     .where(eq(tenants.id, tenantId))
-    .returning({ profileMd: tenants.profileMd, timezone: tenants.timezone });
+    .returning(profileColumns);
   if (!row) throw new NotFoundError(`Tenant ${tenantId}`);
   return row;
 }
