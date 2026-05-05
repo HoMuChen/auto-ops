@@ -27,6 +27,7 @@ export const tenantSkillPacks = pgTable(
   (t) => ({
     tenantKeyUnique: uniqueIndex('tenant_skill_packs_tenant_key_uq').on(t.tenantId, t.key),
     tenantIdx: index('tenant_skill_packs_tenant_idx').on(t.tenantId),
+    appliesToGin: index('tenant_skill_packs_applies_to_gin').using('gin', t.appliesTo),
   }),
 );
 
