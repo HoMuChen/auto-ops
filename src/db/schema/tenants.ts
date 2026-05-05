@@ -11,6 +11,8 @@ export const tenants = pgTable('tenants', {
   plan: text('plan', { enum: subscriptionPlanEnum }).notNull().default('basic'),
   profileMd: text('profile_md').notNull().default(''),
   timezone: text('timezone').notNull().default('UTC'),
+  imageStyleSuffix: text('image_style_suffix').notNull().default(''),
+  imageStyleReferenceImageIds: uuid('image_style_reference_image_ids').array().notNull().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
 });
