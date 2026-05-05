@@ -415,9 +415,9 @@ UI 看到 `refs.published` 就顯示 badge / 連結即可，不需要看其他�
 
 ### Tenant Profile
 
-Stores free-form markdown that every agent reads as persistent brand context — brand voice, tone, banned phrases, preferred keywords, language preferences, etc. Also holds the tenant's IANA timezone for scheduling display.
+Stores free-form markdown that every agent reads as persistent brand context — brand voice, tone, banned phrases, preferred keywords, language preferences, etc. Also holds the tenant's IANA timezone for scheduling display, and a visual style suffix that is automatically appended to every image-generation prompt.
 
-Both `profileMd` and `timezone` are optional on every call; omitted fields are left unchanged.
+All fields are optional on every call; omitted fields are left unchanged.
 
 #### `GET /v1/profile`
 需要 JWT + `x-tenant-id`。
@@ -425,10 +425,12 @@ Both `profileMd` and `timezone` are optional on every call; omitted fields are l
 // Response 200
 {
   "profileMd": "## Brand Voice\n\nWarm but professional. Avoid exclamation marks...",
-  "timezone": "Asia/Taipei"
+  "timezone": "Asia/Taipei",
+  "imageStyleSuffix": "Editorial product photography. Soft daylight from left. White seamless backdrop.",
+  "imageStyleReferenceImageIds": ["uuid-1", "uuid-2"]
 }
 ```
-Returns empty strings if the tenant has not set a profile yet.
+Returns empty strings / empty arrays if the tenant has not set a profile yet.
 
 #### `PUT /v1/profile`
 需要 JWT + `x-tenant-id`。Partial update — send only the fields you want to change.
@@ -436,19 +438,47 @@ Returns empty strings if the tenant has not set a profile yet.
 // Request
 {
   "profileMd": "## Brand Voice\n\nWarm but professional. Avoid exclamation marks.\n\n## Preferred Keywords\n\n女裝, 夏季穿搭, 亞麻",
-  "timezone": "Asia/Taipei"
+  "timezone": "Asia/Taipei",
+  "imageStyleSuffix": "Editorial product photography. Soft daylight from left. White seamless backdrop.",
+  "imageStyleReferenceImageIds": ["uuid-1", "uuid-2"]
 }
 
 // Response 200 — full updated profile
 {
   "profileMd": "## Brand Voice\n\nWarm but professional...",
-  "timezone": "Asia/Taipei"
+  "timezone": "Asia/Taipei",
+  "imageStyleSuffix": "Editorial product photography. Soft daylight from left. White seamless backdrop.",
+  "imageStyleReferenceImageIds": ["uuid-1", "uuid-2"]
 }
 ```
 
 **Validation:**
 - `profileMd` — markdown string, max **32 KB**
 - `timezone` — must be a valid IANA timezone string (e.g. `"Asia/Taipei"`, `"America/New_York"`); invalid values return 400
+- `imageStyleSuffix` — plain-text style description appended to image prompts as `\n\nStyle: <suffix>`; max **2 KB**
+- `imageStyleReferenceImageIds` — 0–5 image UUIDs, each must belong to the calling tenant (otherwise 400); used to record which reference images informed the style
+
+#### `POST /v1/profile/image-style/suggest`
+需要 JWT + `x-tenant-id`。Pass 1–5 reference image ids (uploaded via `POST /v1/uploads`) and an optional hint; the system returns a suggested style-suffix string for the user to review and save.
+
+The endpoint does **not** auto-write the suffix — it returns a suggestion only. The user is expected to review, edit if needed, then save via `PUT /v1/profile`.
+
+```json
+// Request
+{
+  "referenceImageIds": ["uuid-1", "uuid-2"],
+  "hint": "more editorial, less commercial"
+}
+
+// Response 200
+{
+  "suggestedSuffix": "Editorial product photography. Warm natural daylight from the left. Off-white seamless backdrop. Centered composition with negative space. Minimal props. Slight film grain."
+}
+```
+
+**Validation:**
+- `referenceImageIds` — 1–5 entries; each id must belong to the calling tenant (otherwise 400)
+- `hint` — optional freetext hint for the vision model; max 500 chars
 
 ---
 
