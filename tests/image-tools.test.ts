@@ -83,4 +83,59 @@ describe('buildImageTools', () => {
       }),
     );
   });
+
+  it('appends styleSuffix to generate prompt when supplied', async () => {
+    const generatedPrompts: string[] = [];
+    const openai = {
+      generate: vi.fn(async (opts: { prompt: string }) => {
+        generatedPrompts.push(opts.prompt);
+        return Buffer.from('fake-image');
+      }),
+    };
+    const cf = { upload: vi.fn(async () => ({ cfImageId: 'cf-id', url: 'https://x/y' })) };
+    const insertImage = vi.fn(async (input: unknown) => ({
+      ...(input as object),
+      id: 'img-1',
+      createdAt: new Date(),
+    }));
+
+    const tools = buildImageTools('tenant-1', {
+      openaiClient: openai as never,
+      cfClient: cf as never,
+      insertImage: insertImage as never,
+      styleSuffix: 'White seamless backdrop. Soft daylight from left.',
+    });
+    const generate = tools.find((t) => t.id === 'images.generate')!;
+    await generate.tool.invoke({ prompt: 'linen shirt on a marble countertop' });
+
+    expect(generatedPrompts[0]).toBe(
+      'linen shirt on a marble countertop\n\nStyle: White seamless backdrop. Soft daylight from left.',
+    );
+  });
+
+  it('omits style block when styleSuffix is empty / undefined', async () => {
+    const generatedPrompts: string[] = [];
+    const openai = {
+      generate: vi.fn(async (opts: { prompt: string }) => {
+        generatedPrompts.push(opts.prompt);
+        return Buffer.from('fake-image');
+      }),
+    };
+    const cf = { upload: vi.fn(async () => ({ cfImageId: 'cf-id', url: 'https://x/y' })) };
+    const insertImage = vi.fn(async (input: unknown) => ({
+      ...(input as object),
+      id: 'img-1',
+      createdAt: new Date(),
+    }));
+
+    const tools = buildImageTools('tenant-1', {
+      openaiClient: openai as never,
+      cfClient: cf as never,
+      insertImage: insertImage as never,
+    });
+    const generate = tools.find((t) => t.id === 'images.generate')!;
+    await generate.tool.invoke({ prompt: 'minimalist hero shot' });
+
+    expect(generatedPrompts[0]).toBe('minimalist hero shot');
+  });
 });

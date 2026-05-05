@@ -14,13 +14,20 @@ export interface BuildImageToolsOpts {
   getImageById?: (tenantId: string, id: string) => Promise<TenantImage | null>;
   fetchImageBuffer?: (url: string) => Promise<Buffer>;
   taskId?: string;
+  /** Tenant-level style suffix appended as `\n\nStyle: <suffix>` to every prompt. Empty/undefined → no-op. */
+  styleSuffix?: string;
+}
+
+function withStyle(prompt: string, styleSuffix?: string): string {
+  if (!styleSuffix) return prompt;
+  return `${prompt}\n\nStyle: ${styleSuffix}`;
 }
 
 export function buildImageTools(tenantId: string, opts: BuildImageToolsOpts): AgentTool[] {
   const generateTool = tool(
     async (input: { prompt: string; size?: string; quality?: string }) => {
       const buffer = await opts.openaiClient.generate({
-        prompt: input.prompt,
+        prompt: withStyle(input.prompt, opts.styleSuffix),
         size: (input.size as '1024x1024') ?? '1024x1024',
         quality: (input.quality as 'medium') ?? 'medium',
       });
@@ -63,7 +70,7 @@ export function buildImageTools(tenantId: string, opts: BuildImageToolsOpts): Ag
       const sourceBuffer = await opts.fetchImageBuffer(source.url);
       const buffer = await opts.openaiClient.edit({
         imageBuffer: sourceBuffer,
-        prompt: input.prompt,
+        prompt: withStyle(input.prompt, opts.styleSuffix),
       });
       const { cfImageId, url } = await opts.cfClient.upload(buffer, {
         filename: 'edited.png',
