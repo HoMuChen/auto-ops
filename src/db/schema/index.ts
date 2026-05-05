@@ -1,4 +1,5 @@
 export * from './tenants.js';
+export * from './tenant_skill_packs.js';
 export * from './users.js';
 export * from './credentials.js';
 export * from './agents.js';
