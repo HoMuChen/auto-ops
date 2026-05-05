@@ -29,24 +29,38 @@ async function readBuiltInPack(filePath: string): Promise<ParsedPack | null> {
   return { key: fm.key, name: fm.name, version: fm.version, body };
 }
 
-export interface PackSource {
-  /** Built-in agent dir (e.g. `<agentDir>/packs/`). */
-  builtInDir: string;
-  /** Built-in pack on/off, keyed by frontmatter `key`. */
-  builtInEnabled: Record<string, boolean>;
-  /**
-   * Tenant + agent for DB-side packs. When omitted, only built-ins are loaded —
-   * keeps the function callable from places without a tenant context (e.g.
-   * activation form preview).
-   */
-  tenantId?: string;
-  agentId?: string;
-}
+/**
+ * Discriminated form: tenant DB packs require BOTH `tenantId` and `agentId`.
+ * Supplying just one is a compile error — prevents a footgun where a
+ * half-supplied call silently skips the DB lookup.
+ */
+export type PackSource =
+  | {
+      /** Built-in agent dir (e.g. `<agentDir>/packs/`). */
+      builtInDir: string;
+      /** Built-in pack on/off, keyed by frontmatter `key`. */
+      builtInEnabled: Record<string, boolean>;
+      /**
+       * Omit both `tenantId` and `agentId` to load only built-ins — keeps the
+       * function callable from places without a tenant context (e.g.
+       * activation form preview).
+       */
+      tenantId?: undefined;
+      agentId?: undefined;
+    }
+  | {
+      builtInDir: string;
+      builtInEnabled: Record<string, boolean>;
+      tenantId: string;
+      agentId: string;
+    };
 
 /**
  * Load and concatenate enabled packs.
  *
  * Order: built-in (alphabetical) → tenant DB (alphabetical by name).
+ * Built-in headings include a version suffix `(v<n>)`; tenant packs do not —
+ * their schema has no version column.
  * Built-ins act as defaults; tenant-supplied packs sit after so they read
  * as "additional house style on top".
  */
