@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { tenantImages } from '../../db/schema/index.js';
+import { buildModel } from '../../llm/model-registry.js';
 import { getTenantProfile, updateTenantProfile } from '../../tenants/profile-repository.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireTenant, tenantOf } from '../middleware/tenant.js';
@@ -28,6 +29,22 @@ const UpdateProfileBody = z.object({
   imageStyleSuffix: z.string().max(STYLE_SUFFIX_MAX).optional(),
   imageStyleReferenceImageIds: z.array(z.string().uuid()).max(MAX_REFERENCE_IMAGES).optional(),
 });
+
+const SuggestBody = z.object({
+  referenceImageIds: z.array(z.string().uuid()).min(1).max(MAX_REFERENCE_IMAGES),
+  hint: z.string().max(500).optional(),
+});
+
+const SuggestResponse = z.object({
+  suggestedSuffix: z.string(),
+});
+
+const SuffixSchema = z.object({
+  suffix: z.string().min(20).max(2000),
+});
+
+const VISION_SYSTEM_PROMPT =
+  "You extract visual style guidelines from a brand's reference images. Output ONE dense prose paragraph (80–200 words) capturing: photography genre (editorial / product / lifestyle / studio), lighting (direction, quality), color palette and mood, composition rules (centered / rule-of-thirds / copy space), background, props and models, finish (clean / film grain). The output will be appended verbatim to image-generation prompts — write it as instructions to an image model. No headings, no bullets, no quote marks. One paragraph only.";
 
 async function assertReferenceImagesOwned(tenantId: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
@@ -74,6 +91,61 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         await assertReferenceImagesOwned(tenantOf(req), body.imageStyleReferenceImageIds);
       }
       return updateTenantProfile(tenantOf(req), body);
+    },
+  );
+
+  app.post(
+    '/profile/image-style/suggest',
+    {
+      schema: {
+        tags: ['tenants'],
+        body: SuggestBody,
+        response: { 200: SuggestResponse },
+      },
+    },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      const body = req.body as z.infer<typeof SuggestBody>;
+
+      const rows = await db
+        .select({ id: tenantImages.id, url: tenantImages.url })
+        .from(tenantImages)
+        .where(
+          and(
+            eq(tenantImages.tenantId, tenantId),
+            inArray(tenantImages.id, body.referenceImageIds),
+          ),
+        );
+      if (rows.length !== body.referenceImageIds.length) {
+        const found = new Set(rows.map((r) => r.id));
+        const missing = body.referenceImageIds.filter((id) => !found.has(id));
+        const err = new Error(`Reference image ids not owned by tenant: ${missing.join(', ')}`);
+        (err as { statusCode?: number }).statusCode = 400;
+        throw err;
+      }
+
+      const model = buildModel({
+        model: 'anthropic/claude-sonnet-4.6',
+        temperature: 0.2,
+      }).withStructuredOutput(SuffixSchema, { name: 'image_style_suffix' });
+
+      const userContent: Array<
+        { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
+      > = [
+        { type: 'text', text: body.hint ?? 'Describe the visual style.' },
+        ...rows.map((r) => ({
+          type: 'image_url' as const,
+          image_url: { url: r.url },
+        })),
+      ];
+
+      const { HumanMessage, SystemMessage } = await import('@langchain/core/messages');
+      const result = await model.invoke([
+        new SystemMessage(VISION_SYSTEM_PROMPT),
+        new HumanMessage({ content: userContent }),
+      ]);
+
+      return { suggestedSuffix: result.suffix };
     },
   );
 }

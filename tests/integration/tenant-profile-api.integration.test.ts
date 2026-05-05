@@ -1,6 +1,9 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authHeaders, mintJwt } from './helpers/auth.js';
 import { seedTenantWithOwner, truncateAll } from './helpers/db.js';
+import { clearScript, llmMockModule, scriptStructured } from './helpers/llm-mock.js';
+
+vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
 const { createTestApp } = await import('./helpers/app.js');
 
@@ -22,6 +25,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await truncateAll();
+  clearScript();
   // Re-seed after truncate since beforeAll runs once
   const seed = await seedTenantWithOwner();
   tenantId = seed.tenantId;
@@ -209,5 +213,81 @@ describe('IDOR prevention', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().profileMd).not.toBe('secret profile'); // tenant 2's data must not leak
+  });
+});
+
+describe('POST /v1/profile/image-style/suggest', () => {
+  it('returns a suggested suffix from vision LLM', async () => {
+    const { db } = await import('../../src/db/client.js');
+    const { tenantImages } = await import('../../src/db/schema/index.js');
+    const [img] = await db
+      .insert(tenantImages)
+      .values({
+        tenantId,
+        cfImageId: 'cf-1',
+        url: 'https://cf.example.com/cf-1',
+        sourceType: 'uploaded',
+        status: 'ready',
+        mimeType: 'image/png',
+      })
+      .returning();
+
+    scriptStructured({ suffix: 'Editorial product photography. Soft daylight. White seamless.' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/profile/image-style/suggest',
+      headers,
+      payload: { referenceImageIds: [img!.id] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().suggestedSuffix).toContain('Editorial');
+  });
+
+  it('rejects empty referenceImageIds (zod min(1))', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/profile/image-style/suggest',
+      headers,
+      payload: { referenceImageIds: [] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects more than 5 referenceImageIds', async () => {
+    const six = Array.from({ length: 6 }, (_, i) => `00000000-0000-0000-0000-00000000000${i}`);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/profile/image-style/suggest',
+      headers,
+      payload: { referenceImageIds: six },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects reference id from another tenant (IDOR guard)', async () => {
+    const { seedTenantWithOwner: seed2 } = await import('./helpers/db.js');
+    const { db } = await import('../../src/db/client.js');
+    const { tenantImages } = await import('../../src/db/schema/index.js');
+    const otherSeed = await seed2();
+    const [otherImg] = await db
+      .insert(tenantImages)
+      .values({
+        tenantId: otherSeed.tenantId,
+        cfImageId: 'cf-other',
+        url: 'https://cf.example.com/cf-other',
+        sourceType: 'uploaded',
+        status: 'ready',
+        mimeType: 'image/png',
+      })
+      .returning();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/profile/image-style/suggest',
+      headers,
+      payload: { referenceImageIds: [otherImg!.id] },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
