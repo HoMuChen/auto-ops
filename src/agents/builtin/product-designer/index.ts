@@ -117,7 +117,10 @@ export const productDesignerAgent: IAgent = {
     const publishers = ctx.availableExecutionAgents.filter((a) => a.metadata?.kind === 'publisher');
 
     const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
-    const packsBlock = await loadPacks(packsDir, cfg.skills as Record<string, boolean>);
+    const packsBlock = await loadPacks({
+      builtInDir: packsDir,
+      builtInEnabled: cfg.skills as Record<string, boolean>,
+    });
 
     const accountId = env.CLOUDFLARE_ACCOUNT_ID;
     const r2AccessKey = env.CLOUDFLARE_R2_ACCESS_KEY_ID;

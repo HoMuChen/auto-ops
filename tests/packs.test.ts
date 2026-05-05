@@ -6,16 +6,22 @@ import { loadPacks } from '../src/agents/lib/packs.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dir = path.resolve(__dirname, 'fixtures/packs');
 
-describe('loadPacks', () => {
+describe('loadPacks (built-in fs only)', () => {
   it('includes only enabled packs and renders them with versioned headings', async () => {
-    const out = await loadPacks(dir, { seoFundamentals: true, eeat: true, disabled: false });
+    const out = await loadPacks({
+      builtInDir: dir,
+      builtInEnabled: { seoFundamentals: true, eeat: true, disabled: false },
+    });
     expect(out).toMatch(/## Skill: SEO Fundamentals \(v1\)/);
     expect(out).toMatch(/## Skill: EEAT Discipline \(v2\)/);
     expect(out).not.toMatch(/disabled/i);
   });
 
   it('returns empty string when nothing enabled', async () => {
-    const out = await loadPacks(dir, { seoFundamentals: false, eeat: false });
+    const out = await loadPacks({
+      builtInDir: dir,
+      builtInEnabled: { seoFundamentals: false, eeat: false },
+    });
     expect(out).toBe('');
   });
 });

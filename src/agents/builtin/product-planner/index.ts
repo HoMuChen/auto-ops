@@ -142,7 +142,10 @@ export const productPlannerAgent: IAgent = {
     const cfg = configSchema.parse(ctx.agentConfig ?? {}) as ProductPlannerConfig;
 
     const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
-    const packsBlock = await loadPacks(packsDir, cfg.skills as Record<string, boolean>);
+    const packsBlock = await loadPacks({
+      builtInDir: packsDir,
+      builtInEnabled: cfg.skills as Record<string, boolean>,
+    });
 
     const serperKey = env.SERPER_API_KEY;
     const serperTools =

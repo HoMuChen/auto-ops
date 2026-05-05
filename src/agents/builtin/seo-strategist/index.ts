@@ -173,7 +173,10 @@ export const seoStrategistAgent: IAgent = {
     const validWorkerIds = new Set(ctx.availableExecutionAgents.map((a) => a.id));
 
     const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
-    const packsBlock = await loadPacks(packsDir, cfg.skills);
+    const packsBlock = await loadPacks({
+      builtInDir: packsDir,
+      builtInEnabled: cfg.skills,
+    });
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
       await ctx.emitLog('agent.started', '收到 brief，我來規劃幾個主題給老闆挑', {

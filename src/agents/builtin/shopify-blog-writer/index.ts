@@ -219,8 +219,7 @@ export const shopifyBlogWriterAgent: IAgent = {
     id: 'shopify-blog-writer',
     name: 'Shopify 部落格寫手',
     description:
-      '依聚焦 brief 撰寫一篇多語 SEO 部落格文章，' +
-      '待人工核准後發布到租戶的 Shopify 部落格。',
+      '依聚焦 brief 撰寫一篇多語 SEO 部落格文章，' + '待人工核准後發布到租戶的 Shopify 部落格。',
     defaultModel: { model: 'anthropic/claude-sonnet-4.6', temperature: 0.4 },
     defaultPrompt: DEFAULT_PROMPT,
     toolIds: ['shopify.publish_article'],
@@ -287,7 +286,10 @@ export const shopifyBlogWriterAgent: IAgent = {
     const webFetchTools = buildWebFetchTools({ client: new WebFetchClient() });
 
     const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
-    const packsBlock = await loadPacks(packsDir, cfg.skills);
+    const packsBlock = await loadPacks({
+      builtInDir: packsDir,
+      builtInEnabled: cfg.skills,
+    });
     const systemPrompt = packsBlock ? `${packsBlock}\n\n${ctx.systemPrompt}` : ctx.systemPrompt;
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
