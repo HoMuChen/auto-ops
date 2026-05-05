@@ -38,7 +38,7 @@ Requirements:
 - Summary: 1–2 sentence excerpt (<= 200 chars) used as the meta description
   and the blog index card.
 - Tags: 3–8 short lower-case keywords.
-- Honor any tone/keyword/forbidden-phrase constraints in the brief.
+- Honor any tenant profile / brief constraints.
 - Stay focused on the single topic — do NOT propose other articles.
 - progressNote is one short sentence for the kanban timeline. report is the
   full memo for the boss-review panel. Don't duplicate them.
@@ -62,21 +62,6 @@ Research workflow:
 When the task is Stage 1 (EEAT questions), the agent prompt will explicitly ask you for questions; otherwise produce the article.`;
 
 const configSchema = z.object({
-  targetLanguages: z
-    .array(z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']))
-    .min(1)
-    .default(['zh-TW'])
-    .describe('Languages this writer is fluent in (informational; the brief picks one).'),
-  brandTone: z
-    .string()
-    .nullish()
-    .describe('Free-form tone description, e.g. "warm, professional, slightly playful"'),
-  bannedPhrases: z.array(z.string()).default([]).describe('Phrases the agent must never use'),
-  preferredKeywords: z
-    .array(z.string())
-    .default([])
-    .describe('Keywords the agent should weave in when natural'),
-
   publishToShopify: z
     .boolean()
     .default(true)
@@ -294,23 +279,13 @@ export const shopifyBlogWriterAgent: IAgent = {
         blogHandle: cfg.blogHandle ?? '(default)',
       });
 
-      const constraints: string[] = [];
-      if (cfg.brandTone) constraints.push(`Tone: ${cfg.brandTone}`);
-      if (cfg.preferredKeywords.length > 0) {
-        constraints.push(`Preferred keywords: ${cfg.preferredKeywords.join(', ')}`);
-      }
-      if (cfg.bannedPhrases.length > 0) {
-        constraints.push(`Avoid phrases: ${cfg.bannedPhrases.join(', ')}`);
-      }
-      constraints.push(`Writer fluent in: ${cfg.targetLanguages.join(', ')}`);
-
       if (
         shouldDoStage1(input.taskOutput, input.params, input.messages, cfg.skills.eeat ?? false)
       ) {
         const messages = await buildAgentMessages(
           systemPrompt,
           input.messages,
-          constraints,
+          undefined,
           input.imageResolver,
         );
         const q = await invokeStructured(
@@ -358,7 +333,7 @@ ${questionList}
       const messages = await buildAgentMessages(
         systemPrompt,
         input.messages,
-        constraints,
+        undefined,
         input.imageResolver,
       );
 

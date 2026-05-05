@@ -60,7 +60,6 @@ describe('Shopify Blog Writer EEAT two-stage flow', () => {
       headers: authHeaders(jwt, tenantId),
       payload: {
         config: {
-          targetLanguages: ['zh-TW'],
           publishToShopify: true,
           // skills schema is now an open record with no built-in defaults —
           // explicitly opt in to the eeat pack so Stage 1 fires.

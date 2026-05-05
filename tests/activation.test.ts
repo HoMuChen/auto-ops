@@ -179,19 +179,9 @@ describe('builtin agent manifests', () => {
     );
     const result = validateAgentConfig(shopifyBlogWriterAgent.manifest, {});
     expect(result).toMatchObject({
-      targetLanguages: ['zh-TW'],
-      bannedPhrases: [],
-      preferredKeywords: [],
+      publishToShopify: true,
+      publishImmediately: false,
     });
-  });
-
-  it('Shopify Blog Writer rejects empty targetLanguages array', async () => {
-    const { shopifyBlogWriterAgent } = await import(
-      '../src/agents/builtin/shopify-blog-writer/index.js'
-    );
-    expect(() =>
-      validateAgentConfig(shopifyBlogWriterAgent.manifest, { targetLanguages: [] }),
-    ).toThrow(ValidationError);
   });
 
   // Frontend forms emit `null` for empty optional inputs (JSON has no
@@ -206,7 +196,6 @@ describe('builtin agent manifests', () => {
       validateAgentConfig(shopifyBlogWriterAgent.manifest, {
         blogHandle: null,
         defaultAuthor: null,
-        brandTone: null,
         credentialLabel: null,
       }),
     ).not.toThrow();

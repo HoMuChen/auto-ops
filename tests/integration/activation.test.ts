@@ -158,7 +158,7 @@ describe('Agent activation flow', () => {
       method: 'POST',
       url: '/v1/agents/shopify-blog-writer/activate',
       headers: authHeaders(jwt, tenantId),
-      payload: { config: { targetLanguages: ['zh-TW', 'en'] } },
+      payload: { config: { blogHandle: 'news' } },
     });
     expect(earlyActivate.statusCode).toBe(409);
 
@@ -183,10 +183,10 @@ describe('Agent activation flow', () => {
       method: 'POST',
       url: '/v1/agents/shopify-blog-writer/activate',
       headers: authHeaders(jwt, tenantId),
-      payload: { config: { targetLanguages: ['zh-TW', 'en'] } },
+      payload: { config: { blogHandle: 'news' } },
     });
     expect(activate.statusCode).toBe(200);
-    expect(activate.json().config.targetLanguages).toEqual(['zh-TW', 'en']);
+    expect(activate.json().config.blogHandle).toBe('news');
   });
 
   it('deactivate flips enabled but preserves config', async () => {
@@ -205,7 +205,7 @@ describe('Agent activation flow', () => {
       method: 'POST',
       url: '/v1/agents/shopify-blog-writer/activate',
       headers: authHeaders(jwt, tenantId),
-      payload: { config: { targetLanguages: ['ja'] } },
+      payload: { config: { blogHandle: 'news' } },
     });
 
     const deactivate = await app.inject({
@@ -223,6 +223,6 @@ describe('Agent activation flow', () => {
       })
       .then((r) => r.json());
     expect(detail.enabled).toBe(false);
-    expect(detail.config).toMatchObject({ targetLanguages: ['ja'] });
+    expect(detail.config).toMatchObject({ blogHandle: 'news' });
   });
 });

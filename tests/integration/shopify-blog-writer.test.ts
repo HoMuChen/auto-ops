@@ -72,7 +72,6 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
       headers: authHeaders(jwt, tenantId),
       payload: {
         config: {
-          targetLanguages: ['zh-TW'],
           publishToShopify: true,
           blogHandle: 'editorial',
           defaultAuthor: 'Auto-Ops Bot',
@@ -235,7 +234,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
       method: 'POST',
       url: '/v1/agents/shopify-blog-writer/activate',
       headers: authHeaders(jwt, tenantId),
-      payload: { config: { targetLanguages: ['en'], publishToShopify: false } },
+      payload: { config: { publishToShopify: false } },
     });
 
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
@@ -301,7 +300,6 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
       headers: authHeaders(jwt, tenantId),
       payload: {
         config: {
-          targetLanguages: ['en'],
           publishToShopify: true,
           blogHandle: 'doesnt-exist',
         },
@@ -369,7 +367,6 @@ describe('Shopify Blog Writer — cover image generation in Stage 2', () => {
       headers: authHeaders(jwt, tenantId),
       payload: {
         config: {
-          targetLanguages: ['zh-TW'],
           publishToShopify: true,
           generateCoverImage: true,
           coverImageStyle: 'editorial blog cover',
