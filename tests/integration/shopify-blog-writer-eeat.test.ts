@@ -58,7 +58,15 @@ describe('Shopify Blog Writer EEAT two-stage flow', () => {
       method: 'POST',
       url: '/v1/agents/shopify-blog-writer/activate',
       headers: authHeaders(jwt, tenantId),
-      payload: { config: { targetLanguages: ['zh-TW'], publishToShopify: true } },
+      payload: {
+        config: {
+          targetLanguages: ['zh-TW'],
+          publishToShopify: true,
+          // skills schema is now an open record with no built-in defaults —
+          // explicitly opt in to the eeat pack so Stage 1 fires.
+          skills: { eeat: true },
+        },
+      },
     });
 
     // Supervisor routes to writer; Stage 1 — writer asks EEAT questions

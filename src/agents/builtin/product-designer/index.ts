@@ -8,6 +8,7 @@ import { OpenAIImagesClient } from '../../../integrations/openai-images/client.j
 import { buildImageTools } from '../../../integrations/openai-images/tools.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
+import { skillsToggleSchema } from '../../lib/skills-schema.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
 import type {
   AgentBuildContext,
@@ -87,12 +88,7 @@ const ProductListingSchema = z.object({
 const configSchema = z.object({
   defaultVendor: z.string().nullish(),
   defaultLanguage: z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']).default('zh-TW'),
-  skills: z
-    .object({
-      productPhotography: z.boolean().default(true),
-      socialMediaImages: z.boolean().default(true),
-    })
-    .default({}),
+  skills: skillsToggleSchema,
 });
 
 type ProductDesignerConfig = z.infer<typeof configSchema>;
@@ -119,7 +115,7 @@ export const productDesignerAgent: IAgent = {
     const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
     const packsBlock = await loadPacks({
       builtInDir: packsDir,
-      builtInEnabled: cfg.skills as Record<string, boolean>,
+      builtInEnabled: cfg.skills,
       tenantId: ctx.tenantId,
       agentId: 'product-designer',
     });

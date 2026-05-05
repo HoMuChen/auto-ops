@@ -66,6 +66,16 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
       metadata: { storeUrl: 'cluster-shop.myshopify.com' },
     });
 
+    // skills schema is now an open record with no built-in defaults — activate
+    // the writer with `eeat: true` so the Stage 1 (EEAT Q&A) path fires when
+    // the strategist-spawned child runs.
+    await app.inject({
+      method: 'POST',
+      url: '/v1/agents/shopify-blog-writer/activate',
+      headers: authHeaders(jwt, tenantId),
+      payload: { config: { skills: { eeat: true } } },
+    });
+
     // Stub fetch: google.serper.dev returns canned SERP; myshopify.com returns
     // blog list + article create on the publish step.
     fetchMock.mockImplementation(async (url: string | URL) => {

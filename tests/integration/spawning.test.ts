@@ -52,6 +52,15 @@ describe('Strategy → Spawn → Execution flow', () => {
       metadata: { storeUrl: 'demo-shop.myshopify.com' },
     });
 
+    // skills schema is now an open record with no built-in defaults — activate
+    // the writer with `eeat: true` so each strategist-spawned child fires Stage 1.
+    await app.inject({
+      method: 'POST',
+      url: '/v1/agents/shopify-blog-writer/activate',
+      headers: authHeaders(jwt, tenantId),
+      payload: { config: { skills: { eeat: true } } },
+    });
+
     // ── Phase 1: parent strategy task ──────────────────────────────────────
     // Supervisor picks the strategist (structured), then the strategist
     // submits its plan via the submit_plan tool (single-pass tool-loop).

@@ -7,6 +7,7 @@ import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
+import { skillsToggleSchema } from '../../lib/skills-schema.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
 import type {
   AgentBuildContext,
@@ -81,13 +82,7 @@ const configSchema = z.object({
     .array(z.string())
     .default([])
     .describe('Keyword cluster the strategist should prioritise when planning topics'),
-  skills: z
-    .object({
-      seoFundamentals: z.boolean().default(true),
-      aiSeo: z.boolean().default(true),
-      geo: z.boolean().default(true),
-    })
-    .default({}),
+  skills: skillsToggleSchema,
 });
 
 type SeoStrategistConfig = z.infer<typeof configSchema>;

@@ -16,6 +16,7 @@ import { invokeStructured } from '../../lib/invoke-structured.js';
 import { markdownToHtml } from '../../lib/markdown.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
+import { skillsToggleSchema } from '../../lib/skills-schema.js';
 import { runToolLoop } from '../../lib/tool-loop.js';
 import type {
   AgentBuildContext,
@@ -102,14 +103,7 @@ const configSchema = z.object({
     .nullish()
     .describe('Which Shopify credential row to use when the tenant has multiple stores.'),
 
-  skills: z
-    .object({
-      seoFundamentals: z.boolean().default(true),
-      eeat: z.boolean().default(true),
-      aiSeo: z.boolean().default(false),
-      geo: z.boolean().default(false),
-    })
-    .default({}),
+  skills: skillsToggleSchema,
   generateCoverImage: z
     .boolean()
     .default(false)
@@ -310,7 +304,9 @@ export const shopifyBlogWriterAgent: IAgent = {
       }
       constraints.push(`Writer fluent in: ${cfg.targetLanguages.join(', ')}`);
 
-      if (shouldDoStage1(input.taskOutput, input.params, input.messages, cfg.skills.eeat)) {
+      if (
+        shouldDoStage1(input.taskOutput, input.params, input.messages, cfg.skills.eeat ?? false)
+      ) {
         const messages = await buildAgentMessages(
           systemPrompt,
           input.messages,

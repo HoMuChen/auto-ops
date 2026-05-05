@@ -258,7 +258,12 @@ describe('seoStrategistAgent.build → invoke', () => {
   });
 
   it('system prompt contains SEO Fundamentals skill pack when seoFundamentals is enabled', async () => {
-    const runnable = await seoStrategistAgent.build(ctx);
+    // skills schema is an open record (z.record(string, boolean)) with no
+    // built-in defaults — tenants must explicitly opt in to each pack.
+    const runnable = await seoStrategistAgent.build({
+      ...ctx,
+      agentConfig: { ...ctx.agentConfig, skills: { seoFundamentals: true } },
+    });
     await runnable.invoke({
       messages: [{ role: 'user', content: 'plan' }],
       params: {},
