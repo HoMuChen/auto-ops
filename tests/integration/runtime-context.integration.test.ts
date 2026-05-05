@@ -12,7 +12,7 @@ describe('buildRuntimeContext (integration)', () => {
       .insert(tenants)
       .values({
         name: 'Tester',
-        slug: `rt-${Date.now()}`,
+        slug: `rt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         profileMd: '## Voice\n\nWarm and direct.',
         timezone: 'Asia/Taipei',
       })
@@ -37,7 +37,10 @@ describe('buildRuntimeContext (integration)', () => {
   it('omits the profile section when profile_md is empty', async () => {
     const [empty] = await db
       .insert(tenants)
-      .values({ name: 'Empty', slug: `empty-${Date.now()}` })
+      .values({
+        name: 'Empty',
+        slug: `empty-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      })
       .returning();
     try {
       const block = await buildRuntimeContext(empty!.id);
@@ -48,9 +51,9 @@ describe('buildRuntimeContext (integration)', () => {
     }
   });
 
-  it('falls back to UTC + empty profile when tenant row is missing', async () => {
-    const block = await buildRuntimeContext('00000000-0000-0000-0000-000000000000');
-    expect(block).toContain('- Tenant timezone: UTC');
-    expect(block).not.toContain('## Tenant profile');
+  it('throws NotFoundError when the tenant row is missing', async () => {
+    await expect(
+      buildRuntimeContext('00000000-0000-0000-0000-000000000000'),
+    ).rejects.toThrow(/Tenant 00000000-0000-0000-0000-000000000000/);
   });
 });

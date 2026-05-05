@@ -28,12 +28,13 @@ vi.mock('../src/llm/model-registry.js', () => ({
 }));
 
 // Stub the runtime-context loader so the supervisor unit suite stays DB-free.
-// The block format is exercised end-to-end in the integration test
-// (tests/integration/runtime-context.integration.test.ts).
+// Live time + UTC default keeps the suite DB-free without the static-timestamp
+// footgun for any future time-dependent assertions. Block format is exercised
+// end-to-end in tests/integration/runtime-context.integration.test.ts.
 vi.mock('../src/orchestrator/runtime-context.js', () => ({
   buildRuntimeContext: vi.fn(
     async () =>
-      'Runtime context:\n- Current time: 2026-01-01T00:00:00.000Z\n- Tenant timezone: UTC\n\n---\n\n',
+      `Runtime context:\n- Current time: ${new Date().toISOString()}\n- Tenant timezone: UTC\n\n---\n\n`,
   ),
 }));
 
