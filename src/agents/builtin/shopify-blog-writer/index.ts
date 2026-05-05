@@ -289,6 +289,8 @@ export const shopifyBlogWriterAgent: IAgent = {
     const packsBlock = await loadPacks({
       builtInDir: packsDir,
       builtInEnabled: cfg.skills,
+      tenantId: ctx.tenantId,
+      agentId: 'shopify-blog-writer',
     });
     const systemPrompt = packsBlock ? `${packsBlock}\n\n${ctx.systemPrompt}` : ctx.systemPrompt;
 

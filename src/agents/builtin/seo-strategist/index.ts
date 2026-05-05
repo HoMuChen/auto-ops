@@ -176,6 +176,8 @@ export const seoStrategistAgent: IAgent = {
     const packsBlock = await loadPacks({
       builtInDir: packsDir,
       builtInEnabled: cfg.skills,
+      tenantId: ctx.tenantId,
+      agentId: 'seo-strategist',
     });
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {

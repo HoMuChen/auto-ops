@@ -94,6 +94,12 @@ vi.mock('../src/llm/model-registry.js', () => ({
   })),
 }));
 
+// Stub the tenant skill-packs DB query — agent .build() now calls loadPacks
+// with ctx.tenantId, which would otherwise hit the real DB and ECONNREFUSED.
+vi.mock('../src/agents/skill-packs-repository.js', () => ({
+  listPacksForAgent: vi.fn(async () => []),
+}));
+
 const { seoStrategistAgent } = await import('../src/agents/builtin/seo-strategist/index.js');
 
 const PEERS = [

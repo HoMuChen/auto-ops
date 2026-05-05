@@ -83,6 +83,12 @@ vi.mock('../src/integrations/cloudflare/images-repository.js', () => ({
   getImageById: vi.fn(async () => null),
 }));
 
+// Stub the tenant skill-packs DB query — agent .build() now calls loadPacks
+// with ctx.tenantId, which would otherwise hit the real DB and ECONNREFUSED.
+vi.mock('../src/agents/skill-packs-repository.js', () => ({
+  listPacksForAgent: vi.fn(async () => []),
+}));
+
 const { productDesignerAgent } = await import('../src/agents/builtin/product-designer/index.js');
 
 const publisherPeer = {

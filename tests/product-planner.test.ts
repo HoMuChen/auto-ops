@@ -99,6 +99,12 @@ vi.mock('../src/integrations/serper/client.js', () => ({
   SerperClient: vi.fn(() => ({})),
 }));
 
+// Stub the tenant skill-packs DB query — agent .build() now calls loadPacks
+// with ctx.tenantId, which would otherwise hit the real DB and ECONNREFUSED.
+vi.mock('../src/agents/skill-packs-repository.js', () => ({
+  listPacksForAgent: vi.fn(async () => []),
+}));
+
 const { productPlannerAgent } = await import('../src/agents/builtin/product-planner/index.js');
 
 const designerPeer = {

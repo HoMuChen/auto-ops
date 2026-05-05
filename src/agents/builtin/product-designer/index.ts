@@ -120,6 +120,8 @@ export const productDesignerAgent: IAgent = {
     const packsBlock = await loadPacks({
       builtInDir: packsDir,
       builtInEnabled: cfg.skills as Record<string, boolean>,
+      tenantId: ctx.tenantId,
+      agentId: 'product-designer',
     });
 
     const accountId = env.CLOUDFLARE_ACCOUNT_ID;

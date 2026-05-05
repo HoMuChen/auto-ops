@@ -145,6 +145,8 @@ export const productPlannerAgent: IAgent = {
     const packsBlock = await loadPacks({
       builtInDir: packsDir,
       builtInEnabled: cfg.skills as Record<string, boolean>,
+      tenantId: ctx.tenantId,
+      agentId: 'product-planner',
     });
 
     const serperKey = env.SERPER_API_KEY;
