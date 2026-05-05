@@ -82,6 +82,6 @@ describe('skill-packs-repository', () => {
     await createPack(tenantId, { key: 'tenant.dup', name: 'A', body: 'a', appliesTo: [] });
     await expect(
       createPack(tenantId, { key: 'tenant.dup', name: 'B', body: 'b', appliesTo: [] }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/duplicate key value|tenant_skill_packs_tenant_key_uq/);
   });
 });
