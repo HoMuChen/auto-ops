@@ -187,7 +187,7 @@ x-tenant-id: <UUID>
 
 [啟用 Shopify 部落格寫手]               POST /v1/agents/    回 { enabled:true, config }
   渲染 configSchema 表單           shopify-blog-writer/
-  (targetLanguages, brandTone…)    activate
+  (blogHandle, skills…)            activate
                                                     ↓
 
 [首頁兩個入口擇一]              ──── A 老闆已想清楚 ──────────────────────────
@@ -413,6 +413,114 @@ UI 看到 `refs.published` 就顯示 badge / 連結即可，不需要看其他�
 
 ---
 
+### Tenant Profile
+
+Stores free-form markdown that every agent reads as persistent brand context — brand voice, tone, banned phrases, preferred keywords, language preferences, etc. Also holds the tenant's IANA timezone for scheduling display.
+
+Both `profileMd` and `timezone` are optional on every call; omitted fields are left unchanged.
+
+#### `GET /v1/profile`
+需要 JWT + `x-tenant-id`。
+```json
+// Response 200
+{
+  "profileMd": "## Brand Voice\n\nWarm but professional. Avoid exclamation marks...",
+  "timezone": "Asia/Taipei"
+}
+```
+Returns empty strings if the tenant has not set a profile yet.
+
+#### `PUT /v1/profile`
+需要 JWT + `x-tenant-id`。Partial update — send only the fields you want to change.
+```json
+// Request
+{
+  "profileMd": "## Brand Voice\n\nWarm but professional. Avoid exclamation marks.\n\n## Preferred Keywords\n\n女裝, 夏季穿搭, 亞麻",
+  "timezone": "Asia/Taipei"
+}
+
+// Response 200 — full updated profile
+{
+  "profileMd": "## Brand Voice\n\nWarm but professional...",
+  "timezone": "Asia/Taipei"
+}
+```
+
+**Validation:**
+- `profileMd` — markdown string, max **32 KB**
+- `timezone` — must be a valid IANA timezone string (e.g. `"Asia/Taipei"`, `"America/New_York"`); invalid values return 400
+
+---
+
+### Skill Packs
+
+Skill packs are reusable markdown documents that are injected into an agent's system prompt at runtime. They let you add domain knowledge, writing guidelines, or workflow rules without touching agent code.
+
+Each pack has an `appliesTo` list of agent IDs that controls which agents load it. An empty `appliesTo` array means the pack is a draft — it is not loaded anywhere.
+
+#### `GET /v1/skill-packs`
+需要 JWT + `x-tenant-id`。Returns all packs for the tenant.
+```json
+[
+  {
+    "id": "uuid",
+    "key": "tenant.brand-voice",
+    "name": "Brand Voice Guidelines",
+    "body": "Always use second-person address...",
+    "appliesTo": ["shopify-blog-writer", "seo-strategist"],
+    "createdAt": "2026-05-01T00:00:00Z",
+    "updatedAt": "2026-05-01T00:00:00Z"
+  }
+]
+```
+
+#### `POST /v1/skill-packs`
+需要 JWT + `x-tenant-id`。Creates a new pack.
+```json
+// Request
+{
+  "key": "tenant.seo-rules",
+  "name": "SEO Writing Rules",
+  "body": "## H2 density\n\nUse one H2 per 200 words...",
+  "appliesTo": ["shopify-blog-writer"]
+}
+
+// Response 201
+{
+  "id": "uuid",
+  "key": "tenant.seo-rules",
+  "name": "SEO Writing Rules",
+  "body": "## H2 density\n\nUse one H2 per 200 words...",
+  "appliesTo": ["shopify-blog-writer"],
+  "createdAt": "2026-05-01T00:00:00Z",
+  "updatedAt": "2026-05-01T00:00:00Z"
+}
+```
+
+**Key format:** must match `tenant.<slug>` — the prefix is literal `tenant.` followed by 1–60 characters of lowercase letters, digits, and hyphens (e.g. `tenant.seo-rules`, `tenant.brand-voice-2`). Duplicate keys within a tenant return 409.
+
+**Body:** markdown string, max **64 KB**. No frontmatter needed — metadata lives in the other columns.
+
+**`appliesTo` semantic:** the array contains agent IDs (e.g. `"shopify-blog-writer"`, `"seo-strategist"`). When an agent runs a task, it loads every pack where its ID appears in `appliesTo`. An empty array (`[]`) means the pack is saved but not injected anywhere — useful for drafting a pack before rolling it out.
+
+#### `GET /v1/skill-packs/:packId`
+需要 JWT + `x-tenant-id`。Returns a single pack. 404 if not found or not owned by the tenant.
+
+#### `PUT /v1/skill-packs/:packId`
+需要 JWT + `x-tenant-id`。Partial update — all fields optional.
+```json
+// Request — update appliesTo to also cover seo-strategist
+{ "appliesTo": ["shopify-blog-writer", "seo-strategist"] }
+
+// Response 200 — full updated pack
+{ "id": "uuid", "key": "tenant.seo-rules", "appliesTo": ["shopify-blog-writer", "seo-strategist"], ... }
+```
+
+#### `DELETE /v1/skill-packs/:packId`
+需要 JWT + `x-tenant-id`。204 No Content. The pack is removed and will no longer be loaded by any agent.
+
+---
+
 ### Agents
 
 #### `GET /v1/agents`
@@ -427,7 +535,7 @@ UI 看到 `refs.published` 就顯示 badge / 連結即可，不需要看其他�
     "toolIds": ["serper.search"],
     "requiredCredentials": [],
     "configSchema": {
-      /* maxTopics, defaultLanguages, brandTone, preferredKeywords,
+      /* maxTopics, defaultLanguages,
          skills: { seoFundamentals(default:true), aiSeo(default:true), geo(default:true) } */
     },
     "metadata": { "kind": "strategy" },
@@ -451,8 +559,7 @@ UI 看到 `refs.published` 就顯示 badge / 連結即可，不需要看其他�
       }
     ],
     "configSchema": {
-      /* targetLanguages, brandTone, bannedPhrases, preferredKeywords,
-         publishToShopify, blogHandle, defaultAuthor, publishImmediately, credentialLabel,
+      /* publishToShopify, blogHandle, defaultAuthor, publishImmediately, credentialLabel,
          skills: { seoFundamentals(default:true), eeat(default:true), aiSeo(default:false), geo(default:false) } */
     },
     "enabled": false,
@@ -468,7 +575,7 @@ UI 看到 `refs.published` 就顯示 badge / 連結即可，不需要看其他�
     "requiredCredentials": [],
     "configSchema": {
       /* maxVariants(default:5), defaultLanguages(default:['zh-TW']),
-         brandTone, preferredKeywords, useSerperSearch(default:true),
+         useSerperSearch(default:true),
          skills: { seoFundamentals(default:true), productPositioning(default:true), ecommerceMarketing(default:true) } */
     },
     "metadata": { "kind": "strategy" },
@@ -537,8 +644,8 @@ UI 看到 `refs.published` 就顯示 badge / 連結即可，不需要看其他�
 // shopify-blog-writer 範例
 {
   "config": {
-    "targetLanguages": ["zh-TW"],
-    "brandTone": "professional"
+    "publishToShopify": true,
+    "blogHandle": "news"
   },
   "promptOverride": null,        // 可選
   "toolWhitelist": null          // 可選；填了會限制 agent 只能用列表內的 tool
@@ -549,7 +656,6 @@ UI 看到 `refs.published` 就顯示 badge / 連結即可，不需要看其他�
   "config": {
     "maxVariants": 3,
     "defaultLanguages": ["zh-TW"],
-    "brandTone": "warm, professional",
     "useSerperSearch": true
   }
 }
@@ -1165,13 +1271,11 @@ UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](artifac
 
 #### shopify-blog-writer 啟用設定（`POST /v1/agents/shopify-blog-writer/activate` 的 config）
 
+> **Brand voice, preferred keywords, and banned phrases are now set in the Tenant Profile (`PUT /v1/profile`)** — no longer configured per-agent.
+
 ```json
 {
   "config": {
-    "targetLanguages": ["zh-TW", "en"],
-    "brandTone": "professional, slightly playful",
-    "preferredKeywords": ["女裝", "夏季"],
-
     "publishToShopify": true,            // 預設 true；false 則僅產草稿不發
     "blogHandle": "editorial",           // 不填→第一個 blog（多數店只有一個 "news"）
     "defaultAuthor": "Auto-Ops Bot",     // LLM 沒給 author 時用這個
@@ -1420,13 +1524,13 @@ UI 應該渲染：
 
 ### product-planner 啟用設定
 
+> **Brand tone and preferred keywords are now set in the Tenant Profile (`PUT /v1/profile`)** — no longer configured per-agent.
+
 ```json
 {
   "config": {
     "maxVariants": 5,                    // 最多幾個 variant，預設 5
     "defaultLanguages": ["zh-TW"],       // 預設語言，brief 沒指定時用
-    "brandTone": "warm, professional",   // 選填；傳給設計師的品牌語調
-    "preferredKeywords": [],             // 選填；優先納入的 keyword cluster
     "useSerperSearch": true,             // true → 搜尋競品 SERP 後再規劃
     "skills": {
       "seoFundamentals": true,
