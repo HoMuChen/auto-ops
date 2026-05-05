@@ -12,7 +12,9 @@ import { drainNextTask } from './helpers/runner.js';
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
 // Spy on OpenAI image generation BEFORE importing anything that builds tools.
-const generateSpy = vi.fn(async () => Buffer.from('fake-image'));
+const generateSpy = vi.fn(async (_opts: { prompt: string; size?: string; quality?: string }) =>
+  Buffer.from('fake-image'),
+);
 vi.mock('../../src/integrations/openai-images/client.js', async (orig) => {
   const actual = await orig<typeof import('../../src/integrations/openai-images/client.js')>();
   class MockOpenAIImagesClient extends actual.OpenAIImagesClient {
@@ -127,8 +129,9 @@ describe('image style e2e', () => {
     expect(generateSpy).toHaveBeenCalled();
 
     // The prompt passed to OpenAI must include the LLM-provided text AND the tenant style suffix.
-    const firstCall = generateSpy.mock.calls[0]?.[0] as { prompt: string } | undefined;
-    expect(firstCall?.prompt).toContain('linen shirt');
-    expect(firstCall?.prompt).toContain(`Style: ${MARKER}`);
+    const firstCallArgs = generateSpy.mock.calls[0];
+    expect(firstCallArgs).toBeDefined();
+    expect(firstCallArgs![0].prompt).toContain('linen shirt');
+    expect(firstCallArgs![0].prompt).toContain(`Style: ${MARKER}`);
   });
 });
