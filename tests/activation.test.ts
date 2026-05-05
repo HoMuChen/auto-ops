@@ -211,11 +211,4 @@ describe('builtin agent manifests', () => {
       }),
     ).not.toThrow();
   });
-
-  it('SEO Strategist accepts null for optional brandTone', async () => {
-    const { seoStrategistAgent } = await import('../src/agents/builtin/seo-strategist/index.js');
-    expect(() =>
-      validateAgentConfig(seoStrategistAgent.manifest, { brandTone: null }),
-    ).not.toThrow();
-  });
 });

@@ -109,8 +109,6 @@ const configSchema = z.object({
     .array(z.enum(['zh-TW', 'zh-CN', 'en', 'ja', 'ko']))
     .min(1)
     .default(['zh-TW']),
-  brandTone: z.string().nullish(),
-  preferredKeywords: z.array(z.string()).default([]),
   useSerperSearch: z.boolean().default(true).describe('Search competitor SERPs before planning'),
   skills: skillsToggleSchema,
 });
@@ -166,10 +164,6 @@ export const productPlannerAgent: IAgent = {
       const constraints: string[] = [
         `Maximum variants: ${cfg.maxVariants}`,
         `Default languages: ${cfg.defaultLanguages.join(', ')}`,
-        ...(cfg.brandTone ? [`Brand tone: ${cfg.brandTone}`] : []),
-        ...(cfg.preferredKeywords.length > 0
-          ? [`Preferred keywords: ${cfg.preferredKeywords.join(', ')}`]
-          : []),
       ];
 
       const basePrompt = ctx.systemPrompt.replace('{MAX_VARIANTS}', String(cfg.maxVariants));

@@ -74,14 +74,6 @@ const configSchema = z.object({
     .min(1)
     .default(['zh-TW'])
     .describe('Languages used when the brief does not specify per-topic languages'),
-  brandTone: z
-    .string()
-    .nullish()
-    .describe('Free-form tone description forwarded to each child writer task'),
-  preferredKeywords: z
-    .array(z.string())
-    .default([])
-    .describe('Keyword cluster the strategist should prioritise when planning topics'),
   skills: skillsToggleSchema,
 });
 
@@ -182,10 +174,6 @@ export const seoStrategistAgent: IAgent = {
       });
 
       const constraints: string[] = [`Maximum topics: ${cfg.maxTopics}`];
-      if (cfg.brandTone) constraints.push(`Brand tone: ${cfg.brandTone}`);
-      if (cfg.preferredKeywords.length > 0) {
-        constraints.push(`Preferred keyword cluster: ${cfg.preferredKeywords.join(', ')}`);
-      }
       constraints.push(
         `Default languages if user did not specify: ${cfg.defaultLanguages.join(', ')}`,
       );
