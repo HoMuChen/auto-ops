@@ -12,6 +12,7 @@ import { buildSerperTools } from '../../../integrations/serper/tools.js';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { WebFetchClient } from '../../../integrations/web/client.js';
 import { buildWebFetchTools } from '../../../integrations/web/tools.js';
+import { getTenantProfile } from '../../../tenants/profile-repository.js';
 import { invokeStructured } from '../../lib/invoke-structured.js';
 import { markdownToHtml } from '../../lib/markdown.js';
 import { buildAgentMessages } from '../../lib/messages.js';
@@ -222,6 +223,7 @@ export const shopifyBlogWriterAgent: IAgent = {
     const r2PublicBaseUrl = env.CLOUDFLARE_R2_PUBLIC_BASE_URL;
     const openaiKey = env.OPENAI_API_KEY;
 
+    const profile = await getTenantProfile(ctx.tenantId);
     const r2Ready = accountId && r2AccessKey && r2SecretKey && r2Bucket && r2PublicBaseUrl;
     const imageTools =
       r2Ready && openaiKey
@@ -236,6 +238,7 @@ export const shopifyBlogWriterAgent: IAgent = {
             }),
             insertImage,
             taskId: ctx.taskId,
+            styleSuffix: profile.imageStyleSuffix || undefined,
           })
         : [];
 
