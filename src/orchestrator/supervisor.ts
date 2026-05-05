@@ -92,8 +92,10 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
     : '';
 
   const decision = await invokeStructured(SUPERVISOR_MODEL, RouteSchema, 'route_decision', [
-    new SystemMessage(buildRuntimeContext() + SUPERVISOR_PROMPT),
-    new HumanMessage(`Available employees:\n${roster}\n\nUser brief:\n${userBrief}${progressBlock}`),
+    new SystemMessage((await buildRuntimeContext(state.tenantId)) + SUPERVISOR_PROMPT),
+    new HumanMessage(
+      `Available employees:\n${roster}\n\nUser brief:\n${userBrief}${progressBlock}`,
+    ),
   ]);
 
   if (decision.clarification) {

@@ -73,7 +73,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
         taskId: opts.taskId,
         // Model is fixed in the manifest — no per-tenant override.
         modelConfig: manifest.defaultModel,
-        systemPrompt: buildRuntimeContext() + basePrompt,
+        systemPrompt: (await buildRuntimeContext(opts.tenantId)) + basePrompt,
         ...(override.toolWhitelist ? { toolWhitelist: override.toolWhitelist } : {}),
         agentConfig: override.config,
         availableExecutionAgents: peerDescriptors,

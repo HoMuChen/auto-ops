@@ -1,31 +1,31 @@
+import { eq } from 'drizzle-orm';
+import { db } from '../db/client.js';
+import { tenants } from '../db/schema/index.js';
+
 /**
- * Runtime context — a small block prepended to every LLM system prompt
- * (supervisor + each agent) by the orchestrator. This is the single insertion
- * point for tenant- or time-sensitive facts the LLM needs but the static
- * prompt template doesn't carry.
+ * Per-task runtime context block prepended to every system prompt
+ * (supervisor + each agent) by the orchestrator. Single insertion point
+ * for tenant- or time-sensitive facts the LLM needs but the static prompt
+ * template doesn't carry.
  *
- * Today this only carries the current ISO timestamp, which lets agents reason
- * about scheduling, deadlines, seasonal SEO, "this week" type asks, etc. The
- * graph is rebuilt fresh for every worker pickup (see runner.ts → buildGraph),
- * so resumed tasks always see "now", not the time when they first started.
- *
- * Future extensions belong here, not in individual agent code:
- *   - Tenant industry / vertical (e.g. "fashion ecommerce", "B2B SaaS")
- *   - Tenant brand voice / tone preferences
- *   - Tenant banned phrases / compliance constraints
- *   - Tenant timezone (so "every 3 days" and "next Monday" resolve correctly)
- *   - Task attempt count (let agents soften / change tactic on retry)
- *
- * When tenant-keyed context lands, this signature will take `tenantId` and
- * return Promise<string>. Both call sites are already async, so the change
- * is mechanical.
+ * The graph is rebuilt fresh for every worker pickup (runner.ts → buildGraph),
+ * so resumed tasks always see "now", not the time when they first started,
+ * and pick up tenant profile edits made between attempts.
  */
-export function buildRuntimeContext(): string {
+export async function buildRuntimeContext(tenantId: string): Promise<string> {
+  const [row] = await db
+    .select({ profileMd: tenants.profileMd, timezone: tenants.timezone })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+
   const now = new Date().toISOString();
-  return `Runtime context:
-- Current time: ${now}
+  const tz = row?.timezone ?? 'UTC';
+  const profile = row?.profileMd?.trim();
 
----
-
-`;
+  let block = `Runtime context:\n- Current time: ${now}\n- Tenant timezone: ${tz}\n`;
+  if (profile) {
+    block += `\n## Tenant profile\n\n${profile}\n`;
+  }
+  return `${block}\n---\n\n`;
 }

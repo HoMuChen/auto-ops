@@ -27,6 +27,16 @@ vi.mock('../src/llm/model-registry.js', () => ({
   buildModel: buildModelMock,
 }));
 
+// Stub the runtime-context loader so the supervisor unit suite stays DB-free.
+// The block format is exercised end-to-end in the integration test
+// (tests/integration/runtime-context.integration.test.ts).
+vi.mock('../src/orchestrator/runtime-context.js', () => ({
+  buildRuntimeContext: vi.fn(
+    async () =>
+      'Runtime context:\n- Current time: 2026-01-01T00:00:00.000Z\n- Tenant timezone: UTC\n\n---\n\n',
+  ),
+}));
+
 const { runSupervisor } = await import('../src/orchestrator/supervisor.js');
 
 describe('runSupervisor — HITL gate handling (C1)', () => {
