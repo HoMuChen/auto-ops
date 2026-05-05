@@ -18,7 +18,15 @@ const NOISE_SELECTORS = [
   'svg',
 ];
 
-const MAIN_CANDIDATES = ['article', 'main', '[role="main"]', '#content', '.content', '.post', '.article'];
+const MAIN_CANDIDATES = [
+  'article',
+  'main',
+  '[role="main"]',
+  '#content',
+  '.content',
+  '.post',
+  '.article',
+];
 
 /**
  * Strip chrome (nav/footer/etc.) and pull the main content region. Falls back

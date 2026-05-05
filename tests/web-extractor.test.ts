@@ -36,17 +36,17 @@ describe('extractText', () => {
   });
 
   it('falls back to <body> when no main region exists', () => {
-    const html = `<html><body><p>only paragraph</p></body></html>`;
+    const html = '<html><body><p>only paragraph</p></body></html>';
     expect(extractText(html).text).toBe('only paragraph');
   });
 
   it('collapses whitespace runs', () => {
-    const html = `<html><body><article>foo\n\n   bar\t\tbaz</article></body></html>`;
+    const html = '<html><body><article>foo\n\n   bar\t\tbaz</article></body></html>';
     expect(extractText(html).text).toBe('foo bar baz');
   });
 
   it('returns no title when <title> is missing or empty', () => {
-    const html = `<html><body><article>x</article></body></html>`;
+    const html = '<html><body><article>x</article></body></html>';
     expect(extractText(html).title).toBeUndefined();
   });
 });

@@ -33,7 +33,7 @@ describe('GET /v1/profile', () => {
   it('returns defaults for a fresh tenant', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: `/v1/profile`,
+      url: '/v1/profile',
       headers,
     });
     expect(res.statusCode).toBe(200);
@@ -45,7 +45,7 @@ describe('PUT /v1/profile', () => {
   it('updates and round-trips', async () => {
     const put = await app.inject({
       method: 'PUT',
-      url: `/v1/profile`,
+      url: '/v1/profile',
       headers,
       payload: { profileMd: '# Voice\n\nWarm.', timezone: 'Asia/Taipei' },
     });
@@ -56,7 +56,7 @@ describe('PUT /v1/profile', () => {
   it('rejects oversize profileMd (32KB cap)', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: `/v1/profile`,
+      url: '/v1/profile',
       headers,
       payload: { profileMd: 'x'.repeat(32 * 1024 + 1) },
     });
@@ -66,7 +66,7 @@ describe('PUT /v1/profile', () => {
   it('rejects invalid timezone', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: `/v1/profile`,
+      url: '/v1/profile',
       headers,
       payload: { timezone: 'Asia/Atlantis' },
     });
@@ -81,13 +81,16 @@ describe('IDOR prevention', () => {
     const { db } = await import('../../src/db/client.js');
     const { tenants } = await import('../../src/db/schema/index.js');
     const { eq } = await import('drizzle-orm');
-    await db.update(tenants).set({ profileMd: 'secret profile' }).where(eq(tenants.id, seed2.tenantId));
+    await db
+      .update(tenants)
+      .set({ profileMd: 'secret profile' })
+      .where(eq(tenants.id, seed2.tenantId));
 
     // Authenticated as tenant 1 — tenantOf(req) resolves to tenantId (tenant 1)
     // There is no path param to manipulate; the endpoint is /v1/profile
     const res = await app.inject({
       method: 'GET',
-      url: `/v1/profile`,
+      url: '/v1/profile',
       headers, // x-tenant-id = tenantId (tenant 1)
     });
     expect(res.statusCode).toBe(200);

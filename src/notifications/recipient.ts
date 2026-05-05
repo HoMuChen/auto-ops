@@ -8,11 +8,7 @@ import type { NotificationSettings } from '../db/schema/users.js';
  * - true | {} — opt-in to the user's own account email
  * - { email: string } — opt-in to a specific address
  */
-export type TaskNotifyOverride =
-  | boolean
-  | { email?: string | null }
-  | null
-  | undefined;
+export type TaskNotifyOverride = boolean | { email?: string | null } | null | undefined;
 
 /**
  * Decide who (if anyone) should receive a "task done" notification.

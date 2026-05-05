@@ -11,7 +11,9 @@ function htmlResponse(html: string): Response {
 
 describe('WebFetchClient', () => {
   it('extracts main content and reports truncated=false when within cap', async () => {
-    const fetchImpl = vi.fn(async () => htmlResponse('<html><body><article>hello world</article></body></html>'));
+    const fetchImpl = vi.fn(async () =>
+      htmlResponse('<html><body><article>hello world</article></body></html>'),
+    );
     const client = new WebFetchClient({ fetchImpl: fetchImpl as never });
     const result = await client.fetch({ url: 'https://example.com/post' });
     expect(fetchImpl).toHaveBeenCalledOnce();
@@ -21,7 +23,7 @@ describe('WebFetchClient', () => {
   });
 
   it('truncates oversized text and flags truncated=true', async () => {
-    const big = '<html><body><article>' + 'x'.repeat(15_000) + '</article></body></html>';
+    const big = `<html><body><article>${'x'.repeat(15_000)}</article></body></html>`;
     const fetchImpl = vi.fn(async () => htmlResponse(big));
     const client = new WebFetchClient({ fetchImpl: fetchImpl as never, defaultMaxChars: 1000 });
     const result = await client.fetch({ url: 'https://example.com/big' });
@@ -30,7 +32,7 @@ describe('WebFetchClient', () => {
   });
 
   it('honours per-call maxChars but caps at hardMaxChars', async () => {
-    const big = '<html><body><article>' + 'y'.repeat(50_000) + '</article></body></html>';
+    const big = `<html><body><article>${'y'.repeat(50_000)}</article></body></html>`;
     const fetchImpl = vi.fn(async () => htmlResponse(big));
     const client = new WebFetchClient({ fetchImpl: fetchImpl as never, hardMaxChars: 5000 });
     const result = await client.fetch({ url: 'https://example.com/x', maxChars: 99_999 });

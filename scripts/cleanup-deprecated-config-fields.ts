@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../src/db/client.js';
-import { agentConfigs } from '../src/db/schema/index.js';
 import { logger } from '../src/lib/logger.js';
 
 /**

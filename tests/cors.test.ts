@@ -42,7 +42,9 @@ describe('CORS preflight', () => {
       });
       expect(res.statusCode).toBeLessThan(300);
       expect(res.headers['access-control-allow-origin']).toBe('http://localhost:5173');
-      const allowedHeaders = String(res.headers['access-control-allow-headers'] ?? '').toLowerCase();
+      const allowedHeaders = String(
+        res.headers['access-control-allow-headers'] ?? '',
+      ).toLowerCase();
       expect(allowedHeaders).toContain('authorization');
       expect(allowedHeaders).toContain('x-tenant-id');
     } finally {

@@ -16,7 +16,6 @@ import postgres from 'postgres';
 // `submit_*` tool calls pass without a research-hop precondition.
 // `delete` (not `= undefined`) because process.env coerces values to strings,
 // and `'undefined'` would still be truthy in agent code.
-// biome-ignore lint/performance/noDelete: process.env requires actual deletion to absent the key.
 delete process.env.SERPER_API_KEY;
 
 const databaseUrl = process.env.DATABASE_URL;

@@ -52,8 +52,8 @@ describe('buildRuntimeContext (integration)', () => {
   });
 
   it('throws NotFoundError when the tenant row is missing', async () => {
-    await expect(
-      buildRuntimeContext('00000000-0000-0000-0000-000000000000'),
-    ).rejects.toThrow(/Tenant 00000000-0000-0000-0000-000000000000/);
+    await expect(buildRuntimeContext('00000000-0000-0000-0000-000000000000')).rejects.toThrow(
+      /Tenant 00000000-0000-0000-0000-000000000000/,
+    );
   });
 });

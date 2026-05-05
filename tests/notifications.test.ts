@@ -30,9 +30,9 @@ describe('decideDoneRecipient', () => {
   });
 
   it('per-task override true overrides global off', () => {
-    expect(
-      decideDoneRecipient({ notifyOverride: true, settings: null, userEmail }),
-    ).toBe(userEmail);
+    expect(decideDoneRecipient({ notifyOverride: true, settings: null, userEmail })).toBe(
+      userEmail,
+    );
     expect(
       decideDoneRecipient({
         notifyOverride: true,
@@ -63,9 +63,7 @@ describe('decideDoneRecipient', () => {
   });
 
   it('per-task override empty object falls back to user email', () => {
-    expect(
-      decideDoneRecipient({ notifyOverride: {}, settings: null, userEmail }),
-    ).toBe(userEmail);
+    expect(decideDoneRecipient({ notifyOverride: {}, settings: null, userEmail })).toBe(userEmail);
   });
 
   it('returns null when there is genuinely no recipient available', () => {

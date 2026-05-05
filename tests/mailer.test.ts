@@ -50,9 +50,7 @@ describe('ResendClient', () => {
   });
 
   it('throws when the provider returns non-2xx', async () => {
-    const fetchImpl = vi.fn(
-      async () => new Response('rate limited', { status: 429, headers: {} }),
-    );
+    const fetchImpl = vi.fn(async () => new Response('rate limited', { status: 429, headers: {} }));
     const client = new ResendClient({ apiKey: 'rk', fetchImpl: fetchImpl as never });
     await expect(
       client.send({ from: 'a@x.test', to: 'b@x.test', subject: 's', text: 't' }),

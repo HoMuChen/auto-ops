@@ -27,16 +27,12 @@ export function buildDoneEmail(task: Task): DoneEmailContent {
   const reportBlock = report ? `\n\n${report}` : '\n\n（這個任務沒有產出 report 內容。）';
   const text = `任務「${task.title}」已完成。${linkLine ? `\n${linkLine}` : ''}${reportBlock}`;
 
-  const linkHtml = link
-    ? `<p><a href="${escapeHtml(link)}">查看完整任務</a></p>`
-    : '';
+  const linkHtml = link ? `<p><a href="${escapeHtml(link)}">查看完整任務</a></p>` : '';
   // Render markdown to HTML via the same helper Shopify publishing uses.
   // Trusted source — output is from our own agents, no need to sanitise here
   // (Gmail / Outlook strip dangerous tags client-side anyway). Title is still
   // escaped because it's a string field embedded in a non-markdown wrapper.
-  const reportHtml = report
-    ? markdownToHtml(report)
-    : '<p>（這個任務沒有產出 report 內容。）</p>';
+  const reportHtml = report ? markdownToHtml(report) : '<p>（這個任務沒有產出 report 內容。）</p>';
   const html = `<div style="font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.5;">
 <p>任務「<strong>${escapeHtml(task.title)}</strong>」已完成。</p>
 ${linkHtml}

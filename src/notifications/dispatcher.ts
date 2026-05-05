@@ -5,7 +5,7 @@ import { eventBus } from '../events/event-bus.js';
 import { resolveMailer } from '../integrations/email/mailer.js';
 import { logger } from '../lib/logger.js';
 import { buildDoneEmail } from './email.js';
-import { decideDoneRecipient, type TaskNotifyOverride } from './recipient.js';
+import { type TaskNotifyOverride, decideDoneRecipient } from './recipient.js';
 
 /**
  * Wire the task-done notification flow to the event bus.
@@ -61,9 +61,7 @@ export function startNotificationDispatcher(): () => void {
       const [member] = await db
         .select({ notificationSettings: tenantMembers.notificationSettings })
         .from(tenantMembers)
-        .where(
-          and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, task.createdBy)),
-        )
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, task.createdBy)))
         .limit(1);
 
       const params = (task.input as { params?: Record<string, unknown> })?.params ?? {};

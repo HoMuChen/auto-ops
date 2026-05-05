@@ -63,9 +63,7 @@ describe('marketResearcherAgent.build → invoke', () => {
     systemPrompt: marketResearcherAgent.manifest.defaultPrompt,
     agentConfig: {},
     availableExecutionAgents: [],
-    emitLog: vi.fn(
-      async (_event: string, _message: string, _data?: Record<string, unknown>) => {},
-    ),
+    emitLog: vi.fn(async (_event: string, _message: string, _data?: Record<string, unknown>) => {}),
   };
 
   it('returns a markdown report artifact with sources in refs and gates on approval', async () => {
