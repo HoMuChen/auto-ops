@@ -53,6 +53,7 @@ export function pendingScript(): number {
 
 class FakeChatModel {
   async invoke(_messages: unknown): Promise<{ content: string }> {
+    if (captureEnabled) capturedInvocations.push({ messages: _messages });
     const next = queue.shift();
     if (!next) throw new Error('FakeChatModel.invoke called with no scripted response');
     if (next.kind !== 'text') {
@@ -64,6 +65,7 @@ class FakeChatModel {
   withStructuredOutput<T>(_schema: z.ZodType<T>, _opts?: { name?: string }) {
     return {
       invoke: async (_messages: unknown): Promise<T> => {
+        if (captureEnabled) capturedInvocations.push({ messages: _messages });
         const next = queue.shift();
         if (!next) {
           throw new Error('FakeChatModel.withStructuredOutput called with no scripted response');
@@ -92,6 +94,7 @@ class FakeChatModel {
         content: string;
         tool_calls?: { name: string; args: Record<string, unknown>; id: string }[];
       }> => {
+        if (captureEnabled) capturedInvocations.push({ messages: _messages });
         const next = queue[0];
         if (next?.kind === 'tool_call') {
           queue.shift();
@@ -113,4 +116,26 @@ export function llmMockModule() {
   return {
     buildModel: vi.fn(() => fakeChatModel),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Message-capture mechanism — opt-in per test; disabled by default so existing
+// tests are completely unaffected.
+// ---------------------------------------------------------------------------
+
+const capturedInvocations: { messages: unknown }[] = [];
+let captureEnabled = false;
+
+export function enableMessageCapture(): void {
+  captureEnabled = true;
+  capturedInvocations.length = 0;
+}
+
+export function disableMessageCapture(): void {
+  captureEnabled = false;
+  capturedInvocations.length = 0;
+}
+
+export function getCapturedMessages(): { messages: unknown }[] {
+  return [...capturedInvocations];
 }
