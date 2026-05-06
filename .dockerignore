@@ -16,3 +16,4 @@ supabase/.branches
 supabase/.temp
 *.md
 !requirements.md
+!src/**/packs/*.md
