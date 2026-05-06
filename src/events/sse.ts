@@ -1,6 +1,23 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { env } from '../config/env.js';
 import { getStreamCursor, getTask, listTaskLogs, listTenantLogs } from '../tasks/repository.js';
 import { type TaskLogEvent, eventBus } from './event-bus.js';
+
+/**
+ * Compute the correct Access-Control-Allow-Origin value for an SSE response.
+ *
+ * @fastify/cors injects CORS headers via onSend, but SSE handlers call
+ * reply.raw.writeHead() directly — bypassing onSend entirely. We replicate
+ * the same origin-matching logic here so SSE responses get the header too.
+ */
+function corsOriginFor(req: FastifyRequest): string | undefined {
+  const requestOrigin = req.headers.origin;
+  if (!requestOrigin) return undefined;
+  const raw = env.CORS_ALLOWED_ORIGINS;
+  if (!raw) return requestOrigin; // no restriction → reflect any origin
+  const allowed = raw.split(',').map((s) => s.trim().replace(/\/$/, ''));
+  return allowed.includes(requestOrigin) ? requestOrigin : undefined;
+}
 
 /**
  * SSE handler for per-task log streaming.
@@ -34,11 +51,13 @@ export async function streamTaskLogs(
   const sinceParam = (Array.isArray(lastEventId) ? lastEventId[0] : lastEventId) ?? req.query.since;
   const since = sinceParam ? new Date(sinceParam) : undefined;
 
+  const corsOrigin = corsOriginFor(req);
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
+    ...(corsOrigin ? { 'Access-Control-Allow-Origin': corsOrigin, Vary: 'Origin' } : {}),
   });
 
   const write = (event: TaskLogEvent): void => {
@@ -106,11 +125,13 @@ export async function streamTenantLogs(
     since = cursor ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
   }
 
+  const corsOrigin = corsOriginFor(req);
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
+    ...(corsOrigin ? { 'Access-Control-Allow-Origin': corsOrigin, Vary: 'Origin' } : {}),
   });
 
   const write = (event: TaskLogEvent): void => {
