@@ -11,6 +11,12 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY drizzle ./drizzle
 RUN pnpm build
+# tsc only emits .js/.d.ts — copy .md pack assets into dist so agents can readdir() them at runtime
+RUN find src -type d -name 'packs' | while read d; do \
+      dest="dist/${d#src/}"; \
+      mkdir -p "$dest"; \
+      cp "$d"/*.md "$dest/"; \
+    done
 
 # --- Runtime stage ---
 FROM node:20-alpine AS runtime
