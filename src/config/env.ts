@@ -80,6 +80,13 @@ const envSchema = z.object({
    */
   NOTIFICATION_FROM_EMAIL: z.string().min(3).optional(),
   /**
+   * Optional Reply-To address. Useful when the From is a noreply mailbox
+   * but you want recipient replies to land on a real inbox (e.g. From =
+   * notifications@autoffice.app, Reply-To = support@autoffice.app). When
+   * unset the email has no Reply-To header and replies go back to From.
+   */
+  NOTIFICATION_REPLY_TO_EMAIL: z.string().min(3).optional(),
+  /**
    * Public base URL of the consumer UI, used to embed clickable task links
    * in notification emails (e.g. https://app.example.com → /tasks/<id>).
    * Optional; emails skip the link block when not set.

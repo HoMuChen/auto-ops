@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { env } from '../config/env.js';
 import { db } from '../db/client.js';
 import { tasks, tenantMembers, users } from '../db/schema/index.js';
 import { eventBus } from '../events/event-bus.js';
@@ -80,7 +81,13 @@ export function startNotificationDispatcher(): () => void {
       }
 
       const { subject, text, html } = buildDoneEmail(task);
-      const result = await mailer.send({ to: recipient, subject, text, html });
+      const result = await mailer.send({
+        to: recipient,
+        subject,
+        text,
+        html,
+        ...(env.NOTIFICATION_REPLY_TO_EMAIL ? { replyTo: env.NOTIFICATION_REPLY_TO_EMAIL } : {}),
+      });
       log.info(
         { taskId, recipient, providerMessageId: result.providerMessageId },
         'task-done notification sent',
