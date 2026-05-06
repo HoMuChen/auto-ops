@@ -114,6 +114,16 @@ export interface FinalAnswerConfig<S extends ZodTypeAny> {
    * Default: 2 (allow one retry, then bail).
    */
   maxSchemaRetries?: number;
+  /**
+   * Cap on "no tool_calls" coercion nudges. When the model emits content
+   * (or nothing) instead of calling the submit tool, the loop pushes a
+   * "Please call X now" reminder and retries. Empirically (see logs from
+   * tasks 5ff9a3ea / b3ac0433): models that ignore the first nudge ignore
+   * every subsequent one — the bug is that the model decided to "talk
+   * about" finishing instead of finishing, and more nudges don't unstick
+   * it. Cap defaults to 1 (one chance, then bail with `kind: 'plain'`).
+   */
+  maxCoercionRetries?: number;
 }
 
 export interface ToolLoopOptions<S extends ZodTypeAny = ZodTypeAny> {
@@ -165,6 +175,7 @@ export async function runToolLoop<S extends ZodTypeAny = ZodTypeAny>({
   logCtx = {},
 }: ToolLoopOptions<S>): Promise<ToolLoopResult<S>> {
   const maxSchemaRetries = finalAnswer?.maxSchemaRetries ?? 2;
+  const maxCoercionRetries = finalAnswer?.maxCoercionRetries ?? 1;
   const formatters = { ...DEFAULT_FORMATTERS, ...logFormatters };
 
   const submitName = finalAnswer?.name ?? 'submit';
@@ -197,6 +208,7 @@ export async function runToolLoop<S extends ZodTypeAny = ZodTypeAny>({
   let submittedValue: ZodInfer<S> | undefined;
   const minHops = finalAnswer?.minToolHops ?? 0;
   let schemaRetries = 0;
+  let coercionRetries = 0;
 
   // Diagnostic: dump the full system prompt + initial messages once on entry.
   // Pino-debug only (gated inside the helper) — dev sees it, prod skips formatting.
@@ -234,8 +246,20 @@ export async function runToolLoop<S extends ZodTypeAny = ZodTypeAny>({
       // If a final-answer tool is registered, nudge the model to use it
       // instead of accepting a free-form tail (the doubling pattern we want to avoid).
       if (finalAnswer && hop < maxHops - 1) {
+        if (coercionRetries >= maxCoercionRetries) {
+          // Already nudged once and it didn't take. Empirically the model
+          // doesn't recover from this — bail rather than burn the rest of
+          // maxHops on identical retries. The agent's invoke() will see
+          // kind: 'plain' and decide whether to throw.
+          logger.warn(
+            { component: 'tool-loop', hop, coercionRetries, maxCoercionRetries },
+            "coercion retry limit reached — exiting loop with kind:'plain' to stop burning hops",
+          );
+          break;
+        }
+        coercionRetries += 1;
         logger.warn(
-          { component: 'tool-loop', hop, contentChars: contentLen },
+          { component: 'tool-loop', hop, contentChars: contentLen, coercionRetries },
           `coercion: hop ${hop} had no tool_calls but ${contentLen} content chars — nudging model to call ${submitName}`,
         );
         collected.push(
