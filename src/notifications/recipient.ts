@@ -39,3 +39,33 @@ export function decideDoneRecipient(input: {
   // notifyOverride is undefined / null — fall back to global setting.
   return settings?.notifyOnDone ? userEmail : null;
 }
+
+/**
+ * Decide who (if anyone) should receive a "task waiting on you" notification.
+ *
+ * Same per-task override semantics as the done variant — `notifyOverride`
+ * `false` always wins as opt-out — but the global default flips to TRUE.
+ * Waiting means the system is genuinely blocked on the user; staying silent
+ * by default would be the worse failure mode. Pure function — easy to unit
+ * test.
+ */
+export function decideWaitingRecipient(input: {
+  notifyOverride: TaskNotifyOverride;
+  settings: NotificationSettings | null;
+  userEmail: string | null;
+}): string | null {
+  const { notifyOverride, settings, userEmail } = input;
+
+  if (notifyOverride === false) return null;
+
+  if (notifyOverride === true) return userEmail;
+
+  if (typeof notifyOverride === 'object' && notifyOverride !== null) {
+    const explicit = notifyOverride.email?.trim();
+    if (explicit) return explicit;
+    return userEmail;
+  }
+
+  // Default ON: the only way to silence waiting is settings.notifyOnWaiting === false.
+  return settings?.notifyOnWaiting === false ? null : userEmail;
+}

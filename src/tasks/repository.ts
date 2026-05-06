@@ -136,11 +136,26 @@ export async function updateTaskStatus(
     );
   }
 
+  // Strip notifiedWaitingAt when leaving waiting so the next waiting round
+  // (after feedback re-queues the task) can retrigger the watcher email.
+  // Honors any caller-supplied output patch first — they own the value when
+  // they pass it explicitly.
+  const { output: outputFromPatch, ...patchRest } = patch ?? {};
+  let outputPatch = outputFromPatch;
+  if (current.status === 'waiting' && to !== 'waiting') {
+    const base = (outputPatch ?? current.output ?? {}) as Record<string, unknown>;
+    if (base.notifiedWaitingAt !== undefined) {
+      const { notifiedWaitingAt: _drop, ...rest } = base;
+      outputPatch = rest as typeof outputFromPatch;
+    }
+  }
+
   const [updated] = await db
     .update(tasks)
     .set({
       status: to,
-      ...patch,
+      ...patchRest,
+      ...(outputPatch !== undefined ? { output: outputPatch } : {}),
       ...(to === 'done' || to === 'failed' ? { completedAt: new Date() } : {}),
       updatedAt: new Date(),
     })
@@ -298,6 +313,84 @@ export async function extendLock(
     .where(and(eq(tasks.id, taskId), eq(tasks.lockedBy, workerId)))
     .returning({ id: tasks.id });
   return result.length > 0;
+}
+
+/**
+ * Atomic claim for the waiting-watcher.
+ *
+ * Picks one waiting task that has been sitting past `thresholdMs` without
+ * being notified, and stamps `output.notifiedWaitingAt` in the same UPDATE
+ * — so two watcher loops in different processes can't both send email for
+ * the same task. Returns the claimed task (already stamped) or null when
+ * nothing matches.
+ *
+ * Implementation note: we use jsonb_set with create_missing=true to merge
+ * the stamp into the existing output without clobbering peer keys, then
+ * SELECT the row back so callers get camelCase fields. The condition
+ * `output->>'notifiedWaitingAt' IS NULL` filters already-stamped rows so
+ * a re-claim is naturally a no-op.
+ */
+export async function claimWaitingTaskForNotification(opts: {
+  thresholdMs: number;
+}): Promise<Task | null> {
+  const cutoffIso = new Date(Date.now() - opts.thresholdMs).toISOString();
+  const stampIso = new Date().toISOString();
+
+  const result = await db.execute<{ id: string }>(sql`
+    UPDATE tasks
+    SET output = jsonb_set(
+      COALESCE(output, '{}'::jsonb),
+      '{notifiedWaitingAt}',
+      to_jsonb(${stampIso}::text),
+      true
+    ),
+    updated_at = updated_at  -- preserve so the threshold remains stable on retry
+    WHERE id = (
+      SELECT id FROM tasks
+      WHERE status = 'waiting'
+        AND archived_at IS NULL
+        AND updated_at <= ${cutoffIso}::timestamptz
+        AND (output IS NULL OR output->>'notifiedWaitingAt' IS NULL)
+      ORDER BY updated_at ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    )
+    RETURNING id
+  `);
+
+  const rows =
+    (result as unknown as { rows?: { id: string }[] }).rows ?? (result as { id: string }[]);
+  const claimedId = rows[0]?.id;
+  if (!claimedId) return null;
+
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, claimedId)).limit(1);
+  return task ?? null;
+}
+
+/**
+ * Walk up the parentTaskId chain to find the first ancestor with a
+ * `createdBy` set. Returns null if no ancestor (or the task itself) has
+ * one — i.e. the task is fully orphaned of a human owner.
+ *
+ * Used by the waiting-watcher: spawn children are created with createdBy=null
+ * so done-notifications stay quiet on a strategy fan-out, but their HITL
+ * waiting gates still need to ping the human who owns the strategy parent.
+ */
+export async function resolveOwningCreator(task: Task): Promise<string | null> {
+  if (task.createdBy) return task.createdBy;
+  let parentId = task.parentTaskId;
+  // Bound the walk so a corrupt parent cycle can't loop forever.
+  for (let i = 0; i < 8 && parentId; i++) {
+    const [parent] = await db
+      .select({ createdBy: tasks.createdBy, parentTaskId: tasks.parentTaskId })
+      .from(tasks)
+      .where(eq(tasks.id, parentId))
+      .limit(1);
+    if (!parent) return null;
+    if (parent.createdBy) return parent.createdBy;
+    parentId = parent.parentTaskId;
+  }
+  return null;
 }
 
 export async function reclaimExpiredLocks(): Promise<number> {

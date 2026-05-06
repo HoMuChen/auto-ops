@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../src/db/schema/index.js';
-import { buildDoneEmail } from '../src/notifications/email.js';
-import { decideDoneRecipient } from '../src/notifications/recipient.js';
+import { buildDoneEmail, buildWaitingEmail } from '../src/notifications/email.js';
+import { decideDoneRecipient, decideWaitingRecipient } from '../src/notifications/recipient.js';
 
 describe('decideDoneRecipient', () => {
   const userEmail = 'boss@example.com';
@@ -101,6 +101,79 @@ function fakeTask(overrides: Partial<Task> = {}): Task {
     ...overrides,
   } as Task;
 }
+
+describe('decideWaitingRecipient', () => {
+  const userEmail = 'boss@example.com';
+
+  it('defaults ON — null settings still notifies the user', () => {
+    expect(decideWaitingRecipient({ notifyOverride: undefined, settings: null, userEmail })).toBe(
+      userEmail,
+    );
+  });
+
+  it('settings.notifyOnWaiting=true also notifies', () => {
+    expect(
+      decideWaitingRecipient({
+        notifyOverride: undefined,
+        settings: { notifyOnWaiting: true },
+        userEmail,
+      }),
+    ).toBe(userEmail);
+  });
+
+  it('settings.notifyOnWaiting=false silences', () => {
+    expect(
+      decideWaitingRecipient({
+        notifyOverride: undefined,
+        settings: { notifyOnWaiting: false },
+        userEmail,
+      }),
+    ).toBeNull();
+  });
+
+  it('per-task override false silences even when global is on', () => {
+    expect(
+      decideWaitingRecipient({
+        notifyOverride: false,
+        settings: { notifyOnWaiting: true },
+        userEmail,
+      }),
+    ).toBeNull();
+  });
+
+  it('per-task override true forces send even when global is off', () => {
+    expect(
+      decideWaitingRecipient({
+        notifyOverride: true,
+        settings: { notifyOnWaiting: false },
+        userEmail,
+      }),
+    ).toBe(userEmail);
+  });
+
+  it('per-task override with explicit email beats user email', () => {
+    expect(
+      decideWaitingRecipient({
+        notifyOverride: { email: 'team@example.com' },
+        settings: null,
+        userEmail,
+      }),
+    ).toBe('team@example.com');
+  });
+});
+
+describe('buildWaitingEmail', () => {
+  it('subject signals action-required with the hourglass + 等你決定', () => {
+    const { subject } = buildWaitingEmail(fakeTask({ status: 'waiting', title: '寵物文章草稿' }));
+    expect(subject).toContain('等你決定');
+    expect(subject).toContain('寵物文章草稿');
+  });
+
+  it('text body includes call-to-action language for the action', () => {
+    const { text } = buildWaitingEmail(fakeTask({ status: 'waiting' }));
+    expect(text).toContain('需要你的決定');
+  });
+});
 
 describe('buildDoneEmail', () => {
   it('subject leads with the title and a checkmark', () => {

@@ -363,30 +363,39 @@ UI 看到 `refs.published` 就顯示 badge / 連結即可，不需要看其他�
 #### `GET /v1/me/notification-settings`
 需要 JWT + `x-tenant-id`。回該 user 在這個 tenant 的通知偏好設定：
 ```json
-{ "notifyOnDone": false }
+{ "notifyOnDone": false, "notifyOnWaiting": true }
 ```
-未設定過時回預設值 `notifyOnDone: false`。
+未設定過時回預設值 `notifyOnDone: false`、`notifyOnWaiting: true`（done 是 opt-in 純 FYI；waiting 是 opt-out 因為它代表系統真的卡住等老闆動作）。
 
 #### `PATCH /v1/me/notification-settings`
 需要 JWT + `x-tenant-id`。Partial update：
 ```json
-// Request — 開啟「任務完成通知」
-{ "notifyOnDone": true }
+// Request — 開啟「任務完成通知」、關掉「卡住通知」
+{ "notifyOnDone": true, "notifyOnWaiting": false }
 
 // Response 200 — 回更新後的完整 settings
-{ "notifyOnDone": true }
+{ "notifyOnDone": true, "notifyOnWaiting": false }
 ```
 
-**通知行為摘要**（task done → email）：
-- 全域開關：上面這個 `notifyOnDone`（per user × tenant）。
-- 每筆 task 可在 `task.input.params.notify` 覆寫：
+**通知行為摘要**
+
+兩個 trigger，共用同一個 per-task `params.notify` 覆寫機制：
+
+| Trigger | 何時發 | 全域預設 | 用途 |
+|---|---|---|---|
+| `done` | task 變 `done` 時立刻發 | `notifyOnDone: false`（opt-in）| FYI — 報告交付 |
+| `waiting` | task 進 `waiting` **超過 30 min** 還沒被處理 → 發。Feedback 後若再次卡 30 min 會再發一次 | `notifyOnWaiting: true`（opt-out）| Action required — 等老闆審核/修改/退回 |
+
+- 每筆 task 可在 `task.input.params.notify` 覆寫（兩個 trigger 共用）：
   - `undefined` / 不設 → 跟全域走
-  - `true` 或 `{}` → 寄到 user 的 account email（不論全域是否開）
+  - `true` 或 `{}` → 寄到 user 的 account email（不論全域）
   - `{ "email": "x@y.com" }` → 寄到指定 email
   - `false` → 明確 opt-out（即使全域開了也不寄）
-- 收件人：task 的 `createdBy` 對應的 user。Spawn 子任務沒 `createdBy` → 不發 email（避免 SEO 規劃 spawn 5 篇就被洗 5 封）。
+- 收件人解析：
+  - `done`：task 的 `createdBy`。Spawn 子任務沒 `createdBy` → 不發（避免 SEO 規劃 spawn 5 篇就被洗 5 封）。
+  - `waiting`：先看 `createdBy`，沒有則往 `parentTaskId` 走找上去的 strategy 父任務的 `createdBy`。每張子任務都會發（每個都是獨立的 HITL gate）。
 - 失敗策略：fire-and-forget，email 寄信失敗不會影響 task 狀態（只記在 server log）。
-- 設定 `RESEND_API_KEY=` 為空 → 整個 dispatcher 啟動時 no-op，不影響其他流程。
+- 設定 `RESEND_API_KEY=` 為空 → 整個 dispatcher + waiting watcher 啟動時 no-op。
 
 ---
 

@@ -42,6 +42,34 @@ ${reportHtml}
   return { subject, text, html };
 }
 
+/**
+ * Compose the subject + bodies for a "task waiting on you" email. Sent by
+ * the waiting-watcher after a task has been parked in `waiting` past the
+ * threshold (default 30 min) without any user action. Distinct from the
+ * done email so the recipient's inbox shows action-required vs FYI clearly.
+ */
+export function buildWaitingEmail(task: Task): DoneEmailContent {
+  const output = readTaskOutput(task);
+  const report = output.artifact?.report?.trim();
+  const link = env.APP_BASE_URL ? `${env.APP_BASE_URL.replace(/\/$/, '')}/tasks/${task.id}` : null;
+
+  const subject = `⏳ 等你決定：${task.title}`.slice(0, 200);
+
+  const linkLine = link ? `打開任務審核：${link}` : '';
+  const reportBlock = report ? `\n\n${report}` : '';
+  const text = `任務「${task.title}」需要你的決定（核准 / 修改 / 退回）。${linkLine ? `\n${linkLine}` : ''}${reportBlock}`;
+
+  const linkHtml = link ? `<p><a href="${escapeHtml(link)}">打開任務審核</a></p>` : '';
+  const reportHtml = report ? markdownToHtml(report) : '';
+  const html = `<div style="font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.5;">
+<p>任務「<strong>${escapeHtml(task.title)}</strong>」在等你決定（核准 / 修改 / 退回）。</p>
+${linkHtml}
+${reportHtml}
+</div>`;
+
+  return { subject, text, html };
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')

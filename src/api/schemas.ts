@@ -53,6 +53,7 @@ export const TaskOutputSchema = z
     spawnedAt: z.string().optional(),
     spawnedTaskIds: z.array(z.string().uuid()).optional(),
     toolExecutedAt: z.string().optional(),
+    notifiedWaitingAt: z.string().optional(),
     eeatPending: z
       .object({
         questions: z.array(

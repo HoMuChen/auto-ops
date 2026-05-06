@@ -2,12 +2,17 @@ import { jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/p
 import { tenants } from './tenants.js';
 
 /**
- * Per-(user, tenant) notification preferences. Null = defaults (off).
- * Currently just one switch; shaped as jsonb so future channels (Slack,
- * webhooks) and trigger types (failed, waiting) don't need migrations.
+ * Per-(user, tenant) notification preferences. Stored as jsonb so future
+ * channels (Slack, webhooks) and trigger types don't need a migration.
+ *
+ * Defaults differ by trigger: done is opt-in (`notifyOnDone` defaults false —
+ * pure FYI signal) while waiting is opt-out (`notifyOnWaiting` defaults
+ * true — waiting means the system is genuinely blocked on the user, so
+ * staying silent is the worse failure mode).
  */
 export interface NotificationSettings {
   notifyOnDone?: boolean;
+  notifyOnWaiting?: boolean;
 }
 
 export const users = pgTable('users', {

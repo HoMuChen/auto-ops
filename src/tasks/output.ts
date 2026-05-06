@@ -40,6 +40,16 @@ export interface TaskOutput {
   };
 
   generatedImageIds?: string[];
+
+  /**
+   * Stamped by the waiting-watcher after it sends the "task is waiting on you"
+   * email. Acts as an idempotency guard so a single waiting period only emits
+   * one email even if the watcher polls twice. Cleared by `updateTaskStatus`
+   * when the task leaves waiting (e.g. feedback → todo) so a subsequent
+   * waiting round can re-trigger.
+   */
+  notifiedWaitingAt?: string;
+
   /** Escape hatch — should be empty in steady state. */
   [key: string]: unknown;
 }

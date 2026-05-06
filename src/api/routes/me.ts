@@ -10,9 +10,11 @@ import { ErrorEnvelope } from '../schemas.js';
 
 const NotificationSettingsSchema = z.object({
   notifyOnDone: z.boolean().default(false),
+  notifyOnWaiting: z.boolean().default(true),
 });
 const NotificationSettingsPatchSchema = z.object({
   notifyOnDone: z.boolean().optional(),
+  notifyOnWaiting: z.boolean().optional(),
 });
 
 /**
@@ -79,7 +81,12 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
         .limit(1);
       if (!member) throw new NotFoundError('tenant membership');
       const settings: NotificationSettings = member.notificationSettings ?? {};
-      return { notifyOnDone: settings.notifyOnDone ?? false };
+      return {
+        notifyOnDone: settings.notifyOnDone ?? false,
+        // Waiting defaults ON — silence requires an explicit `false`. Mirrors
+        // the dispatcher's `decideWaitingRecipient` semantic.
+        notifyOnWaiting: settings.notifyOnWaiting !== false,
+      };
     },
   );
 
@@ -106,6 +113,7 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       const merged: NotificationSettings = {
         ...(existing.notificationSettings ?? {}),
         ...(body.notifyOnDone !== undefined ? { notifyOnDone: body.notifyOnDone } : {}),
+        ...(body.notifyOnWaiting !== undefined ? { notifyOnWaiting: body.notifyOnWaiting } : {}),
       };
 
       await db
@@ -113,7 +121,10 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
         .set({ notificationSettings: merged })
         .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, user.id)));
 
-      return { notifyOnDone: merged.notifyOnDone ?? false };
+      return {
+        notifyOnDone: merged.notifyOnDone ?? false,
+        notifyOnWaiting: merged.notifyOnWaiting !== false,
+      };
     },
   );
 }

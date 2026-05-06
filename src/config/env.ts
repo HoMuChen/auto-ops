@@ -87,6 +87,27 @@ const envSchema = z.object({
    */
   NOTIFICATION_REPLY_TO_EMAIL: z.string().min(3).optional(),
   /**
+   * How long a task may sit in `waiting` before the watcher fires the
+   * "task waiting on you" email. Default 30 min — short enough to be useful,
+   * long enough to skip cases where the user is already on it.
+   */
+  NOTIFICATION_WAITING_THRESHOLD_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30 * 60 * 1000),
+  /**
+   * How often the watcher sweeps for due waiting tasks. Default 5 min —
+   * each tick is one indexed query plus optional sends, so the cost is
+   * trivial; the cadence trades-off "how late can a notification be"
+   * against "how chatty are the logs".
+   */
+  NOTIFICATION_WAITING_POLL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5 * 60 * 1000),
+  /**
    * Public base URL of the consumer UI, used to embed clickable task links
    * in notification emails (e.g. https://app.example.com → /tasks/<id>).
    * Optional; emails skip the link block when not set.
