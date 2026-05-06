@@ -63,6 +63,12 @@ describe('marketResearcherAgent.build → invoke', () => {
     systemPrompt: marketResearcherAgent.manifest.defaultPrompt,
     agentConfig: {},
     availableExecutionAgents: [],
+    tenantProfile: {
+      profileMd: '',
+      timezone: 'UTC',
+      imageStyleSuffix: '',
+      imageStyleReferenceImageIds: [],
+    },
     emitLog: vi.fn(async (_event: string, _message: string, _data?: Record<string, unknown>) => {}),
   };
 

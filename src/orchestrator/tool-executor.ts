@@ -8,6 +8,7 @@ import { logger } from '../lib/logger.js';
 import type { Artifact } from '../tasks/artifact.js';
 import { readTaskOutput } from '../tasks/output.js';
 import { appendTaskLog, getTask, updateTaskStatus } from '../tasks/repository.js';
+import { getTenantProfile } from '../tenants/profile-repository.js';
 
 /**
  * Execute a tool the agent prepared but deferred behind a HITL gate.
@@ -79,6 +80,7 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
   // Build a minimal context — tool execution doesn't need a model call, but
   // build() needs the full ctx shape so the closure captures tenant + config.
   const override = await agentRegistry.loadConfig(tenantId, agent.manifest.id);
+  const tenantProfile = await getTenantProfile(tenantId);
   const ctx: AgentBuildContext = {
     tenantId,
     taskId,
@@ -87,6 +89,7 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
     ...(override.toolWhitelist ? { toolWhitelist: override.toolWhitelist } : {}),
     agentConfig: override.config,
     availableExecutionAgents: [],
+    tenantProfile,
     emitLog,
   };
 

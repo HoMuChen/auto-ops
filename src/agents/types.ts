@@ -3,6 +3,7 @@ import type { ZodType } from 'zod';
 import type { CredentialProvider } from '../db/schema/index.js';
 import type { ModelConfig } from '../llm/types.js';
 import type { Artifact } from '../tasks/artifact.js';
+import type { TenantProfile } from '../tenants/profile-repository.js';
 
 /**
  * The pluggable Agent contract.
@@ -105,6 +106,12 @@ export interface AgentBuildContext {
    * itself recursively).
    */
   availableExecutionAgents: PeerAgentDescriptor[];
+  /**
+   * Pre-fetched tenant profile (single DB read per build, shared with the
+   * runtime-context formatter). Agents needing `imageStyleSuffix` etc. read
+   * this directly instead of round-tripping back to the DB.
+   */
+  tenantProfile: TenantProfile;
   /** Logger callback — agents emit atomic logs through this. */
   emitLog: (event: string, message: string, data?: Record<string, unknown>) => Promise<void>;
 }

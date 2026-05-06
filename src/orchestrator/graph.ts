@@ -3,8 +3,9 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { agentRegistry } from '../agents/registry.js';
 import type { AgentBuildContext } from '../agents/types.js';
 import { getImagesByIds } from '../integrations/cloudflare/images-repository.js';
+import { getTenantProfile } from '../tenants/profile-repository.js';
 import { getCheckpointer } from './checkpointer.js';
-import { buildRuntimeContext } from './runtime-context.js';
+import { formatRuntimeContext } from './runtime-context.js';
 import { type GraphState, GraphStateAnnotation } from './state.js';
 import { runSupervisor } from './supervisor.js';
 
@@ -68,15 +69,20 @@ export async function buildGraph(opts: BuildGraphOptions) {
       // speaker concept; the kanban timeline always knows who's talking.
       const agentEmitLog: AgentBuildContext['emitLog'] = (event, message, data) =>
         opts.emitLog(event, message, data, manifest.id);
+      // One DB read for the tenant row — fed into both the runtime-context
+      // block (timezone + profile_md) and AgentBuildContext.tenantProfile
+      // (image_style_suffix etc.) so agents never re-fetch.
+      const tenantProfile = await getTenantProfile(opts.tenantId);
       const ctx: AgentBuildContext = {
         tenantId: opts.tenantId,
         taskId: opts.taskId,
         // Model is fixed in the manifest — no per-tenant override.
         modelConfig: manifest.defaultModel,
-        systemPrompt: (await buildRuntimeContext(opts.tenantId)) + basePrompt,
+        systemPrompt: formatRuntimeContext(tenantProfile) + basePrompt,
         ...(override.toolWhitelist ? { toolWhitelist: override.toolWhitelist } : {}),
         agentConfig: override.config,
         availableExecutionAgents: peerDescriptors,
+        tenantProfile,
         emitLog: agentEmitLog,
       };
       const runnable = await agent.build(ctx);

@@ -2,17 +2,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { env } from '../../../config/env.js';
-import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-client.js';
-import { insertImage } from '../../../integrations/cloudflare/images-repository.js';
-import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
-import { buildImageTools } from '../../../integrations/openai-images/tools.js';
+import { buildTenantImageTools } from '../../../integrations/openai-images/build-tenant-image-tools.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
 import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
 import { WebFetchClient } from '../../../integrations/web/client.js';
 import { buildWebFetchTools } from '../../../integrations/web/tools.js';
-import { getTenantProfile } from '../../../tenants/profile-repository.js';
 import { invokeStructured } from '../../lib/invoke-structured.js';
 import { markdownToHtml } from '../../lib/markdown.js';
 import { buildAgentMessages } from '../../lib/messages.js';
@@ -216,31 +212,11 @@ export const shopifyBlogWriterAgent: IAgent = {
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
     const cfg = configSchema.parse(ctx.agentConfig ?? {}) as SeoWriterConfig;
 
-    const accountId = env.CLOUDFLARE_ACCOUNT_ID;
-    const r2AccessKey = env.CLOUDFLARE_R2_ACCESS_KEY_ID;
-    const r2SecretKey = env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
-    const r2Bucket = env.CLOUDFLARE_R2_BUCKET;
-    const r2PublicBaseUrl = env.CLOUDFLARE_R2_PUBLIC_BASE_URL;
-    const openaiKey = env.OPENAI_API_KEY;
-
-    const profile = await getTenantProfile(ctx.tenantId);
-    const r2Ready = accountId && r2AccessKey && r2SecretKey && r2Bucket && r2PublicBaseUrl;
-    const imageTools =
-      r2Ready && openaiKey
-        ? buildImageTools(ctx.tenantId, {
-            openaiClient: new OpenAIImagesClient({ apiKey: openaiKey }),
-            cfClient: new CloudflareImagesClient({
-              accountId,
-              accessKeyId: r2AccessKey,
-              secretAccessKey: r2SecretKey,
-              bucket: r2Bucket,
-              publicBaseUrl: r2PublicBaseUrl,
-            }),
-            insertImage,
-            taskId: ctx.taskId,
-            styleSuffix: profile.imageStyleSuffix || undefined,
-          })
-        : [];
+    const imageTools = buildTenantImageTools({
+      tenantId: ctx.tenantId,
+      taskId: ctx.taskId,
+      styleSuffix: ctx.tenantProfile.imageStyleSuffix || undefined,
+    });
 
     const tools = await buildShopifyTools(ctx.tenantId, {
       ...(cfg.credentialLabel ? { credentialLabel: cfg.credentialLabel } : {}),

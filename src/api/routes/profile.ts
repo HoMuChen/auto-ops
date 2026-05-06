@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { tenantImages } from '../../db/schema/index.js';
+import { ValidationError } from '../../lib/errors.js';
 import { buildModel } from '../../llm/model-registry.js';
 import { getTenantProfile, updateTenantProfile } from '../../tenants/profile-repository.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -46,19 +47,25 @@ const SuffixSchema = z.object({
 const VISION_SYSTEM_PROMPT =
   "You extract visual style guidelines from a brand's reference images. Output ONE dense prose paragraph (80–200 words) capturing: photography genre (editorial / product / lifestyle / studio), lighting (direction, quality), color palette and mood, composition rules (centered / rule-of-thirds / copy space), background, props and models, finish (clean / film grain). The output will be appended verbatim to image-generation prompts — write it as instructions to an image model. No headings, no bullets, no quote marks. One paragraph only.";
 
-async function assertReferenceImagesOwned(tenantId: string, ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
+/**
+ * Confirms every id is owned by the tenant and returns the rows (with `url`).
+ * Throws ValidationError listing offending ids if any are missing or foreign.
+ */
+async function fetchOwnedReferenceImages(
+  tenantId: string,
+  ids: string[],
+): Promise<{ id: string; url: string }[]> {
+  if (ids.length === 0) return [];
   const rows = await db
-    .select({ id: tenantImages.id })
+    .select({ id: tenantImages.id, url: tenantImages.url })
     .from(tenantImages)
     .where(and(eq(tenantImages.tenantId, tenantId), inArray(tenantImages.id, ids)));
   if (rows.length !== ids.length) {
     const found = new Set(rows.map((r) => r.id));
     const missing = ids.filter((id) => !found.has(id));
-    const err = new Error(`Reference image ids not owned by tenant: ${missing.join(', ')}`);
-    (err as { statusCode?: number }).statusCode = 400;
-    throw err;
+    throw new ValidationError(`Reference image ids not owned by tenant: ${missing.join(', ')}`);
   }
+  return rows;
 }
 
 export async function profileRoutes(app: FastifyInstance): Promise<void> {
@@ -88,7 +95,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
     async (req) => {
       const body = req.body as z.infer<typeof UpdateProfileBody>;
       if (body.imageStyleReferenceImageIds) {
-        await assertReferenceImagesOwned(tenantOf(req), body.imageStyleReferenceImageIds);
+        await fetchOwnedReferenceImages(tenantOf(req), body.imageStyleReferenceImageIds);
       }
       return updateTenantProfile(tenantOf(req), body);
     },
@@ -107,22 +114,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
       const tenantId = tenantOf(req);
       const body = req.body as z.infer<typeof SuggestBody>;
 
-      const rows = await db
-        .select({ id: tenantImages.id, url: tenantImages.url })
-        .from(tenantImages)
-        .where(
-          and(
-            eq(tenantImages.tenantId, tenantId),
-            inArray(tenantImages.id, body.referenceImageIds),
-          ),
-        );
-      if (rows.length !== body.referenceImageIds.length) {
-        const found = new Set(rows.map((r) => r.id));
-        const missing = body.referenceImageIds.filter((id) => !found.has(id));
-        const err = new Error(`Reference image ids not owned by tenant: ${missing.join(', ')}`);
-        (err as { statusCode?: number }).statusCode = 400;
-        throw err;
-      }
+      const rows = await fetchOwnedReferenceImages(tenantId, body.referenceImageIds);
 
       const model = buildModel({
         model: 'anthropic/claude-sonnet-4.6',

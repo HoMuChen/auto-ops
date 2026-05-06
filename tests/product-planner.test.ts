@@ -122,6 +122,12 @@ describe('product-planner', () => {
       systemPrompt: 'You are a product planner.',
       agentConfig: {},
       availableExecutionAgents: [designerPeer],
+      tenantProfile: {
+        profileMd: '',
+        timezone: 'UTC',
+        imageStyleSuffix: '',
+        imageStyleReferenceImageIds: [],
+      },
       emitLog: vi.fn(async () => {}),
     });
 
@@ -159,6 +165,12 @@ describe('product-planner', () => {
       systemPrompt: 'sys',
       agentConfig: {},
       availableExecutionAgents: [],
+      tenantProfile: {
+        profileMd: '',
+        timezone: 'UTC',
+        imageStyleSuffix: '',
+        imageStyleReferenceImageIds: [],
+      },
       emitLog: vi.fn(async () => {}),
     });
 
@@ -175,6 +187,12 @@ describe('product-planner', () => {
       systemPrompt: 'sys',
       agentConfig: {},
       availableExecutionAgents: [designerPeer],
+      tenantProfile: {
+        profileMd: '',
+        timezone: 'UTC',
+        imageStyleSuffix: '',
+        imageStyleReferenceImageIds: [],
+      },
       emitLog: vi.fn(async () => {}),
     });
 

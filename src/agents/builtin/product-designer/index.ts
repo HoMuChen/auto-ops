@@ -1,12 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { env } from '../../../config/env.js';
-import { CloudflareImagesClient } from '../../../integrations/cloudflare/images-client.js';
-import { getImageById, insertImage } from '../../../integrations/cloudflare/images-repository.js';
-import { OpenAIImagesClient } from '../../../integrations/openai-images/client.js';
-import { buildImageTools } from '../../../integrations/openai-images/tools.js';
-import { getTenantProfile } from '../../../tenants/profile-repository.js';
+import { buildTenantImageTools } from '../../../integrations/openai-images/build-tenant-image-tools.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { skillsToggleSchema } from '../../lib/skills-schema.js';
@@ -121,33 +116,12 @@ export const productDesignerAgent: IAgent = {
       agentId: 'product-designer',
     });
 
-    const accountId = env.CLOUDFLARE_ACCOUNT_ID;
-    const r2AccessKey = env.CLOUDFLARE_R2_ACCESS_KEY_ID;
-    const r2SecretKey = env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
-    const r2Bucket = env.CLOUDFLARE_R2_BUCKET;
-    const r2PublicBaseUrl = env.CLOUDFLARE_R2_PUBLIC_BASE_URL;
-    const openaiKey = env.OPENAI_API_KEY;
-
-    const profile = await getTenantProfile(ctx.tenantId);
-    const r2Ready = accountId && r2AccessKey && r2SecretKey && r2Bucket && r2PublicBaseUrl;
-    const imageTools =
-      r2Ready && openaiKey
-        ? buildImageTools(ctx.tenantId, {
-            openaiClient: new OpenAIImagesClient({ apiKey: openaiKey }),
-            cfClient: new CloudflareImagesClient({
-              accountId,
-              accessKeyId: r2AccessKey,
-              secretAccessKey: r2SecretKey,
-              bucket: r2Bucket,
-              publicBaseUrl: r2PublicBaseUrl,
-            }),
-            insertImage,
-            getImageById,
-            fetchImageBuffer: async (url) => Buffer.from(await (await fetch(url)).arrayBuffer()),
-            taskId: ctx.taskId,
-            styleSuffix: profile.imageStyleSuffix || undefined,
-          })
-        : [];
+    const imageTools = buildTenantImageTools({
+      tenantId: ctx.tenantId,
+      taskId: ctx.taskId,
+      styleSuffix: ctx.tenantProfile.imageStyleSuffix || undefined,
+      enableEdit: true,
+    });
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
       if (publishers.length === 0) {

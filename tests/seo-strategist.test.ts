@@ -118,6 +118,12 @@ describe('seoStrategistAgent.build → invoke', () => {
     systemPrompt: seoStrategistAgent.manifest.defaultPrompt,
     agentConfig: { maxTopics: 5, defaultLanguages: ['zh-TW' as const] },
     availableExecutionAgents: PEERS,
+    tenantProfile: {
+      profileMd: '',
+      timezone: 'UTC',
+      imageStyleSuffix: '',
+      imageStyleReferenceImageIds: [],
+    },
     emitLog: vi.fn(async () => {}),
   };
 

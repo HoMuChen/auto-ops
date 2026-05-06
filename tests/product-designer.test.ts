@@ -89,15 +89,6 @@ vi.mock('../src/agents/skill-packs-repository.js', () => ({
   listPacksForAgent: vi.fn(async () => []),
 }));
 
-vi.mock('../src/tenants/profile-repository.js', () => ({
-  getTenantProfile: vi.fn(async () => ({
-    profileMd: '',
-    timezone: 'UTC',
-    imageStyleSuffix: '',
-    imageStyleReferenceImageIds: [],
-  })),
-}));
-
 const { productDesignerAgent } = await import('../src/agents/builtin/product-designer/index.js');
 
 const publisherPeer = {
@@ -132,6 +123,12 @@ function buildCtx(overrides = {}) {
     systemPrompt: 'You are a product designer.',
     agentConfig: {},
     availableExecutionAgents: [publisherPeer],
+    tenantProfile: {
+      profileMd: '',
+      timezone: 'UTC',
+      imageStyleSuffix: '',
+      imageStyleReferenceImageIds: [],
+    },
     emitLog: vi.fn(async () => {}),
     ...overrides,
   };

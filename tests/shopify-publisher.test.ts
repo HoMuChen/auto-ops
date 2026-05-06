@@ -39,6 +39,12 @@ describe('shopify-publisher', () => {
       systemPrompt: 'unused',
       agentConfig: { shopify: { autoPublish: false } },
       availableExecutionAgents: [],
+      tenantProfile: {
+        profileMd: '',
+        timezone: 'UTC',
+        imageStyleSuffix: '',
+        imageStyleReferenceImageIds: [],
+      },
       emitLog: vi.fn(async () => {}),
     });
 
@@ -83,6 +89,12 @@ describe('shopify-publisher', () => {
       systemPrompt: 'unused',
       agentConfig: {},
       availableExecutionAgents: [],
+      tenantProfile: {
+        profileMd: '',
+        timezone: 'UTC',
+        imageStyleSuffix: '',
+        imageStyleReferenceImageIds: [],
+      },
       emitLog: vi.fn(async () => {}),
     });
 

@@ -1,4 +1,4 @@
-import { getTenantProfile } from '../tenants/profile-repository.js';
+import { type TenantProfile, getTenantProfile } from '../tenants/profile-repository.js';
 
 /**
  * Per-task runtime context block prepended to every system prompt
@@ -16,13 +16,21 @@ import { getTenantProfile } from '../tenants/profile-repository.js';
  * between attempts.
  */
 export async function buildRuntimeContext(tenantId: string): Promise<string> {
-  const { profileMd, timezone } = await getTenantProfile(tenantId);
-  const now = new Date().toISOString();
-  const profile = profileMd?.trim();
+  return formatRuntimeContext(await getTenantProfile(tenantId));
+}
 
-  let block = `Runtime context:\n- Current time: ${now}\n- Tenant timezone: ${timezone}\n`;
-  if (profile) {
-    block += `\n## Tenant profile\n\n${profile}\n`;
+/**
+ * Pure formatter — call this when the profile has already been resolved
+ * (e.g. `buildGraph` resolves it once and feeds the same row into
+ * `ctx.systemPrompt` and `ctx.tenantProfile`, so agents don't re-fetch).
+ */
+export function formatRuntimeContext(profile: TenantProfile): string {
+  const now = new Date().toISOString();
+  const trimmed = profile.profileMd?.trim();
+
+  let block = `Runtime context:\n- Current time: ${now}\n- Tenant timezone: ${profile.timezone}\n`;
+  if (trimmed) {
+    block += `\n## Tenant profile\n\n${trimmed}\n`;
   }
   return `${block}\n---\n\n`;
 }
