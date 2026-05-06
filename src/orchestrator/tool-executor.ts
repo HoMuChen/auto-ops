@@ -90,6 +90,7 @@ export async function executeApprovedToolCall(tenantId: string, taskId: string):
     agentConfig: override.config,
     availableExecutionAgents: [],
     tenantProfile,
+    logCtx: { taskId, agentId: agent.manifest.id },
     emitLog,
   };
 

@@ -129,6 +129,7 @@ function buildCtx(overrides = {}) {
       imageStyleSuffix: '',
       imageStyleReferenceImageIds: [],
     },
+    logCtx: { taskId: 'task-1', agentId: 'product-designer' },
     emitLog: vi.fn(async () => {}),
     ...overrides,
   };

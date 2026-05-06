@@ -147,7 +147,7 @@ export const marketResearcherAgent: IAgent = {
         tools: [...serperTools, ...webFetchTools],
         maxHops: 14,
         emitLog: ctx.emitLog,
-        logCtx: { taskId: ctx.taskId, agentId: 'market-researcher' },
+        logCtx: ctx.logCtx,
         finalAnswer: {
           schema: ReportSchema,
           name: 'submit_report',

@@ -83,6 +83,7 @@ export async function buildGraph(opts: BuildGraphOptions) {
         agentConfig: override.config,
         availableExecutionAgents: peerDescriptors,
         tenantProfile,
+        logCtx: { taskId: opts.taskId, agentId: manifest.id },
         emitLog: agentEmitLog,
       };
       const runnable = await agent.build(ctx);

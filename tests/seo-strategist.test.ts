@@ -124,6 +124,10 @@ describe('seoStrategistAgent.build → invoke', () => {
       imageStyleSuffix: '',
       imageStyleReferenceImageIds: [],
     },
+    logCtx: {
+      taskId: '00000000-0000-0000-0000-000000000002',
+      agentId: 'seo-strategist',
+    },
     emitLog: vi.fn(async () => {}),
   };
 

@@ -45,6 +45,7 @@ describe('shopify-publisher', () => {
         imageStyleSuffix: '',
         imageStyleReferenceImageIds: [],
       },
+      logCtx: { taskId: 'task-1', agentId: 'shopify-publisher' },
       emitLog: vi.fn(async () => {}),
     });
 
@@ -95,6 +96,7 @@ describe('shopify-publisher', () => {
         imageStyleSuffix: '',
         imageStyleReferenceImageIds: [],
       },
+      logCtx: { taskId: 'task-1', agentId: 'shopify-publisher' },
       emitLog: vi.fn(async () => {}),
     });
 

@@ -1,6 +1,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { ZodType } from 'zod';
 import type { CredentialProvider } from '../db/schema/index.js';
+import type { PromptLogContext } from '../lib/log-prompt.js';
 import type { ModelConfig } from '../llm/types.js';
 import type { Artifact } from '../tasks/artifact.js';
 import type { TenantProfile } from '../tenants/profile-repository.js';
@@ -112,6 +113,13 @@ export interface AgentBuildContext {
    * this directly instead of round-tripping back to the DB.
    */
   tenantProfile: TenantProfile;
+  /**
+   * Diagnostic log context (taskId + agentId) — agents pass this verbatim to
+   * `invokeStructured`/`runToolLoop` so prompt + LLM-response traces are
+   * tagged consistently. Set by `buildGraph` from the manifest, so call sites
+   * never repeat the agent id as a string literal.
+   */
+  logCtx: PromptLogContext;
   /** Logger callback — agents emit atomic logs through this. */
   emitLog: (event: string, message: string, data?: Record<string, unknown>) => Promise<void>;
 }

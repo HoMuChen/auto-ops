@@ -128,6 +128,7 @@ describe('product-planner', () => {
         imageStyleSuffix: '',
         imageStyleReferenceImageIds: [],
       },
+      logCtx: { taskId: 'task-1', agentId: 'product-planner' },
       emitLog: vi.fn(async () => {}),
     });
 
@@ -171,6 +172,7 @@ describe('product-planner', () => {
         imageStyleSuffix: '',
         imageStyleReferenceImageIds: [],
       },
+      logCtx: { taskId: 'task-1', agentId: 'product-planner' },
       emitLog: vi.fn(async () => {}),
     });
 
@@ -193,6 +195,7 @@ describe('product-planner', () => {
         imageStyleSuffix: '',
         imageStyleReferenceImageIds: [],
       },
+      logCtx: { taskId: 'task-1', agentId: 'product-planner' },
       emitLog: vi.fn(async () => {}),
     });
 

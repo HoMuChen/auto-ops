@@ -69,6 +69,10 @@ describe('marketResearcherAgent.build → invoke', () => {
       imageStyleSuffix: '',
       imageStyleReferenceImageIds: [],
     },
+    logCtx: {
+      taskId: '00000000-0000-0000-0000-000000000002',
+      agentId: 'market-researcher',
+    },
     emitLog: vi.fn(async (_event: string, _message: string, _data?: Record<string, unknown>) => {}),
   };
 
