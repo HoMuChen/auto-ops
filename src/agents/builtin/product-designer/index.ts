@@ -216,6 +216,7 @@ export const productDesignerAgent: IAgent = {
         tools: imageTools,
         maxHops: 6,
         emitLog: ctx.emitLog,
+        logCtx: { taskId: ctx.taskId, agentId: 'product-designer' },
         finalAnswer: {
           schema: ProductListingSchema,
           name: 'submit_listing',

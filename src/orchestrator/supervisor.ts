@@ -91,12 +91,19 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
     ? `\n\nWork done so far:\n- ${state.lastOutput.agentId}: ${state.lastOutput.message}`
     : '';
 
-  const decision = await invokeStructured(SUPERVISOR_MODEL, RouteSchema, 'route_decision', [
-    new SystemMessage((await buildRuntimeContext(state.tenantId)) + SUPERVISOR_PROMPT),
-    new HumanMessage(
-      `Available employees:\n${roster}\n\nUser brief:\n${userBrief}${progressBlock}`,
-    ),
-  ]);
+  const decision = await invokeStructured(
+    SUPERVISOR_MODEL,
+    RouteSchema,
+    'route_decision',
+    [
+      new SystemMessage((await buildRuntimeContext(state.tenantId)) + SUPERVISOR_PROMPT),
+      new HumanMessage(
+        `Available employees:\n${roster}\n\nUser brief:\n${userBrief}${progressBlock}`,
+      ),
+    ],
+    undefined,
+    { taskId: state.taskId, agentId: 'supervisor' },
+  );
 
   if (decision.clarification) {
     // Treat the supervisor as a first-class node when it speaks to the user:

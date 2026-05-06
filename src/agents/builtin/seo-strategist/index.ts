@@ -211,6 +211,7 @@ export const seoStrategistAgent: IAgent = {
         tools: serperTools,
         maxHops: 8,
         emitLog: ctx.emitLog,
+        logCtx: { taskId: ctx.taskId, agentId: 'seo-strategist' },
         finalAnswer: {
           schema: PlanSchema,
           name: 'submit_plan',

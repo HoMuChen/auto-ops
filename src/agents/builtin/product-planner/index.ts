@@ -184,6 +184,7 @@ export const productPlannerAgent: IAgent = {
         tools: serperTools,
         maxHops: 8,
         emitLog: ctx.emitLog,
+        logCtx: { taskId: ctx.taskId, agentId: 'product-planner' },
         finalAnswer: {
           schema: PlanSchema,
           name: 'submit_plan',

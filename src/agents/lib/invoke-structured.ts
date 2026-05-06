@@ -1,6 +1,7 @@
 import type { BaseMessage } from '@langchain/core/messages';
 import { jsonrepair } from 'jsonrepair';
 import type { ZodType } from 'zod';
+import { type PromptLogContext, logLlmInvoked, logPromptBuilt } from '../../lib/log-prompt.js';
 import { buildModel } from '../../llm/model-registry.js';
 import type { ModelConfig } from '../../llm/types.js';
 
@@ -19,12 +20,16 @@ export async function invokeStructured<T>(
   schemaName: string,
   messages: BaseMessage[],
   maxRetries = 3,
+  logCtx: PromptLogContext = {},
 ): Promise<T> {
+  logPromptBuilt(logCtx, messages);
   const model = buildModel(modelConfig).withStructuredOutput(schema, { name: schemaName });
   let lastError: unknown;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      return (await model.invoke(messages)) as T;
+      const result = (await model.invoke(messages)) as T;
+      logLlmInvoked(logCtx, { content: JSON.stringify(result) });
+      return result;
     } catch (err) {
       // Try to salvage the raw JSON before burning a retry.
       const salvaged = tryRepairFromError<T>(err, schema);

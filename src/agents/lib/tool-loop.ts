@@ -6,6 +6,7 @@ import {
 } from '@langchain/core/messages';
 import { tool } from '@langchain/core/tools';
 import type { ZodType } from 'zod';
+import { type PromptLogContext, logLlmInvoked, logPromptBuilt } from '../../lib/log-prompt.js';
 import { logger } from '../../lib/logger.js';
 import { buildModel } from '../../llm/model-registry.js';
 import type { ModelConfig } from '../../llm/types.js';
@@ -117,6 +118,8 @@ export interface ToolLoopOptions<T = never> {
    * (legacy behaviour).
    */
   finalAnswer?: FinalAnswerConfig<T>;
+  /** Optional taskId/agentId for prompt + LLM-response diagnostic logs. */
+  logCtx?: PromptLogContext;
 }
 
 interface BaseResult {
@@ -146,6 +149,7 @@ export async function runToolLoop<T = never>({
   emitLog,
   logFormatters = {},
   finalAnswer,
+  logCtx = {},
 }: ToolLoopOptions<T>): Promise<ToolLoopResult<T>> {
   const formatters = { ...DEFAULT_FORMATTERS, ...logFormatters };
 
@@ -179,9 +183,17 @@ export async function runToolLoop<T = never>({
   let submittedValue: T | undefined;
   const minHops = finalAnswer?.minToolHops ?? 0;
 
+  // Diagnostic: dump the full system prompt + initial messages once on entry.
+  // Pino-debug only (gated inside the helper) — dev sees it, prod skips formatting.
+  logPromptBuilt(logCtx, messages);
+
   for (let hop = 0; hop < maxHops; hop++) {
     const res = (await toolModel.invoke(collected)) as AIMessage;
     collected.push(res);
+    logLlmInvoked(logCtx, {
+      content: res.content,
+      tool_calls: res.tool_calls,
+    });
 
     // Diagnostic: pino-only (NOT emitLog — would pollute the kanban timeline).
     // Lets us tell whether the model is writing the answer as content rather

@@ -296,6 +296,8 @@ export const shopifyBlogWriterAgent: IAgent = {
           EeatQuestionsSchema,
           'eeat_questions',
           messages,
+          undefined,
+          { taskId: ctx.taskId, agentId: 'shopify-blog-writer' },
         );
         const askedAt = new Date().toISOString();
         const questionList = q.questions
@@ -353,6 +355,7 @@ ${questionList}
         tools: [...serperTools, ...webFetchTools],
         maxHops: 10,
         emitLog: ctx.emitLog,
+        logCtx: { taskId: ctx.taskId, agentId: 'shopify-blog-writer' },
         finalAnswer: {
           schema: ArticleSchema,
           name: 'submit_article',
