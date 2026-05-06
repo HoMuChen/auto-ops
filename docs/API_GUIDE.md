@@ -956,6 +956,10 @@ Tenant-wide 歷史 log **REST 查詢**（非 SSE）。適合初始載入或翻�
 ?until=<ISO>    終點（inclusive）
 ?limit=<n>      最多幾筆，上限 1000，預設 500
 ```
+排序語意：
+- 沒帶 `since` → 取**最新** N 筆（tail），按時間舊→新回傳。`?limit=50` 回最新 50。
+- 帶 `since` → 從 cursor 往前推進的 forward replay，按時間舊→新回傳前 N 筆（給 SSE bootstrap 用）。
+
 每筆格式同 SSE `data` payload（多一個 `id` UUID 欄位）。
 
 #### `GET /v1/stream/cursor`

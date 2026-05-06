@@ -498,7 +498,16 @@ export async function listTenantLogs(
   if (opts?.since) conditions.push(gt(taskLogs.createdAt, opts.since));
   if (opts?.until) conditions.push(lte(taskLogs.createdAt, opts.until));
 
-  return db
+  const limit = opts?.limit ?? 500;
+
+  // Two ordering modes — both return rows oldest→newest, but pick a
+  // different slice when the result count exceeds `limit`:
+  //   • `since` set  → forward replay from a cursor; take the *earliest* N
+  //     after the cursor so SSE bootstrap doesn't skip a gap.
+  //   • no `since`   → "latest N" tail; ORDER BY desc + LIMIT, then reverse
+  //     to chronological. Without this, ?limit=50 returns the oldest 50,
+  //     which is the opposite of what a UI tail-view wants.
+  const base = db
     .select({
       id: taskLogs.id,
       taskId: taskLogs.taskId,
@@ -510,9 +519,13 @@ export async function listTenantLogs(
       data: taskLogs.data,
     })
     .from(taskLogs)
-    .where(and(...conditions))
-    .orderBy(asc(taskLogs.createdAt))
-    .limit(opts?.limit ?? 500);
+    .where(and(...conditions));
+
+  if (opts?.since) {
+    return base.orderBy(asc(taskLogs.createdAt)).limit(limit);
+  }
+  const rows = await base.orderBy(desc(taskLogs.createdAt)).limit(limit);
+  return rows.reverse();
 }
 
 export async function listTaskLogs(
