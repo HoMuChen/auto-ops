@@ -84,6 +84,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptToolCall('submit_article', {
       title: '夏日穿搭 5 個必備單品',
+      slug: 'summer-outfit-5-essentials',
       body: '## 選對材質讓夏天更舒服\n\n今年夏天必備的 5 個單品讓妳在 35 度高溫也能保持優雅。\n\n- 機能麻襯衫\n- 寬版亞麻褲\n- 透氣涼鞋',
       summaryHtml: '5 個夏季必備單品挑選指南，含材質與搭配建議。',
       tags: ['夏季穿搭', '女裝', '購物指南'],
@@ -240,6 +241,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptToolCall('submit_article', {
       title: 'Drafts only mode',
+      slug: 'drafts-only-mode',
       body: 'This article should never reach Shopify because publishing is disabled by config.',
       summaryHtml: 'A draft to be exported manually.',
       tags: ['draft', 'manual'],
@@ -309,6 +311,7 @@ describe('Shopify Blog Writer → Shopify Blog publishing', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptToolCall('submit_article', {
       title: 'Will fail to publish',
+      slug: 'will-fail-to-publish',
       body: 'Long enough body to satisfy the schema minimum length — even after the markdown migration.',
       summaryHtml: 'A summary that will never be published.',
       tags: ['fail'],
@@ -377,6 +380,7 @@ describe('Shopify Blog Writer — cover image generation in Stage 2', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptToolCall('submit_article', {
       title: '夏日穿搭指南',
+      slug: 'summer-outfit-guide',
       body:
         '## 夏日風格\n\n輕鬆穿出夏日風格 — 機能、透氣、寬鬆是三大關鍵。' +
         '內文示範 5 個搭配，從通勤、約會到週末出遊都涵蓋到。',

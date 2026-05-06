@@ -219,6 +219,7 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
     // ── Phase 5: Writer Stage 2 — draft article (single-pass via submit_article)
     scriptToolCall('submit_article', {
       title: 'Linen Shirts: The Ultimate Summer Guide',
+      slug: 'linen-shirts-ultimate-summer-guide',
       body: '## Why Linen?\n\nLightweight, breathable, and a perfect match for humid summers. Washed it 12 times without pilling.',
       summaryHtml: 'A first-hand guide to linen shirts for humid summer climates.',
       tags: ['linen', 'summer', 'fabric guide'],

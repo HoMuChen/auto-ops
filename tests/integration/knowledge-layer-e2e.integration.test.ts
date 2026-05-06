@@ -91,6 +91,7 @@ describe('knowledge layer e2e — profile + pack reach agent system prompt', () 
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptToolCall('submit_article', {
       title: 'Linen Shirts Guide',
+      slug: 'linen-shirts-guide',
       body: '## Intro\n\nLinen shirts are cool.',
       summaryHtml: 'Guide to linen shirts.',
       tags: ['linen', 'shirts'],

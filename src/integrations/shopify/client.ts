@@ -120,6 +120,7 @@ export class ShopifyAdminClient {
     blogId: number,
     article: {
       title: string;
+      handle?: string;
       body_html: string;
       summary_html?: string;
       tags?: string[] | string;

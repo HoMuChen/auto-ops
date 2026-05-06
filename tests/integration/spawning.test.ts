@@ -223,6 +223,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     for (let i = 0; i < children.length; i++) {
       scriptToolCall('submit_article', {
         title: `Article ${i + 1} draft`,
+        slug: `article-${i + 1}-draft`,
         body: `## Section ${i + 1}\n\nBody ${i + 1} long enough to satisfy the schema minimum after the markdown migration.`,
         summaryHtml: `Summary ${i + 1} for the article excerpt and meta description.`,
         tags: ['seo', 'summer'],

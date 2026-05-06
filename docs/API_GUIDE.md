@@ -295,7 +295,7 @@ function ArtifactPanel({ artifact }: { artifact: Artifact }) {
 | `seo-strategist` | ✓ 規劃匯報 + 文章列表 | — | — |
 | `product-planner` | ✓ 規劃匯報 + variants 列表 | — | — |
 | `shopify-blog-writer` Stage 1（EEAT 問題） | ✓ 為什麼問 + 問題清單（嵌在 markdown 裡） | — | `askedAt` |
-| `shopify-blog-writer` Stage 2（草稿） | ✓ 寫作切角匯報 | ✓ 文章正文 markdown | `title`, `summaryHtml`, `tags`, `language`, `author?`；發布後 `published: BlogPublishedMeta` |
+| `shopify-blog-writer` Stage 2（草稿） | ✓ 寫作切角匯報 | ✓ 文章正文 markdown | `title`, `slug`, `summaryHtml`, `tags`, `language`, `author?`；發布後 `published: BlogPublishedMeta`。`slug` 一律是英文 ASCII kebab-case（例如 `summer-linen-shirt-guide`），即使文章本體是 zh-TW/ja/ko，因為 Shopify 把它當 URL handle |
 | `product-designer` | ✓ 設計匯報（含 `![](url)` 內嵌圖片） | ✓ 商品描述 markdown | `title`, `tags`, `vendor`, `productType?`, `language`, `imageUrls` |
 | `shopify-publisher` | ✓ 同 designer 帶來的內容 | ✓ 同上 | 同 designer + `ready: true`；發布後 `published: ProductPublishedMeta` |
 | `supervisor` 釐清提問 | ✓ 一句話 markdown 問題 | — | — |

@@ -48,6 +48,7 @@ beforeEach(async () => {
 function article(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     title: 'Summer Dresses Buying Guide',
+    slug: 'summer-dresses-buying-guide',
     body: '## Lightweight cuts\n\nThe lightweight cuts that work all summer long. Here are the picks for humid Taiwan weather.',
     summaryHtml: 'A short guide to summer dresses for hot, humid weather.',
     tags: ['summer', 'dresses', 'guide'],

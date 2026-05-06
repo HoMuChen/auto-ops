@@ -31,6 +31,12 @@ the article to the tenant's Shopify blog after the user reviews and approves.
 
 Requirements:
 - Title: <= 70 chars, include the primary keyword if natural.
+- Slug: **English ASCII only**, kebab-case (lowercase a-z + 0-9 + hyphens), 3–7
+  words, no Chinese / Japanese / Korean / accents / spaces / underscores.
+  This is true even when the article body is zh-TW, ja, ko, etc. — Shopify
+  uses this as the URL handle (\`/blogs/<blog>/<slug>\`), and a non-ASCII
+  URL is bad SEO and ugly to share. Translate the primary keyword to English
+  for the slug. Examples: "summer-linen-shirt-guide", "best-running-shoes-2026".
 - Body: clean Markdown. Use ## / ### headings, **bold**, *italic*, - bullets, > blockquote. Do NOT emit raw HTML — the framework converts at the Shopify publish boundary. Aim for 800–1500 words for top-of-funnel SEO posts.
 - Summary: 1–2 sentence excerpt (<= 200 chars) used as the meta description
   and the blog index card.
@@ -100,6 +106,21 @@ type SeoWriterConfig = z.infer<typeof configSchema>;
 
 const ArticleSchema = z.object({
   title: z.string().min(1).max(140).describe('Article title shown on the blog and in feeds.'),
+  slug: z
+    .string()
+    .min(3)
+    .max(80)
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      'slug must be English kebab-case: lowercase a-z, 0-9, and single hyphens only — no spaces, no uppercase, no underscores, no non-ASCII (no 中文 / かな / 한글), no leading/trailing/double hyphens',
+    )
+    .describe(
+      'URL slug used as the Shopify article handle (`/blogs/<blog>/<slug>`). ' +
+        '**English ASCII only**, kebab-case, 3–7 words. ALWAYS English, even when ' +
+        'the article body is zh-TW / zh-CN / ja / ko. Translate the primary keyword to ' +
+        'English to derive the slug. Examples: "summer-linen-shirt-guide", "best-running-shoes-2026". ' +
+        'Forbidden: spaces, capitals, underscores, accents, non-ASCII characters, leading/trailing/double hyphens.',
+    ),
   body: z
     .string()
     .min(50)
@@ -381,6 +402,7 @@ ${questionList}
       // markdown→HTML conversion would add a dependency for negligible benefit.
       const refs: Record<string, unknown> = {
         title: article.title,
+        slug: article.slug,
         summaryHtml: article.summaryHtml,
         tags: article.tags,
         language: article.language,
@@ -399,6 +421,7 @@ ${questionList}
           id: 'shopify.publish_article',
           args: {
             title: article.title,
+            slug: article.slug,
             bodyHtml: markdownToHtml(article.body),
             summaryHtml: article.summaryHtml,
             tags: article.tags,

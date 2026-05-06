@@ -124,6 +124,7 @@ export async function buildShopifyTools(
   const publishArticle = tool(
     async (input: {
       title: string;
+      slug: string;
       bodyHtml: string;
       summaryHtml?: string;
       tags?: string[];
@@ -151,6 +152,11 @@ export async function buildShopifyTools(
 
       const { article } = await client.createArticle(targetBlog.id, {
         title: input.title,
+        // Force the URL handle to the agent-supplied English slug. Without
+        // this, Shopify auto-derives the handle from the title — for non-English
+        // articles that produces percent-encoded URLs that are bad SEO and ugly
+        // to share. The writer's ArticleSchema enforces ASCII kebab-case.
+        handle: input.slug,
         body_html: input.bodyHtml,
         ...(input.summaryHtml ? { summary_html: input.summaryHtml } : {}),
         ...(input.tags ? { tags: input.tags } : {}),
@@ -175,6 +181,13 @@ export async function buildShopifyTools(
         'Publish a blog article to a Shopify blog. Requires HITL approval before execution.',
       schema: z.object({
         title: z.string(),
+        slug: z
+          .string()
+          .regex(
+            /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+            'slug must be English kebab-case (lowercase a-z, 0-9, single hyphens) — no spaces / uppercase / underscores / non-ASCII / leading/trailing/double hyphens',
+          )
+          .describe('English ASCII kebab-case URL slug. Becomes the Shopify article handle.'),
         bodyHtml: z.string(),
         summaryHtml: z.string().nullish(),
         tags: z.array(z.string()).nullish(),

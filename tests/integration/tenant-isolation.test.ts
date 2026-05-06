@@ -41,6 +41,7 @@ describe('Multi-tenant isolation', () => {
     scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
     scriptToolCall('submit_article', {
       title: 'A-only secret content',
+      slug: 'a-only-secret-content',
       body: '## Confidential\n\nConfidential body for tenant A only. Long enough to satisfy schema body.min(50).',
       summaryHtml: 'Confidential summary for tenant A.',
       tags: ['confidential'],

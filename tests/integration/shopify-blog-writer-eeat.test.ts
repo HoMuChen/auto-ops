@@ -152,6 +152,7 @@ describe('Shopify Blog Writer EEAT two-stage flow', () => {
     // Script Stage 2 article — Stage 2 now uses runToolLoop with submit_article.
     scriptToolCall('submit_article', {
       title: '亞麻襯衫夏天穿著指南：親身體驗告訴你為什麼值得',
+      slug: 'linen-shirt-summer-guide',
       body: '## 為什麼亞麻是夏天最好的材質\n\n洗了 10 次不起球，穿在台北 35 度感覺涼到不像麻。\n\n- 機能：透氣、抗皺\n- 保養：少水機洗\n- 搭配：白色為基底',
       summaryHtml: '完整亞麻襯衫選購與保養指南，附親身使用心得。',
       tags: ['亞麻', '夏季穿搭', '永續材質'],
