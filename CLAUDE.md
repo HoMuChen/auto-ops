@@ -26,6 +26,38 @@ Run a single test: `pnpm test -- tests/seo-strategist.test.ts` (or `pnpm test:in
 
 Local Supabase: `supabase start` (CLI required). Studio at http://127.0.0.1:54323. Reset: `supabase db reset`. Connection string is in `.env` — see `.env.example`. After `supabase start`, always run `pnpm db:migrate` before integration tests.
 
+## Deploy to production (Fly.io)
+
+Secrets live in `.env.prod`. App: `auto-ops-api`. Region: `nrt` (Tokyo, same as Supabase).
+
+### 情境 A — 有 schema 變動（新 migration）
+
+```bash
+# 1. 套 schema 到 prod DB（idempotent，重跑沒問題）
+DATABASE_URL=$(grep '^DATABASE_URL=' .env.prod | cut -d= -f2-) pnpm db:migrate
+
+# 2. Deploy（stage secrets + fly deploy + health check）
+./scripts/fly-bootstrap.sh
+```
+
+### 情境 B — 只改程式碼，沒有 schema 變動
+
+```bash
+fly deploy
+```
+
+### 情境 C — 只改環境變數（`.env.prod` 有更動），不重新 build
+
+```bash
+fly secrets import --app auto-ops-api < .env.prod
+# secrets import 本身會觸發 machine restart，不需要額外 fly deploy
+```
+
+> `fly secrets import` 是批次 import（一次 restart），比 `fly secrets set KEY=VAL` 逐筆快。
+> `--stage` 旗標可先暫存不重啟，等下次 `fly deploy` 時一起生效（用於搭配 情境 A/B）。
+> `scripts/fly-bootstrap.sh` 整合了 情境 C + B，適合初次部署或需要確認 cert/health 時使用。
+> 單機限制：SSE EventBus 是 in-process，`min_machines_running=1` 不能調高，直到改用 Postgres LISTEN/NOTIFY。
+
 ## Architecture
 
 ### Three orthogonal layers
