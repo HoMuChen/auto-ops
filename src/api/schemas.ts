@@ -85,6 +85,7 @@ export const TaskSchema = z.object({
   createdAt: IsoDate,
   updatedAt: IsoDate,
   completedAt: NullableIsoDate,
+  archivedAt: NullableIsoDate,
 });
 
 export const CreateTaskBody = z.object({

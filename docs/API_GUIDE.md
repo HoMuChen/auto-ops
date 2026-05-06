@@ -919,7 +919,7 @@ open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
 ### Tasks（看板的核心）
 
 #### `GET /v1/tasks?status=&parentTaskId=`
-列當前 tenant 所有任務（最新在前）。
+列當前 tenant 所有任務（最新在前）。**已 archive 的任務不會出現在這個列表**（用 `GET /v1/tasks/:id` 仍可直接取，便於 deep link）。
 
 > ⚠️ 目前還沒有分頁（已知 issue），會在資料量起來前補。
 
@@ -1009,6 +1009,16 @@ HITL 修改要求。會 append 一條 user message 到對話 thread，task → t
 
 #### `POST /v1/tasks/:taskId/discard`
 直接 fail 任務。`output` 保留，`error.message='Discarded by user'`。
+
+#### `POST /v1/tasks/:taskId/archive`
+**Soft-archive** — 把任務從 `GET /v1/tasks` 與 worker queue 隱藏起來，不刪資料（`output` / `logs` / `messages` 都保留，audit trail 不破）。
+
+- 200 → 回 task 物件，`archivedAt` 已被戳上 ISO timestamp。
+- 422 → 任務正在 `in_progress`（worker 跑到一半），無法 archive。請等 task 進入 `waiting` / `done` / `failed` 或者你先 `discard` 它。
+- 404 → 任務不存在或不屬於這個 tenant。
+- **Idempotent** — 對已 archive 的任務再呼叫一次回 200 + 原本的 `archivedAt`，不會覆寫。
+- `GET /v1/tasks/:id` 仍可取到（deep link / log 連結不會壞）；只是不會出現在列表。
+- **不會 cascade**：archive 一個 strategy 父任務，子任務不會跟著消失。要清乾淨請各別 archive。
 
 #### `POST /v1/tasks/:taskId/continue`
 從一個 `done` task 接續開新任務 — 把前 task 的 `output.artifact.report` 當作 context 串到新 brief 前面，自動建一筆獨立的 todo task。

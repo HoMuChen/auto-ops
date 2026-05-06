@@ -58,7 +58,7 @@ export async function listTasks(
   tenantId: string,
   filter?: { status?: TaskStatus; parentTaskId?: string | null },
 ): Promise<Task[]> {
-  const conditions = [eq(tasks.tenantId, tenantId)];
+  const conditions = [eq(tasks.tenantId, tenantId), isNull(tasks.archivedAt)];
   if (filter?.status) conditions.push(eq(tasks.status, filter.status));
   if (filter?.parentTaskId === null) conditions.push(isNull(tasks.parentTaskId));
   else if (filter?.parentTaskId) conditions.push(eq(tasks.parentTaskId, filter.parentTaskId));
@@ -68,6 +68,48 @@ export async function listTasks(
     .from(tasks)
     .where(and(...conditions))
     .orderBy(desc(tasks.createdAt));
+}
+
+/**
+ * Soft-archive a task. Idempotent — second call against an already-archived
+ * task is a no-op and returns the existing row. Refuses (422) while the task
+ * is `in_progress` so we don't yank state out from under a live runner; every
+ * other status (todo / waiting / done / failed) is fine.
+ *
+ * `claimNextTask` and `listTasks` both filter `archivedAt IS NULL`, so a
+ * `todo` task archived between worker polls won't be picked up.
+ */
+export async function archiveTask(tenantId: string, taskId: string): Promise<Task> {
+  const current = await getTask(tenantId, taskId);
+  if (current.archivedAt) return current;
+  if (current.status === 'in_progress') {
+    throw new IllegalStateError(
+      `Task ${taskId} is in_progress; wait until it pauses or completes before archiving`,
+    );
+  }
+  const now = new Date();
+  const [updated] = await db
+    .update(tasks)
+    .set({ archivedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(tasks.id, taskId),
+        eq(tasks.tenantId, tenantId),
+        isNull(tasks.archivedAt),
+        // Atomic guard against a worker claiming the row between our SELECT and UPDATE.
+        sql`${tasks.status} <> 'in_progress'`,
+      ),
+    )
+    .returning();
+  if (!updated) {
+    // Lost the race with claimNextTask — re-read and surface the precise reason.
+    const after = await getTask(tenantId, taskId);
+    if (after.archivedAt) return after;
+    throw new IllegalStateError(
+      `Task ${taskId} is in_progress; wait until it pauses or completes before archiving`,
+    );
+  }
+  return updated;
 }
 
 export async function updateTaskStatus(
@@ -195,6 +237,7 @@ export async function claimNextTask(opts: {
     WHERE id = (
       SELECT id FROM tasks
       WHERE status = 'todo'
+        AND archived_at IS NULL
         AND (scheduled_at IS NULL OR scheduled_at <= now())
         AND (locked_until IS NULL OR locked_until <= now())
       ORDER BY COALESCE(scheduled_at, created_at) ASC

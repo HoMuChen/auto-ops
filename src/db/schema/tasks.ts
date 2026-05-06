@@ -79,6 +79,13 @@ export const tasks = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
     completedAt: timestamp('completed_at', { withTimezone: true }),
+    /**
+     * Soft-hide flag. When set, the row is excluded from `listTasks` and
+     * `claimNextTask` so neither the kanban nor the worker sees it.
+     * `getTask` still returns it (deep-link / audit). Refuse to set while
+     * `status='in_progress'` to avoid clobbering a live runner mid-flight.
+     */
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
   },
   (table) => ({
     tenantStatusIdx: index('tasks_tenant_status_idx').on(table.tenantId, table.status),

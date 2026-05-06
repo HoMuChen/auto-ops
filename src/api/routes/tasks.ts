@@ -8,6 +8,7 @@ import { buildContinuation } from '../../tasks/continue.js';
 import { appendMessage, listMessages } from '../../tasks/messages.js';
 import { readTaskOutput } from '../../tasks/output.js';
 import {
+  archiveTask,
   createTask,
   finalizeStrategyTask,
   getStreamCursor,
@@ -417,6 +418,31 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
         createdBy: user.id,
       });
       return updateTaskStatus(tenantId, taskId, 'todo');
+    },
+  );
+
+  /**
+   * Soft-archive — hides the task from `GET /tasks` and the worker queue
+   * without deleting it. Idempotent. Refuses (422) if the task is currently
+   * `in_progress`; every other status is archivable.
+   */
+  app.post(
+    '/tasks/:taskId/archive',
+    {
+      schema: {
+        tags: ['tasks'],
+        params: z.object({ taskId: z.string().uuid() }),
+        response: {
+          200: TaskSchema,
+          404: ErrorEnvelope,
+          422: ErrorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      const { taskId } = req.params as { taskId: string };
+      return archiveTask(tenantId, taskId);
     },
   );
 
