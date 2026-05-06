@@ -5,6 +5,7 @@ import { env } from '../../../config/env.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
+import { flexibleDatetime } from '../../lib/lenient-schemas.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { skillsToggleSchema } from '../../lib/skills-schema.js';
@@ -74,8 +75,9 @@ const DesignerVariantSchema = z.object({
         'for sub-sections — they nest correctly under the wrapping H3.',
     ),
   assignedAgent: z.literal('product-designer'),
-  // .nullish() not .optional() — see seo-strategist scheduledAt for the rationale.
-  scheduledAt: z.string().datetime().nullish(),
+  // Lenient: accepts Z / offset / loose forms; falls back to null on garbage.
+  // See src/agents/lib/lenient-schemas.ts for the rationale.
+  scheduledAt: flexibleDatetime,
 });
 
 const PlanSchema = z.object({

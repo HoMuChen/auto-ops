@@ -5,7 +5,7 @@ import {
   ToolMessage,
 } from '@langchain/core/messages';
 import { tool } from '@langchain/core/tools';
-import type { ZodType } from 'zod';
+import type { infer as ZodInfer, ZodType, ZodTypeAny } from 'zod';
 import { type PromptLogContext, logLlmInvoked, logPromptBuilt } from '../../lib/log-prompt.js';
 import { logger } from '../../lib/logger.js';
 import { buildModel } from '../../llm/model-registry.js';
@@ -89,8 +89,8 @@ export interface ToolCall {
  * model write the answer twice), the schema becomes a tool the model calls
  * once it's ready to finalize.
  */
-export interface FinalAnswerConfig<T> {
-  schema: ZodType<T>;
+export interface FinalAnswerConfig<S extends ZodTypeAny> {
+  schema: S;
   /** Tool name exposed to the model. Defaults to 'submit'. */
   name?: string;
   /** Description nudging the model when to call it. */
@@ -101,9 +101,22 @@ export interface FinalAnswerConfig<T> {
    * Default 0 (no minimum).
    */
   minToolHops?: number;
+  /**
+   * Cap on consecutive submit-tool calls that fail Zod schema validation
+   * before the loop gives up and exits with `kind: 'plain'`. Without this
+   * cap, a model that keeps emitting the same bad shape will burn the
+   * remaining `maxHops` budget on retries — each one a full LLM call.
+   *
+   * Tightening optional fields with `flexibleDatetime` / `.catch(default)`
+   * (see lenient-schemas.ts) absorbs most of these without retrying at all;
+   * this cap is the backstop for whatever sloppiness remains.
+   *
+   * Default: 2 (allow one retry, then bail).
+   */
+  maxSchemaRetries?: number;
 }
 
-export interface ToolLoopOptions<T = never> {
+export interface ToolLoopOptions<S extends ZodTypeAny = ZodTypeAny> {
   modelConfig: ModelConfig;
   messages: BaseMessage[];
   tools: AgentTool[];
@@ -117,7 +130,7 @@ export interface ToolLoopOptions<T = never> {
    * this, the loop exits when the model emits content with no tool_calls
    * (legacy behaviour).
    */
-  finalAnswer?: FinalAnswerConfig<T>;
+  finalAnswer?: FinalAnswerConfig<S>;
   /** Optional taskId/agentId for prompt + LLM-response diagnostic logs. */
   logCtx?: PromptLogContext;
 }
@@ -127,8 +140,8 @@ interface BaseResult {
   calls: ToolCall[];
 }
 
-export type ToolLoopResult<T = never> =
-  | (BaseResult & { kind: 'submitted'; value: T })
+export type ToolLoopResult<S extends ZodTypeAny = ZodTypeAny> =
+  | (BaseResult & { kind: 'submitted'; value: ZodInfer<S> })
   | (BaseResult & { kind: 'plain' });
 
 /**
@@ -141,7 +154,7 @@ export type ToolLoopResult<T = never> =
  * where the model first emits a free-form analysis (Pass 1's tail) and is
  * then prompted to re-derive the same answer as JSON (Pass 2).
  */
-export async function runToolLoop<T = never>({
+export async function runToolLoop<S extends ZodTypeAny = ZodTypeAny>({
   modelConfig,
   messages,
   tools,
@@ -150,7 +163,8 @@ export async function runToolLoop<T = never>({
   logFormatters = {},
   finalAnswer,
   logCtx = {},
-}: ToolLoopOptions<T>): Promise<ToolLoopResult<T>> {
+}: ToolLoopOptions<S>): Promise<ToolLoopResult<S>> {
+  const maxSchemaRetries = finalAnswer?.maxSchemaRetries ?? 2;
   const formatters = { ...DEFAULT_FORMATTERS, ...logFormatters };
 
   const submitName = finalAnswer?.name ?? 'submit';
@@ -180,8 +194,9 @@ export async function runToolLoop<T = never>({
 
   const collected: BaseMessage[] = [...messages];
   const calls: ToolCall[] = [];
-  let submittedValue: T | undefined;
+  let submittedValue: ZodInfer<S> | undefined;
   const minHops = finalAnswer?.minToolHops ?? 0;
+  let schemaRetries = 0;
 
   // Diagnostic: dump the full system prompt + initial messages once on entry.
   // Pino-debug only (gated inside the helper) — dev sees it, prod skips formatting.
@@ -256,6 +271,7 @@ export async function runToolLoop<T = never>({
       // Validate; if Zod rejects, surface as a tool error so the model can retry.
       const parsed = finalAnswer.schema.safeParse(argsObj);
       if (!parsed.success) {
+        schemaRetries += 1;
         const issuePreview = parsed.error.issues
           .slice(0, 3)
           .map((i) => `${i.path.join('.')}: ${i.message}`)
@@ -264,11 +280,23 @@ export async function runToolLoop<T = never>({
           {
             component: 'tool-loop',
             hop,
+            schemaRetries,
+            maxSchemaRetries,
             issueCount: parsed.error.issues.length,
             issues: parsed.error.issues.slice(0, 5),
           },
           `submit rejected (schema): ${issuePreview}`,
         );
+        // Bail rather than burn the rest of maxHops on retries the model
+        // can't fix. The agent's invoke() will see kind: 'plain' and decide
+        // whether to throw or accept best-effort.
+        if (schemaRetries >= maxSchemaRetries) {
+          logger.warn(
+            { component: 'tool-loop', hop, schemaRetries, maxSchemaRetries },
+            `schema retry limit reached — exiting loop with kind:'plain' to stop burning hops`,
+          );
+          break;
+        }
         collected.push(
           new ToolMessage({
             tool_call_id: submitCall.id ?? '',

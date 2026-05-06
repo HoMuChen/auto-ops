@@ -5,6 +5,7 @@ import { env } from '../../../config/env.js';
 import { SerpCache } from '../../../integrations/serper/cache.js';
 import { SerperClient } from '../../../integrations/serper/client.js';
 import { buildSerperTools } from '../../../integrations/serper/tools.js';
+import { flexibleDatetime } from '../../lib/lenient-schemas.js';
 import { buildAgentMessages } from '../../lib/messages.js';
 import { loadPacks } from '../../lib/packs.js';
 import { skillsToggleSchema } from '../../lib/skills-schema.js';
@@ -39,7 +40,8 @@ Constraints:
   week starting next Monday"), set "scheduledAt" on each topic relative to the
   "Current time" given in the Runtime context block above. First topic at
   Current time + 0; subsequent topics offset by the requested interval. Use
-  ISO 8601 with timezone (e.g. "2026-05-04T09:00:00Z"). When no cadence is
+  ISO 8601 with timezone — UTC ("2026-05-04T09:00:00Z") or a fixed offset
+  ("2026-05-04T17:00:00+08:00") are both accepted. When no cadence is
   mentioned, leave scheduledAt unset so the article runs immediately.
 
 Workflow:
@@ -98,16 +100,12 @@ const TopicSchema = z.object({
         'under the wrapping H3.',
     ),
   assignedAgent: z.string().describe('Id of the worker agent that should produce this article.'),
-  scheduledAt: z
-    .string()
-    .datetime()
-    .nullish()
-    .describe(
-      'Optional ISO timestamp. Use `.nullish()` (accepts null + undefined) because ' +
-        'OpenAI/Anthropic structured-output specs require optional fields to also be ' +
-        'nullable; Sonnet sends `null` for unscheduled topics, and `optional()` alone ' +
-        'rejects null in Zod validation, jamming the submit retry loop.',
-    ),
+  scheduledAt: flexibleDatetime.describe(
+    'Optional ISO 8601 timestamp for when to publish this article. ' +
+      'Accepts UTC (`Z`) or offset (`+08:00`) form, or null/omit for ' +
+      'immediate. Loose forms (e.g. "2026-05-06") are parsed best-effort; ' +
+      "unparseable values fall back to null so the submit isn't rejected.",
+  ),
 });
 
 const PlanSchema = z.object({

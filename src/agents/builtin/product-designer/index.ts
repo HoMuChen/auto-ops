@@ -59,7 +59,9 @@ const ProductListingSchema = z.object({
     ),
   tags: z.array(z.string().min(1)).min(1).max(20),
   vendor: z.string().min(1),
-  productType: z.string().nullish(),
+  // Optional UI hint — `.catch(null)` so model sloppiness on this metadata
+  // field doesn't reject the whole submission. See lenient-schemas.ts.
+  productType: z.string().nullish().catch(null),
   report: z
     .string()
     .min(80)
