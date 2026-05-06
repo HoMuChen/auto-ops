@@ -58,10 +58,28 @@ Workflow:
    - One concrete E-E-A-T hook the writer should lean into
    Write the brief as prose with subheads — not as a JSON-shaped list. The writer
    reads it as natural language context.
-4. Compose \`overview\` — your zh-TW Markdown report explaining the overall strategy.
 
-When ready, return the plan as the structured output requested. The plan will be
-shown to the user for approval before any child article task is created.`;
+# Submitting your plan — the ONLY way to finish
+
+When you have enough SERP data, **call the \`submit_plan\` tool**. The tool
+arguments ARE your final deliverable: \`overview\` (zh-TW Markdown explaining
+the overall strategy), \`progressNote\` (one-line status for the kanban),
+and \`topics\` (the array of focused articles). There is no other channel —
+nothing you write as plain text reaches the user.
+
+**Anti-patterns — do NOT do these:**
+- ❌ Writing "研究完成，準備提交完整計畫" as a chat message and stopping.
+  This is just narration. The user sees nothing because submit_plan was
+  not called. The task fails.
+- ❌ Writing the plan as Markdown in your response content. The schema is
+  the contract — Markdown text in content is discarded.
+- ❌ Doing more than ~6 serper_search calls hoping for "more confidence".
+  After 3–5 searches you have enough. Submit.
+
+**The right pattern:**
+After your last serper_search returns, your very next turn calls
+\`submit_plan\` with the complete arguments. Not "I will submit", not
+"preparing to submit" — the tool call IS the submission.`;
 
 const configSchema = z.object({
   maxTopics: z

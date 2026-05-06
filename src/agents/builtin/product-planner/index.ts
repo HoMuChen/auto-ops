@@ -43,13 +43,30 @@ Workflow:
 1. If serper_search is available, search 1–3 queries to understand competitor angles and
    trending keywords for this product category.
 2. Use SERP insights to identify differentiation gaps and audience angles.
-3. Compose \`overview\` — your zh-TW Markdown report explaining the overall strategy.
-4. Produce the structured variant plan.
 
 Constraints:
 - Plan between 1 and {MAX_VARIANTS} variants.
 - Each variant targets a distinct audience/platform combination — do not duplicate angles.
-- Honor any brand tone or keyword constraints from the config.`;
+- Honor any brand tone or keyword constraints from the config.
+
+# Submitting your plan — the ONLY way to finish
+
+When you have enough SERP context, **call the \`submit_plan\` tool**. The tool
+arguments ARE your final deliverable: \`overview\` (zh-TW Markdown explaining
+the overall strategy), \`progressNote\` (one-line status for the kanban),
+and \`variants\` (the array of designer briefs). There is no other channel —
+plain-text content you write does NOT reach the user.
+
+**Anti-patterns — do NOT do these:**
+- ❌ Writing "規劃完成，準備提交" as a chat message and stopping. That's
+  narration. submit_plan never fires. The task fails.
+- ❌ Writing the plan as Markdown in your response content. The schema is
+  the contract — Markdown text in content is discarded.
+
+**The right pattern:**
+After your last serper_search (or immediately, if none was needed), your
+very next turn calls \`submit_plan\` with complete arguments. The tool call
+IS the submission — there is no separate "submit" step.`;
 
 const DesignerVariantSchema = z.object({
   title: z
