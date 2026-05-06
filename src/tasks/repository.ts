@@ -10,7 +10,7 @@ import {
   userStreamCursors,
 } from '../db/schema/index.js';
 import { eventBus } from '../events/event-bus.js';
-import { IllegalStateError, NotFoundError, ValidationError } from '../lib/errors.js';
+import { IllegalStateError, LockLostError, NotFoundError, ValidationError } from '../lib/errors.js';
 import type { TaskOutput } from './output.js';
 import { assertTransition } from './state-machine.js';
 
@@ -75,9 +75,24 @@ export async function updateTaskStatus(
   taskId: string,
   to: TaskStatus,
   patch?: Partial<Pick<Task, 'output' | 'error' | 'assignedAgent' | 'kind'>>,
+  /**
+   * Owner guard. When set, the UPDATE only commits if `tasks.locked_by` still
+   * matches this worker id; otherwise throws `LockLostError`. Used by the
+   * task runner to refuse writing state for a task whose lease was reclaimed
+   * mid-run, preventing two parallel runners from corrupting each other's
+   * status transitions. API callers (approve / feedback / discard) leave
+   * this undefined since they're not bound to a worker lock.
+   */
+  expectedLockedBy?: string,
 ): Promise<Task> {
   const current = await getTask(tenantId, taskId);
   assertTransition(current.status, to);
+
+  if (expectedLockedBy && current.lockedBy !== expectedLockedBy) {
+    throw new LockLostError(
+      `Task ${taskId} lock owned by ${current.lockedBy ?? 'nobody'}, not ${expectedLockedBy}`,
+    );
+  }
 
   const [updated] = await db
     .update(tasks)
@@ -87,10 +102,25 @@ export async function updateTaskStatus(
       ...(to === 'done' || to === 'failed' ? { completedAt: new Date() } : {}),
       updatedAt: new Date(),
     })
-    .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)))
+    .where(
+      and(
+        eq(tasks.id, taskId),
+        eq(tasks.tenantId, tenantId),
+        // Atomic owner check — closes the read-then-update race that the
+        // pre-check above would otherwise miss.
+        ...(expectedLockedBy ? [eq(tasks.lockedBy, expectedLockedBy)] : []),
+      ),
+    )
     .returning();
 
-  if (!updated) throw new NotFoundError(`Task ${taskId}`);
+  if (!updated) {
+    if (expectedLockedBy) {
+      throw new LockLostError(
+        `Task ${taskId} lock changed during update — expected owner ${expectedLockedBy}`,
+      );
+    }
+    throw new NotFoundError(`Task ${taskId}`);
+  }
 
   // Domain event for downstream listeners (notifications, future webhooks…).
   // Emitted AFTER the row update so a listener never reacts to a transition
@@ -183,11 +213,48 @@ export async function claimNextTask(opts: {
   return task ?? null;
 }
 
-export async function releaseLock(taskId: string): Promise<void> {
+/**
+ * Owner-guarded lock release. Only clears `lockedBy`/`lockedUntil` if the
+ * current owner is still `expectedLockedBy` — otherwise no-op. This prevents
+ * a runner whose lease was reclaimed mid-run from clearing the new owner's
+ * lock when its `finally` block runs.
+ *
+ * Callers without a worker context (none currently — only the runner uses
+ * this) may omit the guard and unconditionally release.
+ */
+export async function releaseLock(taskId: string, expectedLockedBy?: string): Promise<void> {
   await db
     .update(tasks)
     .set({ lockedBy: null, lockedUntil: null, updatedAt: new Date() })
-    .where(eq(tasks.id, taskId));
+    .where(
+      and(
+        eq(tasks.id, taskId),
+        ...(expectedLockedBy ? [eq(tasks.lockedBy, expectedLockedBy)] : []),
+      ),
+    );
+}
+
+/**
+ * Heartbeat: extend `locked_until` while a runner is still actively working.
+ * Returns true if the lease was extended; false if the lock has been taken
+ * by another worker (or the task no longer exists), in which case the caller
+ * should abandon further state mutations.
+ *
+ * Atomic: single UPDATE with `locked_by = workerId` in WHERE, so a concurrent
+ * `reclaimExpiredLocks` ➝ another worker's `claimNextTask` race ends with
+ * exactly one owner.
+ */
+export async function extendLock(
+  taskId: string,
+  workerId: string,
+  leaseMs: number,
+): Promise<boolean> {
+  const result = await db
+    .update(tasks)
+    .set({ lockedUntil: new Date(Date.now() + leaseMs), updatedAt: new Date() })
+    .where(and(eq(tasks.id, taskId), eq(tasks.lockedBy, workerId)))
+    .returning({ id: tasks.id });
+  return result.length > 0;
 }
 
 export async function reclaimExpiredLocks(): Promise<number> {

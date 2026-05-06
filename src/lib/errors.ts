@@ -72,6 +72,18 @@ export class IllegalStateError extends AppError {
   }
 }
 
+/**
+ * Thrown when a worker tries to mutate a task it no longer owns. Happens when
+ * the heartbeat fails long enough for `reclaimExpiredLocks` to release the
+ * lock and another worker re-claims the task. The original runner catches
+ * this and abandons silently — its parallel sibling is now the source of truth.
+ */
+export class LockLostError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super({ code: 'lock_lost', message, statusCode: 409, details });
+  }
+}
+
 export class ExternalServiceError extends AppError {
   constructor(service: string, message: string, details?: unknown) {
     super({

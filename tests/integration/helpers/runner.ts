@@ -14,11 +14,12 @@ export async function drainNextTask(opts?: { workerId?: string; leaseMs?: number
   claimed: boolean;
   taskId?: string;
 }> {
+  const workerId = opts?.workerId ?? 'test-worker';
   const task = await claimNextTask({
-    workerId: opts?.workerId ?? 'test-worker',
+    workerId,
     leaseMs: opts?.leaseMs ?? 60_000,
   });
   if (!task) return { claimed: false };
-  await runTaskThroughGraph(task);
+  await runTaskThroughGraph(task, workerId);
   return { claimed: true, taskId: task.id };
 }

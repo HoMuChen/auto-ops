@@ -84,7 +84,9 @@ export class TaskWorker {
         this.log.info({ taskId: task.id }, 'claimed task');
 
         // Fire and forget; the runner handles its own errors and final status updates.
-        runTaskThroughGraph(task)
+        // Pass workerId so the runner can heartbeat-extend the lease and refuse
+        // to write task state if its lease is reclaimed mid-run.
+        runTaskThroughGraph(task, this.workerId)
           .catch((err) => this.log.error({ err, taskId: task.id }, 'runner crashed'))
           .finally(() => {
             this.inflight -= 1;
