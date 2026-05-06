@@ -89,11 +89,29 @@ export const TaskSchema = z.object({
   archivedAt: NullableIsoDate,
 });
 
+/**
+ * Free-form key/value bag passed through to the task as `task.input.params`.
+ * Most keys are agent-specific (e.g. `refs.primaryKeyword` for SEO writers).
+ *
+ * Reserved key — recognised by the framework, not the agent:
+ *   `notify`: per-task override of the user's global notification settings.
+ *     - `true` / `{}`            → email user's account address (overrides global)
+ *     - `{ email: "x@y.com" }`   → email a specific address
+ *     - `false`                  → explicit opt-out (overrides global)
+ *     - `undefined` / omitted    → fall back to /v1/me/notification-settings
+ *   Applies to both done and waiting triggers.
+ */
+const TaskParamsSchema = z
+  .record(z.unknown())
+  .describe(
+    "Free-form params merged into task.input. Reserved key `notify` overrides the user's notification settings (true | false | {email} | omit-for-default). See /v1/me/notification-settings.",
+  );
+
 export const CreateTaskBody = z.object({
   brief: z.string().min(1, 'brief is required'),
   /** Optional explicit agent id; otherwise the Supervisor decides. */
   preferredAgent: z.string().optional(),
-  params: z.record(z.unknown()).optional(),
+  params: TaskParamsSchema.optional(),
   scheduledAt: z.string().datetime().optional(),
   /** UUIDs returned by POST /v1/uploads — attached to the first user message. */
   imageIds: z.array(z.string().uuid()).optional(),
@@ -103,7 +121,7 @@ export type CreateTaskBody = z.infer<typeof CreateTaskBody>;
 export const ContinueTaskBody = z.object({
   brief: z.string().min(1, 'brief is required'),
   preferredAgent: z.string().optional(),
-  params: z.record(z.unknown()).optional(),
+  params: TaskParamsSchema.optional(),
   scheduledAt: z.string().datetime().optional(),
   imageIds: z.array(z.string().uuid()).optional(),
 });

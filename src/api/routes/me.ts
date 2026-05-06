@@ -9,12 +9,28 @@ import { authedTenantOf, requireTenant } from '../middleware/tenant.js';
 import { ErrorEnvelope } from '../schemas.js';
 
 const NotificationSettingsSchema = z.object({
-  notifyOnDone: z.boolean().default(false),
-  notifyOnWaiting: z.boolean().default(true),
+  notifyOnDone: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Email when a task transitions to `done`. **Opt-in** (default false) — done is a pure FYI signal, the deliverable is in the kanban regardless. Per-task `params.notify` overrides this.',
+    ),
+  notifyOnWaiting: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Email when a task has been parked in `waiting` past 30 min without action. **Opt-out** (default true) — waiting means the system is genuinely blocked on the user, so silent-by-default would be the worse failure mode. Feedback rounds re-fire if they re-stall. Per-task `params.notify` overrides this.',
+    ),
 });
 const NotificationSettingsPatchSchema = z.object({
-  notifyOnDone: z.boolean().optional(),
-  notifyOnWaiting: z.boolean().optional(),
+  notifyOnDone: z
+    .boolean()
+    .optional()
+    .describe('Toggle the done-email opt-in. Omit to leave unchanged.'),
+  notifyOnWaiting: z
+    .boolean()
+    .optional()
+    .describe('Toggle the waiting-email opt-out. Omit to leave unchanged.'),
 });
 
 /**
@@ -60,8 +76,9 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
    * user serving multiple workspaces can opt in to notifications on one
    * without bleeding into the others.
    *
-   * Storage is jsonb on tenant_members.notification_settings. Null row
-   * value is treated as defaults (notifyOnDone: false).
+   * Storage is jsonb on tenant_members.notification_settings. NULL row maps
+   * to defaults: notifyOnDone=false (opt-in FYI), notifyOnWaiting=true
+   * (opt-out — waiting means blocked on the user).
    */
   app.get(
     '/me/notification-settings',
