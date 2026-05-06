@@ -76,6 +76,8 @@ export interface ToolCall {
   toolName: string;
   args: Record<string, unknown>;
   result: unknown;
+  /** Set when the tool implementation threw — `result` then holds the error envelope. */
+  error?: string;
 }
 
 /**
@@ -355,14 +357,34 @@ export async function runToolLoop<S extends ZodTypeAny = ZodTypeAny>({
         ...callingLog?.data,
       });
 
-      const result = await agentTool.tool.invoke(args);
-      calls.push({ toolName: call.name, args, result });
+      // Catch tool throws so a single transient failure (web_fetch 403, network
+      // hiccup, rate-limit, …) doesn't abort the whole task. We feed a uniform
+      // JSON error envelope back as a ToolMessage so the model can read it and
+      // recover (skip the URL, try a different one, or submit with what it has).
+      // The kanban timeline gets a `tool.error.*` log instead of `tool.result.*`
+      // so the failure is visible without digging into server logs.
+      let result: unknown;
+      let toolError: string | undefined;
+      try {
+        result = await agentTool.tool.invoke(args);
+      } catch (err) {
+        toolError = err instanceof Error ? err.message : String(err);
+        result = { ok: false, error: toolError };
+      }
+      calls.push({ toolName: call.name, args, result, ...(toolError ? { error: toolError } : {}) });
 
-      const resultLog = fmt?.result?.(args, result);
-      await emitLog(`tool.result.${call.name}`, resultLog?.message ?? `${call.name} 完成`, {
-        tool: call.name,
-        ...resultLog?.data,
-      });
+      if (toolError) {
+        await emitLog(`tool.error.${call.name}`, `${call.name} 失敗：${toolError}`, {
+          tool: call.name,
+          error: toolError,
+        });
+      } else {
+        const resultLog = fmt?.result?.(args, result);
+        await emitLog(`tool.result.${call.name}`, resultLog?.message ?? `${call.name} 完成`, {
+          tool: call.name,
+          ...resultLog?.data,
+        });
+      }
 
       collected.push(
         new ToolMessage({ tool_call_id: call.id ?? '', content: JSON.stringify(result) }),

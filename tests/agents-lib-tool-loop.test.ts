@@ -1,4 +1,5 @@
 import { AIMessage } from '@langchain/core/messages';
+import { tool } from '@langchain/core/tools';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
@@ -77,6 +78,59 @@ describe('runToolLoop coercion retry cap', () => {
 
     expect(result.kind).toBe('plain');
     expect(invokeMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('a tool throwing does not abort the loop — error is fed back as a ToolMessage', async () => {
+    invokeMock.mockReset();
+    const flakyTool = tool(
+      async () => {
+        throw new Error('web.fetch 403 for https://example.com');
+      },
+      {
+        name: 'flaky_fetch',
+        description: 'simulates a failing third-party tool',
+        schema: z.object({ url: z.string() }),
+      },
+    );
+
+    // Hop 0: model calls the flaky tool — it throws. Loop must catch and continue.
+    // Hop 1: model recovers and submits using whatever it has.
+    invokeMock
+      .mockResolvedValueOnce(
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'call_1', name: 'flaky_fetch', args: { url: 'https://example.com' } }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'call_2', name: 'submit_test', args: { value: 'recovered' } }],
+        }),
+      );
+
+    const emitLog = vi.fn(async () => {});
+    const result = await runToolLoop({
+      ...baseOpts,
+      tools: [{ id: 'flaky.fetch', tool: flakyTool }],
+      maxHops: 8,
+      emitLog,
+    });
+
+    expect(result.kind).toBe('submitted');
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+    // Error log surfaces on the timeline so the user sees what went wrong.
+    expect(emitLog).toHaveBeenCalledWith(
+      'tool.error.flaky_fetch',
+      expect.stringContaining('403'),
+      expect.objectContaining({ tool: 'flaky_fetch', error: expect.stringContaining('403') }),
+    );
+    // Error envelope captured in the ToolCall record so callers can introspect.
+    expect(result.calls[0]).toMatchObject({
+      toolName: 'flaky_fetch',
+      result: { ok: false, error: expect.stringContaining('403') },
+      error: expect.stringContaining('403'),
+    });
   });
 
   it('successful submit after one nudge still works (recovery path)', async () => {
