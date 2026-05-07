@@ -13,8 +13,12 @@
  * See docs/plans/2026-05-04-markdown-first-artifacts-design.md for rationale.
  */
 export interface Artifact {
-  /** Canonical narrative (markdown). Audience: humans + downstream agents. */
-  report: string;
+  /**
+   * Canonical narrative (markdown). Audience: humans + downstream agents.
+   * Optional from PR2 onwards: agents may emit `structuredOutput` instead
+   * and leave this for the report-writer node to fill in.
+   */
+  report?: string;
   /** Deliverable content (markdown). Only present when an agent produces
    *  publishable content (article body, product description). Converted to
    *  HTML at the publish boundary via `markdownToHtml`. */

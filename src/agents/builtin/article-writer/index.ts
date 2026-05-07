@@ -1,14 +1,26 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import type { buildTenantImageTools } from '../../../integrations/openai-images/build-tenant-image-tools.js';
-import type { buildSerperTools } from '../../../integrations/serper/tools.js';
-import type { buildWebFetchTools } from '../../../integrations/web/tools.js';
+import { env } from '../../../config/env.js';
+import { buildTenantImageTools } from '../../../integrations/openai-images/build-tenant-image-tools.js';
+import { SerpCache } from '../../../integrations/serper/cache.js';
+import { SerperClient } from '../../../integrations/serper/client.js';
+import { buildSerperTools } from '../../../integrations/serper/tools.js';
+import { buildShopifyTools } from '../../../integrations/shopify/tools.js';
+import { WebFetchClient } from '../../../integrations/web/client.js';
+import { buildWebFetchTools } from '../../../integrations/web/tools.js';
+import { markdownToHtml } from '../../lib/markdown.js';
+import { buildAgentMessages } from '../../lib/messages.js';
+import { loadPacks } from '../../lib/packs.js';
 import { skillsToggleSchema } from '../../lib/skills-schema.js';
+import { runToolLoop } from '../../lib/tool-loop.js';
 import type {
   AgentBuildContext,
   AgentInput,
   AgentOutput,
   AgentRunnable,
   IAgent,
+  PendingToolCall,
 } from '../../types.js';
 
 const DEFAULT_PROMPT = `You are an Article Writer AI employee for an e-commerce business.
@@ -162,21 +174,166 @@ export const articleWriterAgent: IAgent = {
     metadata: { kind: 'execution', shape: 'atomic' },
   },
 
-  async build(_ctx: AgentBuildContext): Promise<AgentRunnable> {
-    throw new Error('article-writer.build() not yet implemented');
+  async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
+    const cfg = configSchema.parse(ctx.agentConfig ?? {}) as ArticleWriterConfig;
+
+    const imageTools = buildTenantImageTools({
+      tenantId: ctx.tenantId,
+      taskId: ctx.taskId,
+      styleSuffix: ctx.tenantProfile.imageStyleSuffix || undefined,
+    });
+
+    const tools = await buildShopifyTools(ctx.tenantId, {
+      ...(cfg.credentialLabel ? { credentialLabel: cfg.credentialLabel } : {}),
+      ...(cfg.blogHandle ? { blogHandle: cfg.blogHandle } : {}),
+      ...(cfg.defaultAuthor ? { defaultAuthor: cfg.defaultAuthor } : {}),
+      publishArticleImmediately: cfg.publishImmediately,
+    });
+    const filteredTools = tools.filter((t) => t.id === 'shopify.publish_article');
+
+    const serperKey = env.SERPER_API_KEY;
+    const serperTools = serperKey
+      ? buildSerperTools({
+          tenantId: ctx.tenantId,
+          cache: new SerpCache(new SerperClient({ apiKey: serperKey })),
+        })
+      : [];
+    const webFetchTools = buildWebFetchTools({ client: new WebFetchClient() });
+
+    const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
+    const packsBlock = await loadPacks({
+      builtInDir: packsDir,
+      builtInEnabled: cfg.skills,
+      tenantId: ctx.tenantId,
+      agentId: 'article-writer',
+    });
+    const systemPrompt = packsBlock ? `${packsBlock}\n\n${ctx.systemPrompt}` : ctx.systemPrompt;
+
+    const invoke = async (input: AgentInput): Promise<AgentOutput> => {
+      return runArticleWriter(ctx, cfg, systemPrompt, input, {
+        serperTools,
+        webFetchTools,
+        imageTools,
+      });
+    };
+
+    return { tools: filteredTools, invoke };
   },
 };
 
 export async function runArticleWriter(
-  _ctx: AgentBuildContext,
-  _cfg: ArticleWriterConfig,
-  _systemPrompt: string,
-  _input: AgentInput,
-  _deps: ArticleWriterDeps,
+  ctx: AgentBuildContext,
+  cfg: ArticleWriterConfig,
+  systemPrompt: string,
+  input: AgentInput,
+  deps: ArticleWriterDeps,
 ): Promise<AgentOutput> {
-  throw new Error('runArticleWriter not yet implemented');
+  await ctx.emitLog('agent.started', '開始寫稿了，給我一點時間', {
+    publishToShopify: cfg.publishToShopify,
+    blogHandle: cfg.blogHandle ?? '(default)',
+  });
+
+  const messages = await buildAgentMessages(
+    systemPrompt,
+    input.messages,
+    undefined,
+    input.imageResolver,
+  );
+
+  const articleResult = await runToolLoop({
+    modelConfig: ctx.modelConfig,
+    messages,
+    tools: [...deps.serperTools, ...deps.webFetchTools],
+    maxHops: 10,
+    emitLog: ctx.emitLog,
+    logCtx: ctx.logCtx,
+    finalAnswer: {
+      schema: ArticleSchema,
+      name: 'submit_article',
+      description:
+        'Call this exactly once when the article is ready. The args ARE the final blog article.',
+      minToolHops: 0,
+    },
+  });
+
+  if (articleResult.kind !== 'submitted') {
+    throw new Error(
+      'article-writer did not submit an article within the tool loop budget — model emitted free-form content without calling submit_article.',
+    );
+  }
+  const article = articleResult.value;
+
+  let coverImageUrl: string | undefined;
+  if (cfg.generateCoverImage && deps.imageTools.length > 0) {
+    const genTool = deps.imageTools.find((t) => t.id === 'images.generate');
+    if (genTool) {
+      const style = cfg.coverImageStyle ?? 'editorial blog cover, clean layout';
+      const imgResult = (await genTool.tool.invoke({
+        prompt: `Blog cover image for: "${article.title}". ${style}`,
+      })) as { id: string; url: string };
+      coverImageUrl = imgResult.url;
+    }
+  }
+
+  await ctx.emitLog('agent.draft.ready', article.progressNote, {
+    artifactShape: 'body+structuredOutput',
+    title: article.title,
+    language: article.language,
+    bodyLength: article.body.length,
+    publishOnApprove: cfg.publishToShopify,
+  });
+
+  const refs: Record<string, unknown> = {
+    title: article.title,
+    slug: article.slug,
+    summaryHtml: article.summaryHtml,
+    tags: article.tags,
+    language: article.language,
+    ...(article.author ? { author: article.author } : {}),
+  };
+
+  // NOTE: artifact.report intentionally absent — report-writer fills it in
+  // by reading state.lastStructuredOutput. PR1 wired the channel; this is
+  // the first agent that uses it in production.
+  const result: AgentOutput = {
+    message: article.progressNote,
+    awaitingApproval: true,
+    artifact: { body: article.body, refs },
+    payload: { publishToShopify: cfg.publishToShopify },
+    structuredOutput: {
+      schemaName: 'article-draft',
+      data: {
+        title: article.title,
+        slug: article.slug,
+        body: article.body,
+        summaryHtml: article.summaryHtml,
+        tags: article.tags,
+        language: article.language,
+        ...(article.author ? { author: article.author } : {}),
+        ...(coverImageUrl ? { coverImageUrl } : {}),
+      },
+      keyDecisions: article.keyDecisions,
+    },
+  };
+
+  if (cfg.publishToShopify) {
+    const pendingToolCall: PendingToolCall = {
+      id: 'shopify.publish_article',
+      args: {
+        title: article.title,
+        slug: article.slug,
+        bodyHtml: markdownToHtml(article.body),
+        summaryHtml: article.summaryHtml,
+        tags: article.tags,
+        ...(article.author ? { author: article.author } : {}),
+        ...(coverImageUrl ? { coverImageUrl } : {}),
+      },
+    };
+    result.pendingToolCall = pendingToolCall;
+  }
+
+  return result;
 }
 
-// Re-exports for the workflow (Task 8) and tests.
 export { ArticleSchema, configSchema as articleWriterConfigSchema };
 export type { ArticleWriterConfig, ArticleWriterDeps };
