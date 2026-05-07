@@ -199,6 +199,11 @@ describe('product-designer', () => {
 
     const content = output.spawnTasks![0]!.input.content as ProductContent;
     expect(content.refs.imageUrls).toEqual(['https://cdn.example.com/img-1.jpg']);
+    // Lock the bodyWithImages mid-migration plumbing: content.report (passed
+    // to the un-migrated publisher) must include image markdown, not just
+    // the raw body. A regression where someone sets `content.report =
+    // listing.body` would silently strip images from the publisher's view.
+    expect(content.report).toContain('![圖 1](https://cdn.example.com/img-1.jpg)');
 
     // Post-PR6: image markdown rides on artifact.body (was artifact.report).
     const artifact = output.artifact as { body: string };

@@ -243,8 +243,11 @@ export const productDesignerAgent: IAgent = {
       // Mid-migration plumbing: ProductContent.report stays a string so the
       // un-migrated shopify-publisher (PR7) keeps copying it to its own
       // artifact.report. The semantic content shifts (body+images instead of
-      // boss prose) but the type contract holds. PR7 will rework this when
-      // the publisher migrates.
+      // boss prose) but the type contract holds. PR7 will rework this:
+      // publisher should drop the field from ProductContent entirely and
+      // read body+images from `lastStructuredOutput.data.{body,imageUrls}`
+      // instead, so report-writer (not the upstream agent) controls the
+      // publisher's artifact.report.
       const content: ProductContent = {
         report: bodyWithImages,
         body: listing.body,
