@@ -30,4 +30,34 @@ describe('runReportWriter — no-op paths', () => {
     expect(result).toEqual({});
     expect(buildModelMock).not.toHaveBeenCalled();
   });
+
+  it('returns an empty patch when schemaName is in REPORT_SKIP_SCHEMAS (eeat-questions)', async () => {
+    buildModelMock.mockClear();
+    const state = {
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      taskId: '00000000-0000-0000-0000-000000000002',
+      messages: [],
+      params: {},
+      nextAgent: null,
+      pinnedAgent: null,
+      lastOutput: {
+        agentId: 'eeat-interviewer',
+        message: 'asked questions',
+        artifact: { report: 'existing question prompt — must be preserved' },
+      },
+      lastStructuredOutput: {
+        agentId: 'eeat-interviewer',
+        schemaName: 'eeat-questions',
+        data: { questions: [{ question: 'How long have you worn linen?' }] },
+      },
+      awaitingApproval: true,
+      currentTaskOutput: null,
+      taskImageIds: null,
+    };
+
+    const result = await runReportWriter(state);
+
+    expect(result).toEqual({});
+    expect(buildModelMock).not.toHaveBeenCalled();
+  });
 });
