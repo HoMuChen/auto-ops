@@ -181,6 +181,12 @@ export async function runTaskThroughGraph(task: Task, workerId: string): Promise
           ...(finalState.lastOutput.pendingToolCall
             ? { pendingToolCall: finalState.lastOutput.pendingToolCall }
             : {}),
+          // Persist the inter-node channel so resume / /continue / spawn
+          // children can read it. Stays out of `task.output` when unset to
+          // keep the row clean for agents that haven't migrated yet.
+          ...(finalState.lastStructuredOutput
+            ? { lastStructuredOutput: finalState.lastStructuredOutput }
+            : {}),
         }
       : null;
 

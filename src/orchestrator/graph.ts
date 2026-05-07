@@ -123,6 +123,21 @@ export async function buildGraph(opts: BuildGraphOptions) {
           ...(result.spawnTasks ? { spawnTasks: result.spawnTasks } : {}),
           ...(result.pendingToolCall ? { pendingToolCall: result.pendingToolCall } : {}),
         },
+        // Surface structured output to the inter-node channel. Agents that
+        // don't emit structuredOutput leave the channel as-is (the reducer
+        // is replace-with-undefined, which a small null guard prevents).
+        ...(result.structuredOutput
+          ? {
+              lastStructuredOutput: {
+                agentId: manifest.id,
+                schemaName: result.structuredOutput.schemaName,
+                data: result.structuredOutput.data,
+                ...(result.structuredOutput.keyDecisions
+                  ? { keyDecisions: result.structuredOutput.keyDecisions }
+                  : {}),
+              },
+            }
+          : {}),
         awaitingApproval: result.awaitingApproval ?? false,
         nextAgent: null,
       };
