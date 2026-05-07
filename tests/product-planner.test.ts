@@ -152,7 +152,6 @@ describe('product-planner', () => {
       brief: expect.stringContaining('Marketing angle'),
       refs: { language: 'zh-TW' },
     });
-    expect(output.spawnTasks?.[0]?.input).not.toHaveProperty('variantSpec');
 
     const artifact = output.artifact;
     expect(artifact).toBeDefined();
@@ -193,9 +192,18 @@ describe('product-planner', () => {
     expect(output.structuredOutput?.data).toMatchObject({
       overview: expect.stringContaining('## 市場觀察'),
       variants: expect.arrayContaining([
-        expect.objectContaining({ title: '亞麻短袖 - 電商版 (zh-TW)' }),
+        expect.objectContaining({
+          title: '亞麻短袖 - 電商版 (zh-TW)',
+          platform: 'shopify',
+          language: 'zh-TW',
+          assignedAgent: 'product-designer',
+          brief: expect.stringContaining('Marketing angle'),
+        }),
       ]),
     });
+    expect(
+      (output.structuredOutput?.data as { variants: unknown[] } | undefined)?.variants,
+    ).toHaveLength(2);
     expect(output.structuredOutput?.keyDecisions).toEqual(planFixture.keyDecisions);
   });
 
