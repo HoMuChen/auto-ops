@@ -34,7 +34,7 @@ Research workflow (search-then-read):
    (pricing, feature names, review themes) from the fetched content, not from
    snippets alone. Note where sources disagree.
 
-Report structure (the markdown body in the \`report\` field):
+Report structure (the markdown body in the \`body\` field):
 - ## 市場概況 — size, growth, geography, time-frame
 - ## 主要競品 — 3-8 competitors with positioning, pricing tier, key strengths/weaknesses
 - ## 市場缺口 — observed unmet needs, underserved segments, weak product-market fit
@@ -47,8 +47,10 @@ language. Avoid filler. Cite findings inline like (來源: example.com).
 List every URL you fetched (and any other URL you cite) in the \`sources\`
 field — the framework renders the source list separately.
 
-progressNote: one-liner for the kanban timeline. Don't duplicate the report —
-say what you focused on or what stood out.
+progressNote is one short sentence for the kanban timeline. keyDecisions is
+3-5 short bullets the report-writer can lean on; the boss-facing prose is
+rendered by a separate report-writer node, so do NOT write your own boss
+memo here.
 
 Submit the final report via submit_report when ready.`;
 
@@ -70,7 +72,7 @@ const configSchema = z
 type MarketResearcherConfig = z.infer<typeof configSchema>;
 
 const ReportSchema = z.object({
-  report: z
+  body: z
     .string()
     .min(300)
     .max(8000)
@@ -83,6 +85,15 @@ const ReportSchema = z.object({
     .max(30)
     .describe(
       'Every URL you cited or fetched. The framework renders this as the sources panel; do NOT also list URLs in the report body to avoid duplication.',
+    ),
+  keyDecisions: z
+    .array(z.string().min(5))
+    .min(1)
+    .max(5)
+    .describe(
+      '3-5 short bullets the downstream report-writer can lean on when generating boss prose. ' +
+        'Examples: "聚焦中價位設計感缺口", "競品 D 牌 SKU 太少不算威脅". ' +
+        'Be concrete about market gaps, competitor reads, and recommended angle. Not boss-facing prose itself.',
     ),
   progressNote: z
     .string()
@@ -107,6 +118,7 @@ export const marketResearcherAgent: IAgent = {
     defaultPrompt: DEFAULT_PROMPT,
     requiredCredentials: [],
     configSchema,
+    metadata: { kind: 'execution', shape: 'atomic' },
   },
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
@@ -167,17 +179,27 @@ export const marketResearcherAgent: IAgent = {
       const report = result.value;
 
       await ctx.emitLog('agent.report.ready', report.progressNote, {
-        artifactShape: 'report',
+        artifactShape: 'body+structuredOutput',
         sourceCount: report.sources.length,
-        reportLength: report.report.length,
+        bodyLength: report.body.length,
       });
 
+      // NOTE: artifact.report intentionally absent — the shared report-writer
+      // node fills it from state.lastStructuredOutput at the HITL boundary.
       return {
         message: report.progressNote,
         awaitingApproval: true,
         artifact: {
-          report: report.report,
+          body: report.body,
           refs: { sources: report.sources, sourceCount: report.sources.length },
+        },
+        structuredOutput: {
+          schemaName: 'market-report',
+          data: {
+            body: report.body,
+            sources: report.sources,
+          },
+          keyDecisions: report.keyDecisions,
         },
       };
     };

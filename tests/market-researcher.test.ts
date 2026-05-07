@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
 /**
- * Market Researcher: verifies the report-only deliverable shape — the agent
- * runs serper + web_fetch (mocked away here), submits a structured report,
- * and surfaces it as an Artifact{report,refs.sources}. No spawn, no
- * pendingToolCall — pure plain-text deliverable that gates on awaitingApproval.
+ * Market Researcher (post-PR3): produces a structured market report. The
+ * agent emits `artifact.body` + `artifact.refs` + `structuredOutput`
+ * (schemaName='market-report'); the shared report-writer node renders
+ * `artifact.report` from `lastStructuredOutput` at the HITL boundary, so
+ * the agent itself no longer writes `artifact.report`.
  */
 
 const reportFixture = {
-  report: `## 市場概況
+  body: `## 市場概況
 
 寵物用品市場規模約新台幣 350 億，年成長 6%（2024 → 2026）。
 地理上以雙北、桃園消費密度最高，南部以台中、高雄為次集中區，
@@ -37,6 +38,11 @@ const reportFixture = {
 2. 雙北通路採實體品牌快閃 + 線上會員雙軌，跨足社群 KOC 行銷。
 3. SKU 聚焦 8-12 項，做深不做廣，前 6 個月不擴品類。`,
   sources: ['https://example.com/pet-market-2026', 'https://example.com/competitor-c-review'],
+  keyDecisions: [
+    '聚焦中價位設計感缺口，避開低價乾糧紅海',
+    'D 牌訂閱模型雖強但 SKU 少，可從品項深度切入',
+    '高齡寵物關節保健是本土品牌空白',
+  ],
   progressNote: '報告好了，這個品類最大缺口是中價位設計感商品，老闆看一下切入建議',
 };
 
@@ -76,7 +82,7 @@ describe('marketResearcherAgent.build → invoke', () => {
     emitLog: vi.fn(async (_event: string, _message: string, _data?: Record<string, unknown>) => {}),
   };
 
-  it('returns a markdown report artifact with sources in refs and gates on approval', async () => {
+  it('emits artifact.body + refs.sources and gates on approval (no artifact.report)', async () => {
     const runnable = await marketResearcherAgent.build(ctx);
     const result = await runnable.invoke({
       messages: [{ role: 'user', content: '幫我研究寵物用品在台灣的市場' }],
@@ -86,12 +92,29 @@ describe('marketResearcherAgent.build → invoke', () => {
     expect(result.awaitingApproval).toBe(true);
     expect(result.spawnTasks).toBeUndefined();
     expect(result.pendingToolCall).toBeUndefined();
-    expect(result.artifact?.report).toContain('## 市場概況');
-    expect(result.artifact?.report).toContain('## 切入建議');
+    // The agent no longer writes report — that's report-writer's job now.
+    expect(result.artifact?.report).toBeUndefined();
+    expect(result.artifact?.body).toContain('## 市場概況');
+    expect(result.artifact?.body).toContain('## 切入建議');
     expect(result.artifact?.refs).toEqual({
       sources: reportFixture.sources,
       sourceCount: 2,
     });
+  });
+
+  it('surfaces structuredOutput on the inter-node bus for report-writer', async () => {
+    const runnable = await marketResearcherAgent.build(ctx);
+    const result = await runnable.invoke({
+      messages: [{ role: 'user', content: '幫我研究寵物用品在台灣的市場' }],
+      params: {},
+    });
+
+    expect(result.structuredOutput?.schemaName).toBe('market-report');
+    expect(result.structuredOutput?.data).toMatchObject({
+      body: expect.stringContaining('## 市場概況'),
+      sources: reportFixture.sources,
+    });
+    expect(result.structuredOutput?.keyDecisions).toEqual(reportFixture.keyDecisions);
   });
 
   it('uses the LLM-produced progressNote as the agent.report.ready timeline message', async () => {
