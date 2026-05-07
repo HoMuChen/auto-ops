@@ -119,7 +119,7 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
       throw new Error(`Unexpected fetch: ${urlStr}`);
     });
 
-    // ── Phase 1: Strategist runs (supervisor + two-pass tool+plan) ────────────
+    // ── Phase 1: Strategist runs (supervisor + tool-loop + report-writer) ─────
     // Supervisor routes to seo-strategist (structured).
     scriptStructured({ nextAgent: 'seo-strategist', clarification: null, done: false });
     // Strategist now submits the plan via the submit_plan tool (single-pass).
@@ -129,6 +129,7 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
         '與穿著體驗，related searches 圍繞「縮水」與「洗滌方式」。\n\n## 策略\n\n切角放在' +
         '台灣濕熱氣候下的真實穿著體驗與第一手洗滌數據，這是市場缺口。',
       progressNote: '規劃了 1 個主題，用來測試 EEAT 流程，老闆過目',
+      keyDecisions: ['聚焦單一主題驗證 EEAT 流程', '切角放在台灣濕熱氣候下的真實穿著與洗滌數據'],
       topics: [
         {
           title: 'Linen shirts summer guide',
@@ -140,6 +141,14 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
         },
       ],
     });
+    // Report-writer LLM call for schemaName='topic-plan'. NOTE: NO extra
+    // scriptStructured here — supervisor short-circuits without an LLM call
+    // when awaitingApproval=true (src/orchestrator/supervisor.ts:69-72), so
+    // adding one would leak into the queue and be consumed by report-writer's
+    // plain `.invoke()`.
+    scriptText(
+      '## 策略決定\n\n聚焦台灣濕熱氣候的第一手經驗。\n\n## 為什麼這樣選\n\n是市場切角，競品多半從歐美觀點寫，缺少在地實穿與洗滌數據。',
+    );
 
     const create = await app.inject({
       method: 'POST',
@@ -156,9 +165,25 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
     const parent = await getTask(tenantId, parentId);
     expect(parent.status).toBe('waiting');
     expect(parent.kind).toBe('strategy');
+    // Post-PR5: strategist emits structuredOutput → report-writer renders prose.
     expect(parent.output).toMatchObject({
       artifact: {
-        report: expect.stringContaining('Linen shirts summer guide'),
+        // CRITICAL: report comes from report-writer, contains the prose it
+        // generated — NOT a verbatim copy of structuredOutput.data.overview
+        // (the prose-unique substring '台灣濕熱氣候的第一手經驗' is ONLY in the
+        // scripted text above; it is NOT in the agent's overview/topics).
+        report: expect.stringContaining('台灣濕熱氣候的第一手經驗'),
+        body: expect.stringContaining('Linen shirts summer guide'),
+      },
+      lastStructuredOutput: {
+        schemaName: 'topic-plan',
+        data: expect.objectContaining({
+          overview: expect.stringContaining('## 觀察'),
+          topics: expect.arrayContaining([
+            expect.objectContaining({ title: 'Linen shirts summer guide' }),
+          ]),
+        }),
+        keyDecisions: expect.arrayContaining(['聚焦單一主題驗證 EEAT 流程']),
       },
     });
 

@@ -78,6 +78,11 @@ describe('Strategy → Spawn → Execution flow', () => {
         '競品多半從歐美觀點寫，缺少在地實穿與洗滌經驗。\n\n## 策略\n\n選兩篇打不重疊：' +
         'zh-TW 在地穿搭主打台灣通勤痛點，en 永續 buyer guide 主打採購標準與第一手洗滌數據。',
       progressNote: '規劃了 2 個切角，主軸是夏季關鍵字，老闆過目',
+      keyDecisions: [
+        '兩條主軸：在地穿搭 vs 永續材質採購',
+        '台灣濕熱氣候是切角，競品多半從歐美視角',
+        '挑兩篇打不重疊：zh-TW 通勤痛點 + en 採購標準',
+      ],
       topics: [
         {
           title: '夏季穿搭 5 個必備單品',
@@ -97,6 +102,12 @@ describe('Strategy → Spawn → Execution flow', () => {
         },
       ],
     });
+    // Report-writer LLM call for schemaName='topic-plan'. NO extra
+    // scriptStructured — supervisor short-circuits on awaitingApproval=true
+    // (src/orchestrator/supervisor.ts:69-72).
+    scriptText(
+      '## 策略決定\n\n挑兩條主軸：在地穿搭 + 永續材質。\n\n## 為什麼這樣選\n\n台灣濕熱氣候是切角，競品多半從歐美視角寫。',
+    );
 
     const create = await app.inject({
       method: 'POST',
@@ -115,10 +126,24 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(parent.status).toBe('waiting');
     // Runner should auto-promote kind because the agent emitted spawnTasks.
     expect(parent.kind).toBe('strategy');
-    // The plan (markdown report) and the pending children specs should both be in output.
+    // Post-PR5: strategist emits structuredOutput → report-writer renders prose.
     expect(parent.output).toMatchObject({
       artifact: {
-        report: expect.any(String),
+        // CRITICAL: report is report-writer's prose, contains scripted-only
+        // substring '挑兩條主軸：在地穿搭 + 永續材質' (not present in agent
+        // output). body is the synthesis containing the topic title.
+        report: expect.stringContaining('挑兩條主軸：在地穿搭 + 永續材質'),
+        body: expect.stringContaining('夏季穿搭 5 個必備單品'),
+      },
+      lastStructuredOutput: {
+        schemaName: 'topic-plan',
+        data: expect.objectContaining({
+          overview: expect.stringContaining('## 觀察'),
+          topics: expect.arrayContaining([
+            expect.objectContaining({ title: '夏季穿搭 5 個必備單品' }),
+          ]),
+        }),
+        keyDecisions: expect.arrayContaining(['兩條主軸：在地穿搭 vs 永續材質採購']),
       },
       spawnTasks: expect.arrayContaining([
         expect.objectContaining({ assignedAgent: 'seo-article-with-eeat' }),
