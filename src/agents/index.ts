@@ -1,3 +1,4 @@
+import { articleWriterAgent } from './builtin/article-writer/index.js';
 import { marketResearcherAgent } from './builtin/market-researcher/index.js';
 import { productDesignerAgent } from './builtin/product-designer/index.js';
 import { productPlannerAgent } from './builtin/product-planner/index.js';
@@ -15,6 +16,7 @@ export function bootstrapAgents(): void {
   if (bootstrapped) return;
   agentRegistry.register(seoStrategistAgent);
   agentRegistry.register(shopifyBlogWriterAgent);
+  agentRegistry.register(articleWriterAgent);
   agentRegistry.register(productPlannerAgent);
   agentRegistry.register(productDesignerAgent);
   agentRegistry.register(shopifyPublisherAgent);
