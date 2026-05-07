@@ -15,8 +15,10 @@
 export interface Artifact {
   /**
    * Canonical narrative (markdown). Audience: humans + downstream agents.
-   * Optional from PR2 onwards: agents may emit `structuredOutput` instead
-   * and leave this for the report-writer node to fill in.
+   * Usually filled by the report-writer node from the agent's
+   * `structuredOutput`; agents may also write it directly when they ARE the
+   * boss-facing prose (eeat-interviewer's question prompt, supervisor's
+   * clarification) — those agents' schemaName is in `REPORT_SKIP_SCHEMAS`.
    */
   report?: string;
   /** Deliverable content (markdown). Only present when an agent produces

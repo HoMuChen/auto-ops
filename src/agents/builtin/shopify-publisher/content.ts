@@ -3,9 +3,9 @@
  * publisher agents. Mirrors the artifact shape: body (markdown product
  * description) + refs (machine-readable fields the publisher needs).
  *
- * Post-PR7: the boss-facing prose is rendered by the shared report-writer
- * node from the publisher's own structuredOutput; ProductContent no longer
- * carries it.
+ * The boss-facing prose is rendered by the shared report-writer node from
+ * the publisher's own structuredOutput; ProductContent intentionally does
+ * not carry it.
  */
 export interface ProductContent {
   /** Product description body in Markdown — image-free. Converted to HTML at

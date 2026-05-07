@@ -126,9 +126,10 @@ export async function buildGraph(opts: BuildGraphOptions) {
           ...(result.spawnTasks ? { spawnTasks: result.spawnTasks } : {}),
           ...(result.pendingToolCall ? { pendingToolCall: result.pendingToolCall } : {}),
         },
-        // Surface structured output to the inter-node channel. Agents that
-        // don't emit structuredOutput leave the channel as-is (the reducer
-        // is replace-with-undefined, which a small null guard prevents).
+        // Surface structured output to the inter-node channel. The
+        // conditional spread tracks the optional field on AgentOutput
+        // (kept optional for the supervisor clarification path) — every
+        // registered agent in fact emits one.
         ...(result.structuredOutput
           ? {
               lastStructuredOutput: {

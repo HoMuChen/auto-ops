@@ -231,8 +231,9 @@ export interface AgentOutput {
    * step, spawnTasks handler, report-writer) can consume it directly
    * instead of reading prose out of the message stream.
    *
-   * Optional — agents added before the report-writer refactor (and any
-   * agent that genuinely produces no structured output) leave it unset.
+   * Optional only because `runSupervisor` returns Partial<GraphState>
+   * directly (its clarification path has no agent-produced structure).
+   * Every IAgent in the registry currently emits one.
    */
   structuredOutput?: {
     schemaName: string;

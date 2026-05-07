@@ -48,10 +48,11 @@ ${JSON.stringify(input.data, null, 2)}${decisionsBlock}`;
  * step would have been END or HITL pause — every other hop bypasses it.
  *
  * No-ops (returns `{}`) when:
- *   - `state.lastStructuredOutput` is null (no agent has emitted structured
- *      output yet — true for every agent before the per-agent migrations
- *      land)
- *   - the schemaName is in REPORT_SKIP_SCHEMAS
+ *   - `state.lastStructuredOutput` is null (supervisor clarification path —
+ *      no agent ran)
+ *   - the schemaName is in REPORT_SKIP_SCHEMAS (e.g. eeat-interviewer's
+ *      question prompt — agent's hand-written `artifact.report` IS the
+ *      boss-facing output and must survive intact)
  *
  * On normal paths, calls a small LLM to render the report and writes it
  * to `state.lastOutput.artifact.report`. Failure is non-fatal: a fallback

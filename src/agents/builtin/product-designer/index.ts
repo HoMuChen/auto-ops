@@ -231,9 +231,9 @@ export const productDesignerAgent: IAgent = {
         imageUrls,
       };
 
-      // Image markdown moves from `report` (PR5) to `body` (PR6) so images
-      // stay user-visible pre-approval after we hand the boss-prose duty to
-      // the shared report-writer node.
+      // Image markdown is appended to `artifact.body` (not `body` itself) so
+      // images stay user-visible pre-approval. Boss-facing prose is rendered
+      // separately by the shared report-writer node.
       const imageMarkdown =
         imageUrls.length > 0
           ? `\n\n## 生成的圖片\n\n${imageUrls.map((url, i) => `![圖 ${i + 1}](${url})`).join('\n\n')}`

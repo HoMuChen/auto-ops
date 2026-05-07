@@ -289,8 +289,7 @@ export async function runArticleWriter(
   };
 
   // NOTE: artifact.report intentionally absent — report-writer fills it in
-  // by reading state.lastStructuredOutput. PR1 wired the channel; this is
-  // the first agent that uses it in production.
+  // by reading state.lastStructuredOutput.
   const result: AgentOutput = {
     message: article.progressNote,
     awaitingApproval: true,

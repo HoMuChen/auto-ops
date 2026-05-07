@@ -75,7 +75,7 @@ export const shopifyPublisherAgent: IAgent = {
       // Image markdown for boss-facing display only — Shopify gets images via
       // the `images[]` field, not inline in body_html. Same shape as the
       // designer's bodyWithImages; inlined here rather than shared because the
-      // logic is 3 lines and only used in two callsites (PR7 plan §"Architecture").
+      // logic is 3 lines and only used in two callsites.
       const imageMarkdown =
         imageUrls.length > 0
           ? `\n\n## 生成的圖片\n\n${imageUrls.map((url, i) => `![圖 ${i + 1}](${url})`).join('\n\n')}`

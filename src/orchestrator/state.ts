@@ -81,8 +81,8 @@ export const GraphStateAnnotation = Annotation.Root({
    * downstream nodes in workflow sub-graphs, the spawnTasks handler, the
    * report-writer node, and `/continue` threading prior output forward.
    *
-   * Null while no agent has produced output yet, or when an agent doesn't
-   * emit structured output (e.g. before this refactor lands per-agent).
+   * Null on the supervisor clarification path (no agent ran, so no
+   * structured output to channel).
    */
   lastStructuredOutput: Annotation<{
     agentId: string;
