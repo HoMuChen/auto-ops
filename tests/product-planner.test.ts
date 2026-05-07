@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 /**
- * product-planner: strategy agent that researches via Serper and spawns
- * product-designer tasks — one per content variant.
+ * product-planner (post-PR4): strategy agent that researches via Serper and
+ * spawns product-designer tasks. The synthesized markdown deliverable now
+ * lives on `artifact.body` (was `artifact.report`); `artifact.report` is
+ * filled by the shared report-writer node downstream from
+ * `structuredOutput.schemaName='product-plan'`. Spawn behaviour is unchanged.
  */
 
 const planFixture = {
@@ -15,6 +18,11 @@ const planFixture = {
 
 兩個 variant：一個 zh-TW 電商頁面切「機能透氣」、一個 IG 社群版切「永續生活感」。`,
   progressNote: '研究完競品後規劃了 2 個 variants，老闆看一下',
+  keyDecisions: [
+    '兩條主軸：機能透氣 vs 永續生活感',
+    '反向操作 SERP 的悶熱恐懼，主打 180g 不悶 + 可機洗',
+    '電商版切實用、IG 版切價值觀，避免角度互相吃掉',
+  ],
   variants: [
     {
       title: '亞麻短袖 - 電商版 (zh-TW)',
@@ -114,7 +122,7 @@ const designerPeer = {
 };
 
 describe('product-planner', () => {
-  it('spawns one product-designer task per variant', async () => {
+  it('spawns one product-designer task per variant; synthesis lands on artifact.body', async () => {
     const runnable = await productPlannerAgent.build({
       tenantId: 't1',
       taskId: 'task-1',
@@ -148,14 +156,47 @@ describe('product-planner', () => {
 
     const artifact = output.artifact;
     expect(artifact).toBeDefined();
-    expect(artifact).toHaveProperty('report');
-    expect(artifact).not.toHaveProperty('kind');
-    expect(artifact).not.toHaveProperty('data');
-    if (artifact && 'report' in artifact) {
-      expect(artifact.report).toContain('## 市場觀察');
-      expect(artifact.report).toContain('### 亞麻短袖 - 電商版 (zh-TW)');
-      expect(artifact.report).toContain('### 亞麻短袖 - Instagram 版 (zh-TW)');
+    // The agent no longer writes report — that's report-writer's job now.
+    expect(artifact).not.toHaveProperty('report');
+    expect(artifact).toHaveProperty('body');
+    if (artifact && 'body' in artifact) {
+      expect(artifact.body).toContain('## 市場觀察');
+      expect(artifact.body).toContain('### 亞麻短袖 - 電商版 (zh-TW)');
+      expect(artifact.body).toContain('### 亞麻短袖 - Instagram 版 (zh-TW)');
     }
+  });
+
+  it('surfaces structuredOutput on the inter-node bus for report-writer', async () => {
+    const runnable = await productPlannerAgent.build({
+      tenantId: 't1',
+      taskId: 'task-1',
+      modelConfig: { model: 'anthropic/claude-opus-4.7', temperature: 0.2 },
+      systemPrompt: 'You are a product planner.',
+      agentConfig: {},
+      availableExecutionAgents: [designerPeer],
+      tenantProfile: {
+        profileMd: '',
+        timezone: 'UTC',
+        imageStyleSuffix: '',
+        imageStyleReferenceImageIds: [],
+      },
+      logCtx: { taskId: 'task-1', agentId: 'product-planner' },
+      emitLog: vi.fn(async () => {}),
+    });
+
+    const output = await runnable.invoke({
+      messages: [{ role: 'user', content: 'Plan content for this linen shirt' }],
+      params: {},
+    });
+
+    expect(output.structuredOutput?.schemaName).toBe('product-plan');
+    expect(output.structuredOutput?.data).toMatchObject({
+      overview: expect.stringContaining('## 市場觀察'),
+      variants: expect.arrayContaining([
+        expect.objectContaining({ title: '亞麻短袖 - 電商版 (zh-TW)' }),
+      ]),
+    });
+    expect(output.structuredOutput?.keyDecisions).toEqual(planFixture.keyDecisions);
   });
 
   it('throws when no product-designer peer is available', async () => {
@@ -195,17 +236,20 @@ describe('product-planner', () => {
         imageStyleSuffix: '',
         imageStyleReferenceImageIds: [],
       },
-      logCtx: { taskId: 'task-1', agentId: 'product-planner' },
+      logCtx: { taskId: 'task-3', agentId: 'product-planner' },
       emitLog: vi.fn(async () => {}),
     });
 
     const output = await runnable.invoke({
       messages: [{ role: 'user', content: 'brief' }],
-      params: { imageIds: ['img-uuid-1', 'img-uuid-2'] },
+      params: { imageIds: ['img-1', 'img-2'] },
     });
 
-    expect(output.spawnTasks![0]!.input.refs).toMatchObject({
-      originalImageIds: ['img-uuid-1', 'img-uuid-2'],
+    expect(output.spawnTasks?.[0]?.input).toMatchObject({
+      refs: { language: 'zh-TW', originalImageIds: ['img-1', 'img-2'] },
+    });
+    expect(output.spawnTasks?.[1]?.input).toMatchObject({
+      refs: { language: 'zh-TW', originalImageIds: ['img-1', 'img-2'] },
     });
   });
 });

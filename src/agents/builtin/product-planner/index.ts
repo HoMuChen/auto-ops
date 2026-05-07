@@ -54,8 +54,14 @@ Constraints:
 When you have enough SERP context, **call the \`submit_plan\` tool**. The tool
 arguments ARE your final deliverable: \`overview\` (zh-TW Markdown explaining
 the overall strategy), \`progressNote\` (one-line status for the kanban),
-and \`variants\` (the array of designer briefs). There is no other channel —
-plain-text content you write does NOT reach the user.
+\`keyDecisions\` (3-5 short bullets the report-writer can lean on when generating
+boss-facing prose; these are NOT boss-facing prose themselves), and \`variants\`
+(the array of designer briefs). There is no other channel — plain-text content
+you write does NOT reach the user.
+
+The boss-facing 匯報 (memo) is rendered by a separate report-writer node from
+your structured output. Do NOT write a boss memo into \`overview\` — that field
+is the strategy narrative for downstream consumers, not the executive summary.
 
 **Anti-patterns — do NOT do these:**
 - ❌ Writing "規劃完成，準備提交" as a chat message and stopping. That's
@@ -113,6 +119,15 @@ const PlanSchema = z.object({
     .min(10)
     .max(200)
     .describe('一句話對老闆回報整體規劃思路。用 zh-TW 第一人稱，對話對象是「老闆」。'),
+  keyDecisions: z
+    .array(z.string().min(5))
+    .min(1)
+    .max(5)
+    .describe(
+      '3-5 short bullets the downstream report-writer can lean on when generating boss prose. ' +
+        'Examples: "兩條主軸：機能透氣 vs 永續生活感", "反向操作 SERP 的悶熱恐懼，主打 180g 不悶 + 可機洗". ' +
+        'Be concrete about strategic angles and trade-offs. Not boss-facing prose itself.',
+    ),
   variants: z.array(DesignerVariantSchema).min(1),
 });
 
@@ -147,7 +162,7 @@ export const productPlannerAgent: IAgent = {
     toolIds: ['serper.search'],
     requiredCredentials: [],
     configSchema,
-    metadata: { kind: 'strategy' },
+    metadata: { kind: 'strategy', shape: 'atomic' },
   },
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
@@ -239,19 +254,29 @@ export const productPlannerAgent: IAgent = {
       }));
 
       await ctx.emitLog('agent.plan.ready', plan.progressNote, {
-        artifactShape: 'report',
+        artifactShape: 'body+structuredOutput',
         variantCount: capped.length,
       });
 
-      const report = [plan.overview, ...capped.map((v) => `### ${v.title}\n\n${v.brief}`)].join(
+      const body = [plan.overview, ...capped.map((v) => `### ${v.title}\n\n${v.brief}`)].join(
         '\n\n',
       );
 
+      // NOTE: artifact.report intentionally absent — the shared report-writer
+      // node fills it from state.lastStructuredOutput at the HITL boundary.
       return {
         message: plan.progressNote,
         awaitingApproval: true,
-        artifact: { report },
+        artifact: { body },
         spawnTasks,
+        structuredOutput: {
+          schemaName: 'product-plan',
+          data: {
+            overview: plan.overview,
+            variants: capped,
+          },
+          keyDecisions: plan.keyDecisions,
+        },
       };
     };
 
