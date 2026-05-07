@@ -225,6 +225,20 @@ export interface AgentOutput {
    * `tools` array so the framework can resolve and execute it.
    */
   pendingToolCall?: PendingToolCall;
+  /**
+   * Machine-consumable structured output of this agent run. Surfaced to
+   * GraphState.lastStructuredOutput so downstream nodes (next sub-graph
+   * step, spawnTasks handler, report-writer) can consume it directly
+   * instead of reading prose out of the message stream.
+   *
+   * Optional — agents added before the report-writer refactor (and any
+   * agent that genuinely produces no structured output) leave it unset.
+   */
+  structuredOutput?: {
+    schemaName: string;
+    data: Record<string, unknown>;
+    keyDecisions?: string[];
+  };
 }
 
 /** The full Agent: manifest + a factory that produces a runnable for a given context. */
