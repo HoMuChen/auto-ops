@@ -1,4 +1,9 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { invokeStructured } from '../../lib/invoke-structured.js';
+import { buildAgentMessages } from '../../lib/messages.js';
+import { loadPacks } from '../../lib/packs.js';
 import { skillsToggleSchema } from '../../lib/skills-schema.js';
 import type {
   AgentBuildContext,
@@ -66,17 +71,82 @@ export const eeatInterviewerAgent: IAgent = {
     metadata: { kind: 'execution', shape: 'atomic' },
   },
 
-  async build(_ctx: AgentBuildContext): Promise<AgentRunnable> {
-    throw new Error('eeat-interviewer.build() not yet implemented');
+  async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
+    const cfg = configSchema.parse(ctx.agentConfig ?? {});
+
+    const packsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'packs');
+    const packsBlock = await loadPacks({
+      builtInDir: packsDir,
+      builtInEnabled: cfg.skills,
+      tenantId: ctx.tenantId,
+      agentId: 'eeat-interviewer',
+    });
+    const systemPrompt = packsBlock ? `${packsBlock}\n\n${ctx.systemPrompt}` : ctx.systemPrompt;
+
+    const invoke = (input: AgentInput) => runEeatInterviewer(ctx, systemPrompt, input);
+    return { tools: [], invoke };
   },
 };
 
 export async function runEeatInterviewer(
-  _ctx: AgentBuildContext,
-  _systemPrompt: string,
-  _input: AgentInput,
+  ctx: AgentBuildContext,
+  systemPrompt: string,
+  input: AgentInput,
 ): Promise<AgentOutput> {
-  throw new Error('runEeatInterviewer not yet implemented');
+  await ctx.emitLog('agent.started', '我先想幾個 EEAT 問題請老闆回答', {});
+
+  const messages = await buildAgentMessages(
+    systemPrompt,
+    input.messages,
+    undefined,
+    input.imageResolver,
+  );
+  const q = await invokeStructured(
+    ctx.modelConfig,
+    EeatQuestionsSchema,
+    'eeat_questions',
+    messages,
+    undefined,
+    ctx.logCtx,
+  );
+
+  const askedAt = new Date().toISOString();
+  const questionList = q.questions
+    .map((qu, i) => {
+      const hint = qu.hint ? ` — ${qu.hint}` : '';
+      const optional = qu.optional ? ' *(選填)*' : '';
+      return `${i + 1}. **${qu.question}**${hint}${optional}`;
+    })
+    .join('\n');
+
+  // Layout: H2 → narrative → numbered list → CTA. Schema's narrative
+  // description forbids listing questions in narrative to avoid duplication.
+  const report = `## 我需要先請你回答幾個問題
+
+${q.narrative}
+
+${questionList}
+
+答完後我會把這些經驗融進文章裡。`;
+
+  await ctx.emitLog('agent.questions.asked', q.progressNote, {
+    artifactShape: 'report',
+    count: q.questions.length,
+  });
+
+  return {
+    message: q.progressNote,
+    awaitingApproval: true,
+    artifact: { report, refs: { askedAt } },
+    payload: { eeatPending: { questions: q.questions, askedAt } },
+    // Schema name MUST be in src/orchestrator/report-writer.ts:REPORT_SKIP_SCHEMAS.
+    // The interviewer's artifact.report (above) IS the boss-facing surface;
+    // report-writer would clobber it with a meta-summary if not skipped.
+    structuredOutput: {
+      schemaName: 'eeat-questions',
+      data: { questions: q.questions, askedAt },
+    },
+  };
 }
 
 export { EeatQuestionsSchema };
