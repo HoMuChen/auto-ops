@@ -292,7 +292,11 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
           vendor: 'Acme',
           tags: expect.arrayContaining(['linen']),
           language: 'zh-TW',
-          imageCount: expect.any(Number),
+          // This E2E doesn't script `images_generate`, so the integration
+          // path always has imageCount=0. Locks the no-image path explicitly
+          // — a regression leaking images from designer into spawn input
+          // would fail this assertion (vs. a loose expect.any(Number)).
+          imageCount: 0,
         }),
         keyDecisions: expect.arrayContaining([expect.stringContaining('Linen Oversized Shirt')]),
       },
