@@ -256,13 +256,52 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     expect(designerChildren[0]!.assignedAgent).toBe('shopify-publisher');
 
     // ── Phase 5: shopify-publisher runs → waiting with pendingToolCall ─────────
-    // Publisher agent sets up pendingToolCall only — no Shopify API call until approve.
+    // Publisher agent sets up pendingToolCall (no Shopify API call until approve)
+    // AND emits structuredOutput { schemaName: 'shopify-publish-intent' } →
+    // report-writer fires once before the HITL gate. NO scriptStructured
+    // because supervisor short-circuits on awaitingApproval=true
+    // (src/orchestrator/supervisor.ts:69-72).
+    scriptText(
+      '## 上架前確認\n\n老闆，我把【Linen Oversized Shirt】整理好了，準備丟到 Shopify zh-TW 站。\n\n## 為什麼這樣選\n\n品牌 Acme，3 個標籤、1 張圖片，等你按確認就上線。',
+    );
+
     await drainNextTask();
     const pubTask = await getTask(tenantId, publisherTaskId);
     expect(pubTask.status).toBe('waiting');
     expect((pubTask.output as { pendingToolCall?: { id: string } })?.pendingToolCall?.id).toBe(
       'shopify.create_product',
     );
+    // Post-PR7: publisher emits structuredOutput → report-writer renders prose.
+    expect(pubTask.output).toMatchObject({
+      artifact: {
+        // CRITICAL: report comes from report-writer — prose-unique substring
+        // '上架前確認' is ONLY in the scripted text above; the agent's
+        // keyDecisions never use that phrase, so a copy of keyDecisions to
+        // artifact.report would NOT match this assertion.
+        report: expect.stringContaining('上架前確認'),
+        body: expect.stringContaining('## 主特色'),
+        refs: expect.objectContaining({
+          title: 'Linen Oversized Shirt',
+          ready: true,
+        }),
+      },
+      lastStructuredOutput: {
+        schemaName: 'shopify-publish-intent',
+        data: expect.objectContaining({
+          title: 'Linen Oversized Shirt',
+          vendor: 'Acme',
+          tags: expect.arrayContaining(['linen']),
+          language: 'zh-TW',
+          imageCount: expect.any(Number),
+        }),
+        keyDecisions: expect.arrayContaining([expect.stringContaining('Linen Oversized Shirt')]),
+      },
+    });
+    // bodyWithImages assertion (`/!\[圖 \d+\]/`) is intentionally NOT here:
+    // this E2E doesn't script `images_generate`, so designer's imageUrls=[]
+    // flows through and publisher correctly omits the image markdown block.
+    // Boss-view image plumbing is covered by tests/shopify-publisher.test.ts
+    // (the unit-level "invoke() maps ProductContent ..." spec).
 
     // ── Phase 6: approve publisher → fires shopify.create_product → done ──────
     fetchMock.mockResolvedValueOnce({
