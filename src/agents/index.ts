@@ -3,6 +3,7 @@ import { eeatInterviewerAgent } from './builtin/eeat-interviewer/index.js';
 import { marketResearcherAgent } from './builtin/market-researcher/index.js';
 import { productDesignerAgent } from './builtin/product-designer/index.js';
 import { productPlannerAgent } from './builtin/product-planner/index.js';
+import { seoArticleWithEeatAgent } from './builtin/seo-article-with-eeat/index.js';
 import { seoStrategistAgent } from './builtin/seo-strategist/index.js';
 import { shopifyBlogWriterAgent } from './builtin/shopify-blog-writer/index.js';
 import { shopifyPublisherAgent } from './builtin/shopify-publisher/index.js';
@@ -19,6 +20,7 @@ export function bootstrapAgents(): void {
   agentRegistry.register(shopifyBlogWriterAgent);
   agentRegistry.register(articleWriterAgent);
   agentRegistry.register(eeatInterviewerAgent);
+  agentRegistry.register(seoArticleWithEeatAgent);
   agentRegistry.register(productPlannerAgent);
   agentRegistry.register(productDesignerAgent);
   agentRegistry.register(shopifyPublisherAgent);
