@@ -75,6 +75,25 @@ export const GraphStateAnnotation = Annotation.Root({
     default: () => null,
   }),
 
+  /**
+   * Typed inter-node communication channel. Every atomic agent (including
+   * those inside workflow sub-graphs) writes this on completion. Consumers:
+   * downstream nodes in workflow sub-graphs, the spawnTasks handler, the
+   * report-writer node, and `/continue` threading prior output forward.
+   *
+   * Null while no agent has produced output yet, or when an agent doesn't
+   * emit structured output (e.g. before this refactor lands per-agent).
+   */
+  lastStructuredOutput: Annotation<{
+    agentId: string;
+    schemaName: string;
+    data: Record<string, unknown>;
+    keyDecisions?: string[];
+  } | null>({
+    reducer: (_curr, next) => next,
+    default: () => null,
+  }),
+
   /** All image UUIDs attached to any message in this task (flat list). */
   taskImageIds: Annotation<string[] | null>({
     reducer: (_prev, next) => next,

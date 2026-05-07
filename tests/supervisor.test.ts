@@ -52,6 +52,7 @@ describe('runSupervisor — HITL gate handling (C1)', () => {
       lastOutput: null,
       awaitingApproval: true,
       currentTaskOutput: null,
+      lastStructuredOutput: null,
       taskImageIds: null,
     };
 
@@ -75,6 +76,7 @@ describe('runSupervisor — pinned-agent shortcut (execution children)', () => {
       lastOutput: null,
       awaitingApproval: false,
       currentTaskOutput: null,
+      lastStructuredOutput: null,
       taskImageIds: null,
     };
 
@@ -127,6 +129,7 @@ describe('runSupervisor — clarification path persists through lastOutput', () 
       lastOutput: null,
       awaitingApproval: false,
       currentTaskOutput: null,
+      lastStructuredOutput: null,
       taskImageIds: null,
     };
 
@@ -184,6 +187,7 @@ describe('runSupervisor — runtime context injected into system message', () =>
       lastOutput: null,
       awaitingApproval: false,
       currentTaskOutput: null,
+      lastStructuredOutput: null,
       taskImageIds: null,
     });
 
@@ -234,6 +238,7 @@ describe('runSupervisor — post-execution progress awareness', () => {
       },
       awaitingApproval: false,
       currentTaskOutput: null,
+      lastStructuredOutput: null,
       taskImageIds: null,
     });
 
