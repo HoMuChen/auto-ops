@@ -44,8 +44,14 @@ Copy rules:
 - Tags: 3–8 short lower-case keywords.
 
 After tool calls (or if no tools needed), produce the structured listing object.
-- progressNote is one short sentence for the kanban timeline. report is the
-  full memo for the boss-review panel. Don't duplicate them.`;
+- progressNote is one short sentence for the kanban timeline.
+- keyDecisions is 3-5 short bullets the report-writer can lean on when generating
+  the boss-facing memo. These are NOT boss-facing prose themselves — keep them
+  short and concrete (e.g. "從 brief 推斷 Acme 為品牌", "主圖白底突出布料").
+- Do NOT write a boss memo as part of your output. The shared report-writer
+  node renders the boss-facing prose from your structured fields at the HITL
+  boundary — your job is to produce the deliverable (title/body/tags/etc.) and
+  the keyDecisions hints; the rendering is downstream.`;
 
 const ProductListingSchema = z.object({
   title: z.string().min(1).max(255),
@@ -62,19 +68,14 @@ const ProductListingSchema = z.object({
   // Optional UI hint — `.catch(null)` so model sloppiness on this metadata
   // field doesn't reject the whole submission. See lenient-schemas.ts.
   productType: z.string().nullish().catch(null),
-  report: z
-    .string()
-    .min(80)
-    .max(4000)
+  keyDecisions: z
+    .array(z.string().min(5))
+    .min(1)
+    .max(5)
     .describe(
-      '給老闆看的詳細匯報。**用 zh-TW 繁體中文** + Markdown 格式。' +
-        '說明：你怎麼解讀 brief、文案的切角是什麼、為什麼選這幾張圖、' +
-        '特別考量的地方（受眾、平台、語言、素材限制）。' +
-        '可用 ## / ### 子標題、**粗體**、- 條列、表格。' +
-        '老闆靠這段決定 Approve / Feedback，要詳實但不要重複 body 的內容。' +
-        '長度建議 200–800 字。' +
-        '注意：圖片會由 agent code 在你的 report 後面附上 markdown image syntax，' +
-        '所以你的 report 不需要插入 ![](url)。',
+      '3-5 short bullets the downstream report-writer can lean on when generating boss prose. ' +
+        'Examples: "機能透氣切台灣通勤實戰", "從 brief 推斷 Acme 為品牌", "主圖白底突出布料". ' +
+        'Be concrete about copy angle, vendor inference, and image choices. Not boss-facing prose itself.',
     ),
   progressNote: z
     .string()
@@ -103,6 +104,7 @@ export const productDesignerAgent: IAgent = {
     toolIds: ['images.generate', 'images.edit'],
     requiredCredentials: [],
     configSchema,
+    metadata: { kind: 'execution', shape: 'atomic' },
   },
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
@@ -229,15 +231,22 @@ export const productDesignerAgent: IAgent = {
         imageUrls,
       };
 
-      // Append generated images to the report so the boss panel renders them inline.
+      // Image markdown moves from `report` (PR5) to `body` (PR6) so images
+      // stay user-visible pre-approval after we hand the boss-prose duty to
+      // the shared report-writer node.
       const imageMarkdown =
         imageUrls.length > 0
           ? `\n\n## 生成的圖片\n\n${imageUrls.map((url, i) => `![圖 ${i + 1}](${url})`).join('\n\n')}`
           : '';
-      const reportWithImages = `${listing.report}${imageMarkdown}`;
+      const bodyWithImages = `${listing.body}${imageMarkdown}`;
 
+      // Mid-migration plumbing: ProductContent.report stays a string so the
+      // un-migrated shopify-publisher (PR7) keeps copying it to its own
+      // artifact.report. The semantic content shifts (body+images instead of
+      // boss prose) but the type contract holds. PR7 will rework this when
+      // the publisher migrates.
       const content: ProductContent = {
-        report: reportWithImages,
+        report: bodyWithImages,
         body: listing.body,
         refs: refsOut,
         progressNote: listing.progressNote,
@@ -250,22 +259,36 @@ export const productDesignerAgent: IAgent = {
       }));
 
       await ctx.emitLog('agent.content.ready', listing.progressNote, {
-        artifactShape: 'report+body',
+        artifactShape: 'body+structuredOutput',
         title: listing.title,
         imageCount: imageUrls.length,
         publisherCount: spawnTasks.length,
       });
 
+      // NOTE: artifact.report intentionally absent — the shared report-writer
+      // node fills it from state.lastStructuredOutput at the HITL boundary.
       return {
         message: listing.progressNote,
         awaitingApproval: true,
         artifact: {
-          report: reportWithImages,
-          body: listing.body,
+          body: bodyWithImages,
           refs: refsOut,
         },
         payload: { content },
         spawnTasks,
+        structuredOutput: {
+          schemaName: 'product-listing',
+          data: {
+            title: listing.title,
+            body: listing.body,
+            tags: listing.tags,
+            vendor: listing.vendor,
+            ...(listing.productType ? { productType: listing.productType } : {}),
+            language: inputLanguage,
+            imageUrls,
+          },
+          keyDecisions: listing.keyDecisions,
+        },
       };
     };
 

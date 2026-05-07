@@ -2,15 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ProductContent } from '../src/agents/builtin/shopify-publisher/content.js';
 
 /**
- * product-designer: execution agent that receives a markdown brief from
- * product-planner, generates images via tool loop, writes copy, then spawns
- * publisher tasks.
+ * product-designer (post-PR6): execution agent that receives a markdown
+ * brief from product-planner, generates images via tool loop, writes
+ * copy, then spawns publisher tasks.
  *
- * Key behaviours tested:
- * 1. Happy path: spawns shopify-publisher with ProductContent
- * 2. Feedback round: preserves previous imageUrls when no tool calls fire
- * 3. Feedback round: replaces imageUrls when LLM generates new images
- * 4. Emits an Artifact { report, body, refs }
+ * Post-PR6 contract:
+ * - `artifact.body` = listing.body + image markdown (images stay user-visible
+ *   pre-approval).
+ * - `artifact.report` is filled by report-writer, NOT by the agent.
+ * - `payload.content.report` = `body + imageMarkdown` (string preserved so
+ *   un-migrated downstream publisher keeps working until PR7).
+ * - `structuredOutput.schemaName='product-listing'` carries the deliverable
+ *   for report-writer + downstream consumers.
  */
 
 const listingFixture = {
@@ -18,18 +21,14 @@ const listingFixture = {
   body: '## 主特色\n\n180g 亞麻、台灣製造、可機洗。\n\n- 不悶熱\n- 可機洗',
   tags: ['linen', 'summer', 'oversized'],
   vendor: 'Acme',
-  report: `## 我的切角
-
-機能透氣切「台灣通勤」實戰。文案直接連結濕熱痛點。
-
-## 為什麼選這個 vendor 跟 productType
-從 brief 推斷 Acme 為品牌，productType 留空（brief 未指定）。`,
+  keyDecisions: [
+    '機能透氣切「台灣通勤」實戰，文案直接連結濕熱痛點',
+    '從 brief 推斷 Acme 為品牌；productType 留空',
+    '主圖白底突出布料、近拍補強織紋細節',
+  ],
   progressNote: '文案好了，老闆看一下',
 };
 
-// Single-pass mock: by default the model immediately calls submit_listing
-// with the fixture. Tests that need a different sequence (e.g., generate
-// images first then submit) override via mockImplementation.
 const submitListingResponse = {
   content: '',
   tool_calls: [{ name: 'submit_listing', id: 'call_submit_listing', args: listingFixture }],
@@ -83,8 +82,6 @@ vi.mock('../src/integrations/cloudflare/images-repository.js', () => ({
   getImageById: vi.fn(async () => null),
 }));
 
-// Stub the tenant skill-packs DB query — agent .build() now calls loadPacks
-// with ctx.tenantId, which would otherwise hit the real DB and ECONNREFUSED.
 vi.mock('../src/agents/skill-packs-repository.js', () => ({
   listPacksForAgent: vi.fn(async () => []),
 }));
@@ -98,8 +95,6 @@ const publisherPeer = {
   metadata: { kind: 'publisher' },
 };
 
-// briefMarkdown emulates what product-planner now spawns: a markdown brief
-// folding marketing angle / key messages / image plan / copy brief into prose.
 const briefMarkdown = `### Marketing angle
 機能透氣，台灣濕熱夏天通勤族 — 切「機能 + 在地實穿」。
 
@@ -152,6 +147,10 @@ describe('product-designer', () => {
     expect(content.refs.title).toBe('Linen Oversized Shirt');
     expect(content.body).toContain('180g 亞麻');
     expect(content.refs.language).toBe('zh-TW');
+    // Post-PR6: content.report is body+images string (was boss prose).
+    // Type contract preserved so un-migrated publisher keeps working.
+    expect(typeof content.report).toBe('string');
+    expect(content.report).toContain('180g 亞麻');
   });
 
   it('preserves previous imageUrls when feedback does not trigger image generation', async () => {
@@ -175,8 +174,6 @@ describe('product-designer', () => {
   });
 
   it('replaces imageUrls when LLM generates new images on feedback', async () => {
-    // Hop 0: model calls images_generate.
-    // Hop 1: model submits the listing — submit_listing tool_call terminates the loop.
     let hop = 0;
     toolPassInvokeMock.mockImplementation(async () => {
       if (hop === 0) {
@@ -203,15 +200,16 @@ describe('product-designer', () => {
     const content = output.spawnTasks![0]!.input.content as ProductContent;
     expect(content.refs.imageUrls).toEqual(['https://cdn.example.com/img-1.jpg']);
 
-    const artifact = output.artifact as { report: string };
-    expect(artifact.report).toContain('## 生成的圖片');
-    expect(artifact.report).toContain('![圖 1](https://cdn.example.com/img-1.jpg)');
+    // Post-PR6: image markdown rides on artifact.body (was artifact.report).
+    const artifact = output.artifact as { body: string };
+    expect(artifact.body).toContain('## 生成的圖片');
+    expect(artifact.body).toContain('![圖 1](https://cdn.example.com/img-1.jpg)');
 
     toolPassInvokeMock.mockResolvedValue(submitListingResponse);
     hop = 0;
   });
 
-  it('emits an Artifact { report, body, refs }', async () => {
+  it('emits Artifact{body, refs} (no agent-written report) and surfaces images on body', async () => {
     toolPassInvokeMock.mockResolvedValue(submitListingResponse);
     const runnable = await productDesignerAgent.build(buildCtx());
     const output = await runnable.invoke({
@@ -219,7 +217,8 @@ describe('product-designer', () => {
       params: { brief: briefMarkdown, refs: { language: 'zh-TW' } },
     });
     const artifact = output.artifact;
-    expect(artifact).toHaveProperty('report');
+    // The agent no longer writes report — that's report-writer's job now.
+    expect(artifact).not.toHaveProperty('report');
     expect(artifact).toHaveProperty('body');
     expect(artifact).toHaveProperty('refs');
     expect(artifact).not.toHaveProperty('kind');
@@ -231,5 +230,25 @@ describe('product-designer', () => {
         imageUrls: expect.any(Array),
       });
     }
+  });
+
+  it('surfaces structuredOutput on the inter-node bus for report-writer', async () => {
+    toolPassInvokeMock.mockResolvedValue(submitListingResponse);
+    const runnable = await productDesignerAgent.build(buildCtx());
+    const output = await runnable.invoke({
+      messages: [{ role: 'user', content: briefMarkdown }],
+      params: { brief: briefMarkdown, refs: { language: 'zh-TW' } },
+    });
+
+    expect(output.structuredOutput?.schemaName).toBe('product-listing');
+    expect(output.structuredOutput?.data).toMatchObject({
+      title: 'Linen Oversized Shirt',
+      body: expect.stringContaining('180g 亞麻'),
+      tags: ['linen', 'summer', 'oversized'],
+      vendor: 'Acme',
+      language: 'zh-TW',
+      imageUrls: expect.any(Array),
+    });
+    expect(output.structuredOutput?.keyDecisions).toEqual(listingFixture.keyDecisions);
   });
 });
