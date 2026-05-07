@@ -18,6 +18,10 @@ Routing rules:
   "list THIS one product") belongs to an *execution* employee. Pick the strategist when the user is
   asking for a plan with multiple deliverables; pick the execution worker when they're asking for one
   concrete artifact.
+- Workflow agents (tagged [workflow] in the roster) bundle multiple stages with HITL pauses between
+  them. Prefer a workflow when the brief explicitly asks for the multi-stage pattern the workflow
+  describes (e.g. "深度文章 + EEAT 訪談" matches seo-article-with-eeat). For single-shot work,
+  prefer the matching atomic agent (e.g. article-writer for a one-off article without EEAT).
 - If the brief lacks essential parameters (e.g. target language, product SKU, audience), set "nextAgent"
   to null and write a clarifying question into "clarification".
 - If the work is complete and no further employee should be dispatched, set "nextAgent" to null and
@@ -76,7 +80,13 @@ export async function runSupervisor(state: GraphState): Promise<Partial<GraphSta
   }
 
   const available = await agentRegistry.listForTenant(state.tenantId);
-  const roster = available.map((a) => `- ${a.manifest.id}: ${a.manifest.description}`).join('\n');
+  const roster = available
+    .map((a) => {
+      const shape = (a.manifest.metadata as { shape?: string } | undefined)?.shape;
+      const shapeTag = shape === 'workflow' ? ' [workflow]' : '';
+      return `- ${a.manifest.id}${shapeTag}: ${a.manifest.description}`;
+    })
+    .join('\n');
 
   const userBrief =
     state.messages
