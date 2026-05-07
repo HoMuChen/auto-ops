@@ -34,7 +34,7 @@ export interface RequiredCredential {
 }
 
 export interface AgentManifest {
-  /** Stable identifier, used as DB key and as LangGraph node id. e.g. "shopify-blog-writer". */
+  /** Stable identifier, used as DB key and as LangGraph node id. e.g. "article-writer". */
   id: string;
   /** Human-readable name shown in UI. */
   name: string;

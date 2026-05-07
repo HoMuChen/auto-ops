@@ -33,7 +33,7 @@ export interface TaskOutput {
   /** Stamped after the post-HITL tool execution (idempotency). */
   toolExecutedAt?: string;
 
-  /** HITL: shopify-blog-writer Stage 1 — boss must answer EEAT questions. */
+  /** HITL: article-writer Stage 1 — boss must answer EEAT questions. */
   eeatPending?: {
     questions: { question: string; hint?: string; optional?: boolean }[];
     askedAt: string;

@@ -25,7 +25,7 @@ export const taskLogs = pgTable(
     /**
      * Who is speaking — drives the UI avatar / colour. Reserved values:
      * `'system'` for framework-emitted events, `'supervisor'` for the routing
-     * LLM. Otherwise an agent id from the registry (e.g. `'shopify-blog-writer'`).
+     * LLM. Otherwise an agent id from the registry (e.g. `'article-writer'`).
      * Nullable for backward compat / unattributed system noise.
      */
     speaker: text('speaker'),

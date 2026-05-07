@@ -20,7 +20,7 @@ interface BuildTenantImageToolsArgs {
  * silently degrade to text-only.
  *
  * Single source of truth for the env wiring + style-suffix plumbing. Was
- * duplicated across product-designer and shopify-blog-writer before.
+ * duplicated across product-designer and article-writer before.
  */
 export function buildTenantImageTools({
   tenantId,

@@ -4,7 +4,7 @@ import { tenants } from './tenants.js';
 /**
  * Per-tenant markdown skill pack. Body is plain markdown (no frontmatter —
  * metadata lives in sibling columns). `applies_to` doubles as scope AND
- * activation: a pack with applies_to = ['shopify-blog-writer'] is loaded
+ * activation: a pack with applies_to = ['article-writer'] is loaded
  * for that agent's prompt automatically; remove the agent id to disable.
  *
  * `key` must be `tenant.<slug>` to keep the namespace disjoint from

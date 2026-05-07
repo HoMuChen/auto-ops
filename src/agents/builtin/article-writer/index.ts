@@ -139,11 +139,7 @@ const ArticleSchema = z.object({
         'Examples: "從機能性切入而不是潮流", "開頭塞 EEAT 數字", "控制在 1500 字內". ' +
         'Be concrete about angle, EEAT hooks, and differentiation. Not boss-facing prose itself.',
     ),
-  progressNote: z
-    .string()
-    .min(10)
-    .max(200)
-    .describe('一句話對老闆回報。zh-TW 第一人稱。'),
+  progressNote: z.string().min(10).max(200).describe('一句話對老闆回報。zh-TW 第一人稱。'),
 });
 
 interface ArticleWriterDeps {

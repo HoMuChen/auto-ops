@@ -173,11 +173,9 @@ describe('builtin agent manifests', () => {
     });
   });
 
-  it('Shopify Blog Writer configSchema accepts default empty object', async () => {
-    const { shopifyBlogWriterAgent } = await import(
-      '../src/agents/builtin/shopify-blog-writer/index.js'
-    );
-    const result = validateAgentConfig(shopifyBlogWriterAgent.manifest, {});
+  it('Article Writer configSchema accepts default empty object', async () => {
+    const { articleWriterAgent } = await import('../src/agents/builtin/article-writer/index.js');
+    const result = validateAgentConfig(articleWriterAgent.manifest, {});
     expect(result).toMatchObject({
       publishToShopify: true,
       publishImmediately: false,
@@ -188,12 +186,10 @@ describe('builtin agent manifests', () => {
   // `undefined`). Make sure the user-facing optional string fields accept
   // null, not just undefined — otherwise activation 400s the moment the user
   // leaves an optional field blank.
-  it('Shopify Blog Writer accepts null for optional string fields', async () => {
-    const { shopifyBlogWriterAgent } = await import(
-      '../src/agents/builtin/shopify-blog-writer/index.js'
-    );
+  it('Article Writer accepts null for optional string fields', async () => {
+    const { articleWriterAgent } = await import('../src/agents/builtin/article-writer/index.js');
     expect(() =>
-      validateAgentConfig(shopifyBlogWriterAgent.manifest, {
+      validateAgentConfig(articleWriterAgent.manifest, {
         blogHandle: null,
         defaultAuthor: null,
         credentialLabel: null,

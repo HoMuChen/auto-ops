@@ -131,9 +131,7 @@ describe('seo-article-with-eeat workflow — EEAT → article → publish', () =
       keyDecisions: ['用「洗 10 次不起球」當開頭', 'EEAT 寫在最前面'],
       progressNote: '草稿好了，開頭用了老闆親身體驗的數字。',
     });
-    scriptText(
-      '## 切角\n\n用老闆「洗 10 次不起球」這個具體數字當開頭，把 EEAT 寫在最前面。',
-    );
+    scriptText('## 切角\n\n用老闆「洗 10 次不起球」這個具體數字當開頭，把 EEAT 寫在最前面。');
 
     await drainNextTask();
     task = await getTask(tenantId, taskId);
