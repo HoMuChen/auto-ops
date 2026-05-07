@@ -174,7 +174,7 @@ x-tenant-id: <UUID>
 [建第一個 workspace]            POST /v1/tenants    {name,slug,plan} → 回 tenant
                                                     ↓ 拿到 tenant.id
 
-[列可聘員工]                    GET /v1/agents      回 [seo-strategist, shopify-blog-writer,
+[列可聘員工]                    GET /v1/agents      回 [seo-strategist, article-writer,
   顯示卡片：                                          product-planner, product-designer,
                                                       shopify-publisher, market-researcher, ...]
   - ✓ Shopify 部落格寫手 (ready)                            每個含 ready / credentials
@@ -186,7 +186,7 @@ x-tenant-id: <UUID>
                                                     ↓ 老闆點 Shopify 部落格寫手
 
 [啟用 Shopify 部落格寫手]               POST /v1/agents/    回 { enabled:true, config }
-  渲染 configSchema 表單           shopify-blog-writer/
+  渲染 configSchema 表單           article-writer/
   (blogHandle, skills…)            activate
                                                     ↓
 
@@ -294,8 +294,8 @@ function ArtifactPanel({ artifact }: { artifact: Artifact }) {
 |---|---|---|---|
 | `seo-strategist` | ✓ 規劃匯報 + 文章列表 | — | — |
 | `product-planner` | ✓ 規劃匯報 + variants 列表 | — | — |
-| `shopify-blog-writer` Stage 1（EEAT 問題） | ✓ 為什麼問 + 問題清單（嵌在 markdown 裡） | — | `askedAt` |
-| `shopify-blog-writer` Stage 2（草稿） | ✓ 寫作切角匯報 | ✓ 文章正文 markdown | `title`, `slug`, `summaryHtml`, `tags`, `language`, `author?`；發布後 `published: BlogPublishedMeta`。`slug` 一律是英文 ASCII kebab-case（例如 `summer-linen-shirt-guide`），即使文章本體是 zh-TW/ja/ko，因為 Shopify 把它當 URL handle |
+| `article-writer` Stage 1（EEAT 問題） | ✓ 為什麼問 + 問題清單（嵌在 markdown 裡） | — | `askedAt` |
+| `article-writer` Stage 2（草稿） | ✓ 寫作切角匯報 | ✓ 文章正文 markdown | `title`, `slug`, `summaryHtml`, `tags`, `language`, `author?`；發布後 `published: BlogPublishedMeta`。`slug` 一律是英文 ASCII kebab-case（例如 `summer-linen-shirt-guide`），即使文章本體是 zh-TW/ja/ko，因為 Shopify 把它當 URL handle |
 | `product-designer` | ✓ 設計匯報（含 `![](url)` 內嵌圖片） | ✓ 商品描述 markdown | `title`, `tags`, `vendor`, `productType?`, `language`, `imageUrls` |
 | `shopify-publisher` | ✓ 同 designer 帶來的內容 | ✓ 同上 | 同 designer + `ready: true`；發布後 `published: ProductPublishedMeta` |
 | `supervisor` 釐清提問 | ✓ 一句話 markdown 問題 | — | — |
@@ -506,7 +506,7 @@ Each pack has an `appliesTo` list of agent IDs that controls which agents load i
     "key": "tenant.brand-voice",
     "name": "Brand Voice Guidelines",
     "body": "Always use second-person address...",
-    "appliesTo": ["shopify-blog-writer", "seo-strategist"],
+    "appliesTo": ["article-writer", "seo-strategist"],
     "createdAt": "2026-05-01T00:00:00Z",
     "updatedAt": "2026-05-01T00:00:00Z"
   }
@@ -521,7 +521,7 @@ Each pack has an `appliesTo` list of agent IDs that controls which agents load i
   "key": "tenant.seo-rules",
   "name": "SEO Writing Rules",
   "body": "## H2 density\n\nUse one H2 per 200 words...",
-  "appliesTo": ["shopify-blog-writer"]
+  "appliesTo": ["article-writer"]
 }
 
 // Response 201
@@ -530,7 +530,7 @@ Each pack has an `appliesTo` list of agent IDs that controls which agents load i
   "key": "tenant.seo-rules",
   "name": "SEO Writing Rules",
   "body": "## H2 density\n\nUse one H2 per 200 words...",
-  "appliesTo": ["shopify-blog-writer"],
+  "appliesTo": ["article-writer"],
   "createdAt": "2026-05-01T00:00:00Z",
   "updatedAt": "2026-05-01T00:00:00Z"
 }
@@ -540,7 +540,7 @@ Each pack has an `appliesTo` list of agent IDs that controls which agents load i
 
 **Body:** markdown string, max **64 KB**. No frontmatter needed — metadata lives in the other columns.
 
-**`appliesTo` semantic:** the array contains agent IDs (e.g. `"shopify-blog-writer"`, `"seo-strategist"`). When an agent runs a task, it loads every pack where its ID appears in `appliesTo`. An empty array (`[]`) means the pack is saved but not injected anywhere — useful for drafting a pack before rolling it out.
+**`appliesTo` semantic:** the array contains agent IDs (e.g. `"article-writer"`, `"seo-strategist"`). When an agent runs a task, it loads every pack where its ID appears in `appliesTo`. An empty array (`[]`) means the pack is saved but not injected anywhere — useful for drafting a pack before rolling it out.
 
 #### `GET /v1/skill-packs/:packId`
 需要 JWT + `x-tenant-id`。Returns a single pack. 404 if not found or not owned by the tenant.
@@ -549,10 +549,10 @@ Each pack has an `appliesTo` list of agent IDs that controls which agents load i
 需要 JWT + `x-tenant-id`。Partial update — all fields optional.
 ```json
 // Request — update appliesTo to also cover seo-strategist
-{ "appliesTo": ["shopify-blog-writer", "seo-strategist"] }
+{ "appliesTo": ["article-writer", "seo-strategist"] }
 
 // Response 200 — full updated pack
-{ "id": "uuid", "key": "tenant.seo-rules", "appliesTo": ["shopify-blog-writer", "seo-strategist"], ... }
+{ "id": "uuid", "key": "tenant.seo-rules", "appliesTo": ["article-writer", "seo-strategist"], ... }
 ```
 
 #### `DELETE /v1/skill-packs/:packId`
@@ -584,7 +584,7 @@ Each pack has an `appliesTo` list of agent IDs that controls which agents load i
     "config": {}
   },
   {
-    "id": "shopify-blog-writer",
+    "id": "article-writer",
     "name": "Shopify 部落格寫手",
     "description": "依聚焦 brief 撰寫一篇多語 SEO 部落格文章，待人工核准後發布到租戶的 Shopify 部落格。",
     "defaultModel": { "model": "anthropic/claude-sonnet-4.6", "temperature": 0.4 },
@@ -680,7 +680,7 @@ Each pack has an `appliesTo` list of agent IDs that controls which agents load i
 #### `POST /v1/agents/:agentId/activate`
 驗證 creds 都備好 + config 通過 manifest.configSchema → 啟用。所有 agent 對所有 tenant 可見，沒有 plan-tier 限制。
 ```json
-// shopify-blog-writer 範例
+// article-writer 範例
 {
   "config": {
     "publishToShopify": true,
@@ -785,7 +785,7 @@ upsert。`provider` ∈ `{shopify, threads, instagram, facebook}`。
 // Request
 {
   "brief": "幫我規劃夏季女裝的 SEO 並發布",
-  "preferredAgent": "shopify-blog-writer",         // 可選；不給就讓 Supervisor 路由
+  "preferredAgent": "article-writer",         // 可選；不給就讓 Supervisor 路由
   "params": { "language": "zh-TW" },              // 可選；任意 KV 給 agent 參考
   "scheduledAt": "2026-05-02T08:00:00Z",          // 可選；未來時間 → 排程
   "imageIds": ["uuid-from-uploads", "..."]         // 可選；先 POST /v1/uploads 拿 id
@@ -880,7 +880,7 @@ open ──/abandon──> abandoned    (對話被丟掉，沒有 task)
 {
   "title": "夏季穿搭 SEO 文章",        // 可選 override
   "brief": "撰寫一篇 SEO 文章，主題...", // 可選 override
-  "preferredAgent": "shopify-blog-writer" // 可選；給了 worker 直接 pin 這顆 agent
+  "preferredAgent": "article-writer" // 可選；給了 worker 直接 pin 這顆 agent
 }
 
 // Response 200
@@ -1098,7 +1098,7 @@ Last-Event-ID: <ISO timestamp>   ← 斷線重連時帶，server 從此時間點
 ```
 id: 2026-05-01T00:00:00.123Z
 event: agent.draft.ready
-data: {"event":"agent.draft.ready","message":"草稿完成","speaker":"shopify-blog-writer","at":"2026-05-01T00:00:00.123Z"}
+data: {"event":"agent.draft.ready","message":"草稿完成","speaker":"article-writer","at":"2026-05-01T00:00:00.123Z"}
 
 ```
 
@@ -1106,7 +1106,7 @@ data: {"event":"agent.draft.ready","message":"草稿完成","speaker":"shopify-b
 ```
 id: 2026-05-01T00:00:00.123Z
 event: agent.draft.ready
-data: {"taskId":"abc-123","event":"agent.draft.ready","message":"草稿完成","speaker":"shopify-blog-writer","at":"2026-05-01T00:00:00.123Z"}
+data: {"taskId":"abc-123","event":"agent.draft.ready","message":"草稿完成","speaker":"article-writer","at":"2026-05-01T00:00:00.123Z"}
 
 ```
 
@@ -1179,7 +1179,7 @@ const history = await fetch(
 
 ---
 
-## 6.v shopify-blog-writer 的三段式流程（EEAT → 草稿 → 發布）
+## 6.v article-writer 的三段式流程（EEAT → 草稿 → 發布）
 
 當任務由 SEO 策略師派生，且 `task.input.research.eeatHook` 不為空時，
 Blog Writer 會走**三段式流程**，否則走兩段式（直接草稿 → 發布）。
@@ -1205,7 +1205,7 @@ Blog Writer 會走**三段式流程**，否則走兩段式（直接草稿 → �
 {
   "id": "task-uuid",
   "status": "waiting",
-  "assignedAgent": "shopify-blog-writer",
+  "assignedAgent": "article-writer",
   "output": {
     "artifact": {
       "report": "## 為什麼需要老闆親身經驗\n\nGoogle 評估內容品質時，**第一手體驗（E-E-A-T 的 Experience）**是 2024 後最重要的訊號。競品都用通用形容詞（「透氣」「舒適」），所以只要老闆給具體數字／場景，文章可信度立刻拉開。\n\n## 兩個問題的用途\n\n- 第一題的洗滌數字 → 放在開頭引言，建立信任\n- 第二題的台北氣候體驗 → 放在「適合場景」段，解決讀者最在意的痛點\n\n## 我想請老闆回答\n\n1. **這件亞麻衣料洗了幾次開始起球？** _(具體數字比形容詞更有說服力)_\n2. _(可選)_ 台北夏天 35 度穿起來感覺如何？",
@@ -1239,10 +1239,10 @@ LLM 後**不會**直接打 API；它會把「想呼叫的 tool + 參數」放到
 停在 `waiting` 等 user 按 Approve，框架才在 approve 路徑裡 deterministic 地把 tool 點燃。
 
 目前帶 `pendingToolCall` 的 agent：
-- `shopify-blog-writer` → `shopify.publish_article`（發部落格文章，**MVP 主流程**）
+- `article-writer` → `shopify.publish_article`（發部落格文章，**MVP 主流程**）
 - `shopify-publisher` → `shopify.create_product`（上架商品；由 `product-designer` 產生的子任務呼叫）
 
-### 範例：shopify-blog-writer 發部落格
+### 範例：article-writer 發部落格
 
 #### `waiting` 狀態的 `output` 形狀
 
@@ -1251,7 +1251,7 @@ LLM 後**不會**直接打 API；它會把「想呼叫的 tool + 參數」放到
   "id": "task-uuid",
   "kind": "execution",
   "status": "waiting",
-  "assignedAgent": "shopify-blog-writer",
+  "assignedAgent": "article-writer",
   "output": {
     "artifact": {
       "report": "## 寫作切角\n\n這篇我特別強調**機能性麻料適合台灣濕熱夏天**，因為 SERP 前 10 名都在講材質歷史，沒人講實際穿著體驗。\n\n## 結構亮點\n\n- 開頭直接放老闆親身分享的洗滌數字（10 次無起球）\n- 第 3 段插入比較表（亞麻 vs 棉 vs Tencel）\n- 結尾 CTA 引導到 listing 頁\n\n## 風險提醒\n\n字數 1500，比預期多 200 字，但因為加了表格與引用，閱讀體驗更好。",
@@ -1322,7 +1322,7 @@ UI 應該渲染：
 UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](artifact.refs.published.articleUrl)」。
 若 `refs.published.status='published'` 表示已對讀者公開。
 
-#### shopify-blog-writer 啟用設定（`POST /v1/agents/shopify-blog-writer/activate` 的 config）
+#### article-writer 啟用設定（`POST /v1/agents/article-writer/activate` 的 config）
 
 > **Brand voice, preferred keywords, and banned phrases are now set in the Tenant Profile (`PUT /v1/profile`)** — no longer configured per-agent.
 
@@ -1344,7 +1344,7 @@ UI 拿到 200 後可立刻顯示「已草稿到 Shopify，[去後台看](artifac
 }
 ```
 
-> shopify-blog-writer **必須**綁 Shopify credentials 才能 activate（即使 `publishToShopify=false`），
+> article-writer **必須**綁 Shopify credentials 才能 activate（即使 `publishToShopify=false`），
 > 因為框架不知道 user 之後會不會切回 publish。Activation 時若沒 creds 會回 409。
 
 ### 範例：shopify-publisher 上架商品
@@ -1644,7 +1644,7 @@ UI 應該渲染：
     "spawnTasks": [
       {
         "title": "夏季穿搭 5 個必備單品",
-        "assignedAgent": "shopify-blog-writer",
+        "assignedAgent": "article-writer",
         "input": {
           "brief": "...",
           "primaryKeyword": "夏季穿搭",
@@ -1660,7 +1660,7 @@ UI 應該渲染：
           }
         }
       },
-      { "title": "Sustainable summer fabrics buyer guide", "assignedAgent": "shopify-blog-writer", "..." : "..." }
+      { "title": "Sustainable summer fabrics buyer guide", "assignedAgent": "article-writer", "..." : "..." }
     ]
   }
 }
@@ -1768,7 +1768,7 @@ interface Task {
 }
 
 /**
- * EEAT two-stage gate — set on `output.eeatPending` when shopify-blog-writer
+ * EEAT two-stage gate — set on `output.eeatPending` when article-writer
  * has asked experience questions and is waiting for the boss to reply via /feedback.
  * Once the boss replies, `eeatPending` stays in output (historical record) but
  * Stage 2 runs and `output.pendingToolCall` gets set instead.
@@ -1912,8 +1912,8 @@ interface AgentStatus {
 | 沒 rate limit | 任意 client 短時間內可灌 N 次 POST /v1/tasks；UI 自己擋 |
 | 沒 RLS 兜底 | 不影響 UI；純粹是後端安全防線 |
 | `parentTaskId=null` query 還沒解析 | 列「頂層任務」目前要 client-side filter `parentTaskId === null` |
-| shopify-blog-writer 文章無附圖 | 文章本身不夾圖；`product-designer` 支援圖片生成（需 R2 + OpenAI env），blog writer 尚未接 |
-| shopify-blog-writer 必綁 Shopify creds | 即使打算只用 `publishToShopify=false` 純草稿，activate 仍要 creds；roadmap 改為動態 required |
+| article-writer 文章無附圖 | 文章本身不夾圖；`product-designer` 支援圖片生成（需 R2 + OpenAI env），blog writer 尚未接 |
+| article-writer 必綁 Shopify creds | 即使打算只用 `publishToShopify=false` 純草稿，activate 仍要 creds；roadmap 改為動態 required |
 | product-planner / product-designer 需同時啟用 | `product-planner` 需要 `product-designer` 存在；`product-designer` 需要至少一個 `kind=publisher` agent。若缺少，worker 跑到 invoke 時會 throw |
 
 ---
