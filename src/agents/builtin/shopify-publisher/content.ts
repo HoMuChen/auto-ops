@@ -1,15 +1,16 @@
 /**
  * Platform-agnostic product content produced by product-designer and consumed by
- * publisher agents. Mirrors the artifact shape: report (boss-facing markdown
- * narrative), body (markdown product description), refs (machine-readable
- * fields the publisher needs).
+ * publisher agents. Mirrors the artifact shape: body (markdown product
+ * description) + refs (machine-readable fields the publisher needs).
+ *
+ * Post-PR7: the boss-facing prose is rendered by the shared report-writer
+ * node from the publisher's own structuredOutput; ProductContent no longer
+ * carries it.
  */
 export interface ProductContent {
-  /** zh-TW Markdown report — boss-facing narrative. Forwarded into the
-   *  publisher's artifact.report and shown on the kanban / artifact panel. */
-  report: string;
-  /** Product description body in Markdown. Converted to HTML at the publish
-   *  boundary by the publisher (markdownToHtml). */
+  /** Product description body in Markdown — image-free. Converted to HTML at
+   *  the publish boundary by the publisher (markdownToHtml). Image markdown
+   *  is rebuilt by display callers from refs.imageUrls. */
   body: string;
   refs: {
     title: string;

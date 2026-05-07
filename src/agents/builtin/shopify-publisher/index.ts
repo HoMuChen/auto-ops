@@ -39,7 +39,7 @@ export const shopifyPublisherAgent: IAgent = {
       },
     ],
     configSchema,
-    metadata: { kind: 'publisher' },
+    metadata: { kind: 'publisher', shape: 'atomic' },
   },
 
   async build(ctx: AgentBuildContext): Promise<AgentRunnable> {
@@ -52,7 +52,7 @@ export const shopifyPublisherAgent: IAgent = {
 
     const invoke = async (input: AgentInput): Promise<AgentOutput> => {
       const content = input.params.content as ProductContent;
-      const { title, tags, vendor, productType, imageUrls } = content.refs;
+      const { title, tags, vendor, productType, language, imageUrls } = content.refs;
       const bodyHtml = markdownToHtml(content.body);
 
       await ctx.emitLog('agent.started', content.progressNote, {
@@ -72,16 +72,46 @@ export const shopifyPublisherAgent: IAgent = {
         },
       };
 
+      // Image markdown for boss-facing display only — Shopify gets images via
+      // the `images[]` field, not inline in body_html. Same shape as the
+      // designer's bodyWithImages; inlined here rather than shared because the
+      // logic is 3 lines and only used in two callsites (PR7 plan §"Architecture").
+      const imageMarkdown =
+        imageUrls.length > 0
+          ? `\n\n## 生成的圖片\n\n${imageUrls.map((url, i) => `![圖 ${i + 1}](${url})`).join('\n\n')}`
+          : '';
+      const bodyWithImages = `${content.body}${imageMarkdown}`;
+
+      // NOTE: artifact.report intentionally absent — the shared report-writer
+      // node fills it from state.lastStructuredOutput at the HITL boundary.
       return {
         message: content.progressNote,
         awaitingApproval: true,
         artifact: {
-          report: content.report,
-          body: content.body,
+          body: bodyWithImages,
           refs: { ...content.refs, ready: true },
         },
         payload: { content },
         pendingToolCall,
+        structuredOutput: {
+          schemaName: 'shopify-publish-intent',
+          data: {
+            title,
+            vendor,
+            tags,
+            language,
+            ...(productType ? { productType } : {}),
+            imageCount: imageUrls.length,
+            imageUrls,
+          },
+          // Deterministic — no LLM call. Three concrete bullets the
+          // report-writer leans on to render boss prose.
+          keyDecisions: [
+            `準備上架「${title}」到 Shopify (${language})`,
+            `品牌 ${vendor}${productType ? ` / ${productType}` : ''}`,
+            `${tags.length} 個標籤、${imageUrls.length} 張圖片`,
+          ],
+        },
       };
     };
 

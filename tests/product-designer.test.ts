@@ -2,16 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ProductContent } from '../src/agents/builtin/shopify-publisher/content.js';
 
 /**
- * product-designer (post-PR6): execution agent that receives a markdown
+ * product-designer (post-PR7): execution agent that receives a markdown
  * brief from product-planner, generates images via tool loop, writes
  * copy, then spawns publisher tasks.
  *
- * Post-PR6 contract:
+ * Post-PR7 contract:
  * - `artifact.body` = listing.body + image markdown (images stay user-visible
  *   pre-approval).
  * - `artifact.report` is filled by report-writer, NOT by the agent.
- * - `payload.content.report` = `body + imageMarkdown` (string preserved so
- *   un-migrated downstream publisher keeps working until PR7).
+ * - `payload.content` is plain ProductContent (no `report` field) — the
+ *   downstream publisher reads body+refs and emits its own structuredOutput.
  * - `structuredOutput.schemaName='product-listing'` carries the deliverable
  *   for report-writer + downstream consumers.
  */
@@ -147,10 +147,10 @@ describe('product-designer', () => {
     expect(content.refs.title).toBe('Linen Oversized Shirt');
     expect(content.body).toContain('180g 亞麻');
     expect(content.refs.language).toBe('zh-TW');
-    // Post-PR6: content.report is body+images string (was boss prose).
-    // Type contract preserved so un-migrated publisher keeps working.
-    expect(typeof content.report).toBe('string');
-    expect(content.report).toContain('180g 亞麻');
+    // Post-PR7: ProductContent no longer carries `report`. The publisher
+    // emits its own structuredOutput so report-writer fills its
+    // artifact.report independently.
+    expect(content).not.toHaveProperty('report');
   });
 
   it('preserves previous imageUrls when feedback does not trigger image generation', async () => {
@@ -199,13 +199,8 @@ describe('product-designer', () => {
 
     const content = output.spawnTasks![0]!.input.content as ProductContent;
     expect(content.refs.imageUrls).toEqual(['https://cdn.example.com/img-1.jpg']);
-    // Lock the bodyWithImages mid-migration plumbing: content.report (passed
-    // to the un-migrated publisher) must include image markdown, not just
-    // the raw body. A regression where someone sets `content.report =
-    // listing.body` would silently strip images from the publisher's view.
-    expect(content.report).toContain('![圖 1](https://cdn.example.com/img-1.jpg)');
-
-    // Post-PR6: image markdown rides on artifact.body (was artifact.report).
+    // Post-PR7: image markdown rides on artifact.body only. content carries
+    // raw fields; the publisher rebuilds bodyWithImages from refs.imageUrls.
     const artifact = output.artifact as { body: string };
     expect(artifact.body).toContain('## 生成的圖片');
     expect(artifact.body).toContain('![圖 1](https://cdn.example.com/img-1.jpg)');
