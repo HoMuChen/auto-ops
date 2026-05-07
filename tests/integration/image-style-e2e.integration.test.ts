@@ -5,6 +5,7 @@ import {
   clearScript,
   llmMockModule,
   scriptStructured,
+  scriptText,
   scriptToolCall,
 } from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
@@ -107,9 +108,13 @@ describe('image style e2e', () => {
       body: '## Hero Shot\n\nClean product photography on white background.',
       tags: ['linen', 'shirt', 'summer'],
       vendor: 'Acme',
-      report: '## 切角\n\n機能透氣。\n\n## 圖片選擇\n\n白底主圖。',
+      keyDecisions: ['機能透氣切角', '白底主圖突出布料'],
       progressNote: '圖文都好了，老闆看一下',
     });
+    // 4. Report-writer LLM call for schemaName='product-listing'. NO extra
+    // scriptStructured — supervisor short-circuits on awaitingApproval=true
+    // (src/orchestrator/supervisor.ts:69-72).
+    scriptText('## 設計決定\n\n機能透氣切白底主圖。');
 
     // Create the task pinned to product-designer.
     const taskRes = await app.inject({

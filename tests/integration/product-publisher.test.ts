@@ -198,20 +198,48 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
       body: '## 主特色\n\n輕薄亞麻，台灣夏天通勤首選。\n\n- 不悶熱\n- 可機洗',
       tags: ['linen', 'summer', 'taiwan'],
       vendor: 'Acme',
-      report: `## 我的切角
-
-機能透氣切「台灣濕熱通勤」實戰。文案直接連結痛點。
-
-## 為什麼選這個 vendor 跟 productType
-從 brief 推斷 Acme 為品牌；productType 留空（brief 未指定）。`,
+      keyDecisions: [
+        '機能透氣切「台灣濕熱通勤」實戰',
+        '從 brief 推斷 Acme 為品牌；productType 留空',
+      ],
       progressNote: '文案跟圖片都好了，老闆看一下',
     });
+    // Report-writer LLM call for schemaName='product-listing'. NO extra
+    // scriptStructured — supervisor short-circuits on awaitingApproval=true
+    // (src/orchestrator/supervisor.ts:69-72).
+    scriptText(
+      '## 設計決定\n\n機能透氣切台灣濕熱通勤實戰。\n\n## 為什麼這樣選\n\n從 brief 切角直接連結痛點，避免抽象廣告語。',
+    );
 
     await drainNextTask();
     const designerTask = await getTask(tenantId, designerTaskId);
     expect(designerTask.status).toBe('waiting');
     expect(designerTask.kind).toBe('strategy');
     expect((designerTask.output as { spawnTasks?: unknown[] })?.spawnTasks).toHaveLength(1);
+    // Post-PR6: designer emits structuredOutput → report-writer renders prose.
+    expect(designerTask.output).toMatchObject({
+      artifact: {
+        // CRITICAL: report comes from report-writer — prose-unique substring
+        // '機能透氣切台灣濕熱通勤實戰' is ONLY in the scripted text above.
+        // (The agent's keyDecisions[0] uses the slightly different phrase
+        // '機能透氣切「台灣濕熱通勤」實戰' with quote marks — a copy of
+        // keyDecisions or body to artifact.report would NOT match the
+        // assertion's quote-free substring.)
+        report: expect.stringContaining('機能透氣切台灣濕熱通勤實戰'),
+        body: expect.stringContaining('## 主特色'),
+      },
+      lastStructuredOutput: {
+        schemaName: 'product-listing',
+        data: expect.objectContaining({
+          title: 'Linen Oversized Shirt',
+          body: expect.stringContaining('## 主特色'),
+          tags: expect.arrayContaining(['linen']),
+          vendor: 'Acme',
+          language: expect.any(String),
+        }),
+        keyDecisions: expect.arrayContaining(['機能透氣切「台灣濕熱通勤」實戰']),
+      },
+    });
 
     // ── Phase 4: approve designer → spawns shopify-publisher child ────────────
     const approveDesigner = await app.inject({
