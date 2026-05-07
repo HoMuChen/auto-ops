@@ -16,6 +16,7 @@ import {
   clearScript,
   llmMockModule,
   scriptStructured,
+  scriptText,
   scriptToolCall,
 } from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
@@ -104,6 +105,10 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
 
 聚焦 1 個 variant：zh-TW 電商頁面，切「機能透氣」+ 在地實穿。`,
       progressNote: '規劃好了，1 個 variant，老闆看一下',
+      keyDecisions: [
+        '反向操作 SERP 悶熱恐懼，主打 180g 不悶',
+        '聚焦 1 個 zh-TW 電商 variant 切機能透氣',
+      ],
       variants: [
         {
           title: '亞麻短袖 - 電商版 (zh-TW)',
@@ -127,6 +132,14 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
         },
       ],
     });
+    // Report-writer LLM call for schemaName='product-plan'. NOTE: NO extra
+    // scriptStructured here — supervisor short-circuits without an LLM call
+    // when awaitingApproval=true (src/orchestrator/supervisor.ts:69-72), so
+    // adding one would leak into the queue and be consumed by report-writer's
+    // plain `.invoke()`.
+    scriptText(
+      '## 我的策略\n\n反向操作 SERP 悶熱恐懼。\n\n## 為什麼這樣選\n\n台灣夏天通勤族對亞麻有刻板印象，正面挑戰反而能站穩位置。',
+    );
 
     const create = await app.inject({
       method: 'POST',
@@ -142,6 +155,25 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     expect(plannerTask.status).toBe('waiting');
     expect(plannerTask.kind).toBe('strategy');
     expect((plannerTask.output as { spawnTasks?: unknown[] })?.spawnTasks).toHaveLength(1);
+    // Post-PR4: planner emits structuredOutput → report-writer renders prose.
+    expect(plannerTask.output).toMatchObject({
+      artifact: {
+        // CRITICAL: report comes from report-writer, contains the prose it
+        // generated — NOT a verbatim copy of structuredOutput.data.overview.
+        report: expect.stringContaining('反向操作 SERP 悶熱恐懼'),
+        body: expect.stringContaining('## 市場觀察'),
+      },
+      lastStructuredOutput: {
+        schemaName: 'product-plan',
+        data: expect.objectContaining({
+          overview: expect.stringContaining('## 市場觀察'),
+          variants: expect.arrayContaining([
+            expect.objectContaining({ title: '亞麻短袖 - 電商版 (zh-TW)' }),
+          ]),
+        }),
+        keyDecisions: expect.arrayContaining(['反向操作 SERP 悶熱恐懼，主打 180g 不悶']),
+      },
+    });
 
     // ── Phase 2: approve planner → spawns product-designer child ─────────────
     const approvePlanner = await app.inject({
