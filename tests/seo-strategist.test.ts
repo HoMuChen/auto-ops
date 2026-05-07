@@ -17,6 +17,11 @@ const planFixture = {
 
 挑兩篇主打：一篇 zh-TW 切「在地穿搭實戰」，一篇英文 buyer guide 切「永續材質採購標準」，互不重疊。`,
   progressNote: '規劃了 2 個主軸，圍繞夏季 + 永續，老闆過目',
+  keyDecisions: [
+    '兩條主軸：在地穿搭實戰 vs 永續材質採購',
+    '挑兩篇打不重疊：zh-TW 切在地通勤、en 切採購標準',
+    '台灣濕熱氣候是市場切角，競品多半從歐美觀點寫',
+  ],
   topics: [
     {
       title: '夏季穿搭 5 個必備單品',
@@ -191,7 +196,7 @@ describe('seoStrategistAgent.build → invoke', () => {
     expect(result.spawnTasks).toHaveLength(1);
   });
 
-  it('emits an Artifact{report} with the overview and per-topic sections', async () => {
+  it('emits Artifact{body} with the overview + per-topic sections (no agent-written report)', async () => {
     const runnable = await seoStrategistAgent.build(ctx);
     const result = await runnable.invoke({
       messages: [{ role: 'user', content: 'plan summer SEO' }],
@@ -199,14 +204,40 @@ describe('seoStrategistAgent.build → invoke', () => {
     });
     const artifact = result.artifact;
     expect(artifact).toBeDefined();
-    expect(artifact).toHaveProperty('report');
-    expect(artifact).not.toHaveProperty('kind');
-    expect(artifact).not.toHaveProperty('data');
-    if (artifact && 'report' in artifact) {
-      expect(artifact.report).toContain('## 市場觀察');
-      expect(artifact.report).toContain('### 夏季穿搭 5 個必備單品');
-      expect(artifact.report).toContain('### Sustainable summer fabrics buyer guide');
+    // The agent no longer writes report — that's report-writer's job now.
+    expect(artifact).not.toHaveProperty('report');
+    expect(artifact).toHaveProperty('body');
+    if (artifact && 'body' in artifact) {
+      expect(artifact.body).toContain('## 市場觀察');
+      expect(artifact.body).toContain('### 夏季穿搭 5 個必備單品');
+      expect(artifact.body).toContain('### Sustainable summer fabrics buyer guide');
     }
+  });
+
+  it('surfaces structuredOutput on the inter-node bus for report-writer', async () => {
+    const runnable = await seoStrategistAgent.build(ctx);
+    const result = await runnable.invoke({
+      messages: [{ role: 'user', content: 'plan summer SEO' }],
+      params: {},
+    });
+
+    expect(result.structuredOutput?.schemaName).toBe('topic-plan');
+    expect(result.structuredOutput?.data).toMatchObject({
+      overview: expect.stringContaining('## 市場觀察'),
+      topics: expect.arrayContaining([
+        expect.objectContaining({
+          title: '夏季穿搭 5 個必備單品',
+          primaryKeyword: '夏季穿搭',
+          language: 'zh-TW',
+          assignedAgent: 'article-writer',
+          writerBrief: expect.stringContaining('搜尋意圖'),
+        }),
+      ]),
+    });
+    expect(
+      (result.structuredOutput?.data as { topics: unknown[] } | undefined)?.topics,
+    ).toHaveLength(2);
+    expect(result.structuredOutput?.keyDecisions).toEqual(planFixture.keyDecisions);
   });
 
   it('throws at build time if no peer worker agents are available', async () => {
@@ -230,6 +261,7 @@ describe('seoStrategistAgent.build → invoke', () => {
               '## 觀察\n\n為了測試錯誤處理，這份規劃故意指派一個不存在的 worker，預期框架會擋下並丟錯。' +
               '本段 overview 必須夠長（≥100 字元）才能通過 Zod 的 min(100) 驗證；不然 runToolLoop 會把 submit 視為無效並重新 prompt 模型，走進 default fixture path。',
             progressNote: '計畫好了但 worker 名稱可能有誤',
+            keyDecisions: ['故意指派不存在的 worker 來驗證錯誤處理'],
             topics: [
               {
                 title: 'whatever',
