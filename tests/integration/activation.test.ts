@@ -138,7 +138,7 @@ describe('Agent activation flow', () => {
     expect(JSON.stringify(body.error.details)).toMatch(/shopify/);
   });
 
-  it('shopify-blog-writer requires Shopify credentials (it publishes blog articles on approve)', async () => {
+  it('article-writer requires Shopify credentials (it publishes blog articles on approve)', async () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
 
@@ -146,7 +146,7 @@ describe('Agent activation flow', () => {
     let detail = await app
       .inject({
         method: 'GET',
-        url: '/v1/agents/shopify-blog-writer',
+        url: '/v1/agents/article-writer',
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());
@@ -156,7 +156,7 @@ describe('Agent activation flow', () => {
 
     const earlyActivate = await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-blog-writer/activate',
+      url: '/v1/agents/article-writer/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: { blogHandle: 'news' } },
     });
@@ -173,7 +173,7 @@ describe('Agent activation flow', () => {
     detail = await app
       .inject({
         method: 'GET',
-        url: '/v1/agents/shopify-blog-writer',
+        url: '/v1/agents/article-writer',
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());
@@ -181,7 +181,7 @@ describe('Agent activation flow', () => {
 
     const activate = await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-blog-writer/activate',
+      url: '/v1/agents/article-writer/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: { blogHandle: 'news' } },
     });
@@ -193,7 +193,7 @@ describe('Agent activation flow', () => {
     const { tenantId, userId, email } = await seedTenantWithOwner();
     const jwt = await mintJwt({ userId, email });
 
-    // shopify-blog-writer needs Shopify creds bound before activation.
+    // article-writer needs Shopify creds bound before activation.
     await app.inject({
       method: 'PUT',
       url: '/v1/credentials/shopify',
@@ -203,14 +203,14 @@ describe('Agent activation flow', () => {
 
     await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-blog-writer/activate',
+      url: '/v1/agents/article-writer/activate',
       headers: authHeaders(jwt, tenantId),
       payload: { config: { blogHandle: 'news' } },
     });
 
     const deactivate = await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-blog-writer/deactivate',
+      url: '/v1/agents/article-writer/deactivate',
       headers: authHeaders(jwt, tenantId),
     });
     expect(deactivate.statusCode).toBe(204);
@@ -218,7 +218,7 @@ describe('Agent activation flow', () => {
     const detail = await app
       .inject({
         method: 'GET',
-        url: '/v1/agents/shopify-blog-writer',
+        url: '/v1/agents/article-writer',
         headers: authHeaders(jwt, tenantId),
       })
       .then((r) => r.json());

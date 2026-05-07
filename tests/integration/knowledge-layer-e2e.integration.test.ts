@@ -55,13 +55,13 @@ describe('knowledge layer e2e — profile + pack reach agent system prompt', () 
       })
       .where(eq(tenants.id, tenantId));
 
-    // 2. Seed a tenant skill pack that applies to shopify-blog-writer
+    // 2. Seed a tenant skill pack that applies to article-writer
     await db.insert(tenantSkillPacks).values({
       tenantId,
       key: 'tenant.house-style',
       name: 'House Style',
       body: '## House style\n\nAlways close articles with a question.',
-      appliesTo: ['shopify-blog-writer'],
+      appliesTo: ['article-writer'],
     });
 
     // 3. Bind the Shopify credential (required by manifest regardless of publishToShopify)
@@ -78,17 +78,17 @@ describe('knowledge layer e2e — profile + pack reach agent system prompt', () 
     // 4. Activate the writer with publishToShopify: false so no Shopify API calls needed
     const activateRes = await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-blog-writer/activate',
+      url: '/v1/agents/article-writer/activate',
       headers: hdrs,
       payload: { config: { publishToShopify: false } },
     });
     expect(activateRes.statusCode).toBe(200);
 
     // 5. Enable capture, then script the LLM calls:
-    //    - supervisor routes to shopify-blog-writer (withStructuredOutput)
+    //    - supervisor routes to article-writer (withStructuredOutput)
     //    - writer produces article via submit_article tool call (bindTools)
     enableMessageCapture();
-    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'article-writer', clarification: null, done: false });
     scriptToolCall('submit_article', {
       title: 'Linen Shirts Guide',
       slug: 'linen-shirts-guide',
@@ -105,7 +105,7 @@ describe('knowledge layer e2e — profile + pack reach agent system prompt', () 
       method: 'POST',
       url: '/v1/tasks',
       headers: hdrs,
-      payload: { brief: 'Write a post about linen shirts', agentId: 'shopify-blog-writer' },
+      payload: { brief: 'Write a post about linen shirts', agentId: 'article-writer' },
     });
     expect(taskRes.statusCode).toBe(201);
 

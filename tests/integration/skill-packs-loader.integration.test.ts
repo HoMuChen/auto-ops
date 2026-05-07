@@ -31,14 +31,14 @@ describe('loadPacks (with tenant DB packs)', () => {
       key: 'tenant.brand-guide',
       name: 'Brand Guide',
       body: '## Voice\n\nWarm.',
-      appliesTo: ['shopify-blog-writer'],
+      appliesTo: ['article-writer'],
     });
 
     const out = await loadPacks({
       builtInDir: dir,
       builtInEnabled: { seoFundamentals: true },
       tenantId,
-      agentId: 'shopify-blog-writer',
+      agentId: 'article-writer',
     });
 
     expect(out).toMatch(/## Skill: SEO Fundamentals/); // built-in first
@@ -58,7 +58,7 @@ describe('loadPacks (with tenant DB packs)', () => {
       builtInDir: dir,
       builtInEnabled: {},
       tenantId,
-      agentId: 'shopify-blog-writer',
+      agentId: 'article-writer',
     });
     expect(out).toBe('');
   });

@@ -23,6 +23,7 @@ import {
   clearScript,
   llmMockModule,
   scriptStructured,
+  scriptText,
   scriptToolCall,
 } from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
@@ -69,11 +70,15 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
     // skills schema is now an open record with no built-in defaults — activate
     // the writer with `eeat: true` so the Stage 1 (EEAT Q&A) path fires when
     // the strategist-spawned child runs.
+    // Strategy spawns into the seo-article-with-eeat workflow so the EEAT
+    // Q&A still fires for the spawned child (the bulk-plan default of the
+    // article-writer atomic skips EEAT — that path is covered by the
+    // article-writer integration test).
     await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-blog-writer/activate',
+      url: '/v1/agents/seo-article-with-eeat/activate',
       headers: authHeaders(jwt, tenantId),
-      payload: { config: { skills: { eeat: true } } },
+      payload: { config: { eeatEnabled: true, skills: { eeat: true } } },
     });
 
     // Stub fetch: google.serper.dev returns canned SERP; myshopify.com returns
@@ -131,7 +136,7 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
           language: 'en',
           writerBrief:
             '**Search intent**: commercial\n\n### PAA\n- Is linen good for summer?\n- How to care for linen?\n\n### Related queries\n- linen vs cotton summer\n- best linen shirts 2026\n\n### Competitor gap\nNo Taiwan humidity specifics.\n\n### Target\n~1200 words. Comprehensive guide on linen shirts for humid summer climates.\n\n### E-E-A-T hook\nBoss should share washing experience and wearability in humid heat.',
-          assignedAgent: 'shopify-blog-writer',
+          assignedAgent: 'seo-article-with-eeat',
         },
       ],
     });
@@ -224,10 +229,16 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
       summaryHtml: 'A first-hand guide to linen shirts for humid summer climates.',
       tags: ['linen', 'summer', 'fabric guide'],
       language: 'en',
-      report:
-        '## Decision\n\nOpening paragraph leads with the boss-provided 12-wash data point — strongest EEAT signal we have. Comparison table left out to keep length under 1200 words.',
+      keyDecisions: [
+        'Lead with the boss-provided 12-wash data point',
+        'Drop the comparison table to keep length under 1200 words',
+      ],
       progressNote: '草稿好了，已用老闆親身穿著體驗開場，老闆過目',
     });
+    // Report-writer renders boss prose for the article-draft schema.
+    scriptText(
+      '## Decision\n\nOpening paragraph leads with the 12-wash data point — strongest EEAT signal we have.',
+    );
 
     const writerDrain = await drainNextTask();
     expect(writerDrain.taskId).toBe(childId);

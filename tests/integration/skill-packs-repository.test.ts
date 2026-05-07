@@ -31,10 +31,10 @@ describe('skill-packs-repository', () => {
       key: 'tenant.brand-guide',
       name: 'Brand Guide',
       body: '# Voice\n\nWarm.',
-      appliesTo: ['shopify-blog-writer'],
+      appliesTo: ['article-writer'],
     });
     expect(pack.id).toBeDefined();
-    expect(pack.appliesTo).toEqual(['shopify-blog-writer']);
+    expect(pack.appliesTo).toEqual(['article-writer']);
   });
 
   it('listPacksForAgent returns only packs with that agent in applies_to', async () => {
@@ -42,7 +42,7 @@ describe('skill-packs-repository', () => {
       key: 'tenant.a',
       name: 'A',
       body: 'a',
-      appliesTo: ['shopify-blog-writer'],
+      appliesTo: ['article-writer'],
     });
     await createPack(tenantId, {
       key: 'tenant.b',
@@ -50,7 +50,7 @@ describe('skill-packs-repository', () => {
       body: 'b',
       appliesTo: ['seo-strategist'],
     });
-    const writerPacks = await listPacksForAgent(tenantId, 'shopify-blog-writer');
+    const writerPacks = await listPacksForAgent(tenantId, 'article-writer');
     expect(writerPacks.map((p) => p.key)).toEqual(['tenant.a']);
   });
 

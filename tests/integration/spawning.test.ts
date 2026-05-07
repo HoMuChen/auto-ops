@@ -7,13 +7,14 @@ import {
   llmMockModule,
   pendingScript,
   scriptStructured,
+  scriptText,
   scriptToolCall,
 } from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
 
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
-// Stub fetch so shopify-blog-writer's publish_article call doesn't actually hit Shopify.
+// Stub fetch so article-writer's publish_article call doesn't actually hit Shopify.
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
@@ -43,7 +44,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     // Strategist is gated to pro+ — seed accordingly.
     const { tenantId, userId, email } = await seedTenantWithOwner({ plan: 'pro' });
     const jwt = await mintJwt({ userId, email });
-    // Children are shopify-blog-writer tasks that publish to Shopify; bind a credential
+    // Children are article-writer tasks that publish to Shopify; bind a credential
     // so the publish tool can resolve creds when it fires on approve.
     await db.insert(tenantCredentials).values({
       tenantId,
@@ -54,11 +55,13 @@ describe('Strategy → Spawn → Execution flow', () => {
 
     // skills schema is now an open record with no built-in defaults — activate
     // the writer with `eeat: true` so each strategist-spawned child fires Stage 1.
+    // Spawn into the seo-article-with-eeat workflow so EEAT Q&A still
+    // fires per child (this test exercises that flow specifically).
     await app.inject({
       method: 'POST',
-      url: '/v1/agents/shopify-blog-writer/activate',
+      url: '/v1/agents/seo-article-with-eeat/activate',
       headers: authHeaders(jwt, tenantId),
-      payload: { config: { skills: { eeat: true } } },
+      payload: { config: { eeatEnabled: true, skills: { eeat: true } } },
     });
 
     // ── Phase 1: parent strategy task ──────────────────────────────────────
@@ -82,7 +85,7 @@ describe('Strategy → Spawn → Execution flow', () => {
           language: 'zh-TW',
           writerBrief:
             '**搜尋意圖**: commercial\n\n### PAA\n- Is linen good for summer?\n\n### 競品缺口\n沒有台灣濕熱氣候的穿搭建議。\n\n### 目標\n1500 字 long-form article on layered summer styling for humid Taiwan climate.',
-          assignedAgent: 'shopify-blog-writer',
+          assignedAgent: 'seo-article-with-eeat',
         },
         {
           title: 'Sustainable summer fabrics buyer guide',
@@ -90,7 +93,7 @@ describe('Strategy → Spawn → Execution flow', () => {
           language: 'en',
           writerBrief:
             '**Search intent**: informational\n\n### PAA\n- What is the most sustainable fabric?\n\n### Competitor gap\nNo first-hand washing data.\n\n### Target\nBuyer guide comparing linen, organic cotton and Tencel for summer apparel.',
-          assignedAgent: 'shopify-blog-writer',
+          assignedAgent: 'seo-article-with-eeat',
         },
       ],
     });
@@ -118,7 +121,7 @@ describe('Strategy → Spawn → Execution flow', () => {
         report: expect.any(String),
       },
       spawnTasks: expect.arrayContaining([
-        expect.objectContaining({ assignedAgent: 'shopify-blog-writer' }),
+        expect.objectContaining({ assignedAgent: 'seo-article-with-eeat' }),
       ]),
     });
 
@@ -147,7 +150,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(children).toHaveLength(2);
     for (const child of children) {
       expect(child.kind).toBe('execution');
-      expect(child.assignedAgent).toBe('shopify-blog-writer');
+      expect(child.assignedAgent).toBe('seo-article-with-eeat');
       expect(child.status).toBe('todo');
       expect(child.input).toHaveProperty('brief');
       expect((child.input as { brief: string }).brief).toEqual(expect.any(String));
@@ -169,7 +172,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(stillTwo).toHaveLength(2);
 
     // ── Phase 4: drain children — supervisor LLM is BYPASSED via pinning ───
-    // Each child has assignedAgent='shopify-blog-writer' so the supervisor short-circuits.
+    // Each child has assignedAgent='article-writer' so the supervisor short-circuits.
     // Children carry refs.primaryKeyword (strategist signal) so Stage 1 (EEAT) fires
     // first; we then post boss feedback to drive Stage 2 (article draft).
     expect(pendingScript()).toBe(0);
@@ -219,7 +222,8 @@ describe('Strategy → Spawn → Execution flow', () => {
       expect(fb.statusCode).toBe(200);
     }
 
-    // Script Stage 2 (article draft) for each child — Stage 2 now submits via submit_article.
+    // Script Stage 2 (article draft) for each child — Stage 2 submits via
+    // submit_article and the report-writer node renders the boss prose.
     for (let i = 0; i < children.length; i++) {
       scriptToolCall('submit_article', {
         title: `Article ${i + 1} draft`,
@@ -228,9 +232,15 @@ describe('Strategy → Spawn → Execution flow', () => {
         summaryHtml: `Summary ${i + 1} for the article excerpt and meta description.`,
         tags: ['seo', 'summer'],
         language: i === 0 ? 'zh-TW' : 'en',
-        report: `## Decision\n\nArticle ${i + 1} leads with the boss's first-hand wear data. Length kept tight.`,
+        keyDecisions: [
+          `Article ${i + 1} leads with the boss's first-hand wear data`,
+          'Length kept tight (~1200 words)',
+        ],
         progressNote: `Article ${i + 1} 草稿好了，老闆過目`,
       });
+      scriptText(
+        `## Decision\n\nArticle ${i + 1} leads with the boss's first-hand wear data. Length kept tight.`,
+      );
     }
 
     const c1b = await drainNextTask();

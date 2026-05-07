@@ -6,6 +6,7 @@ import {
   clearScript,
   llmMockModule,
   scriptStructured,
+  scriptText,
   scriptToolCall,
 } from './helpers/llm-mock.js';
 import { drainNextTask } from './helpers/runner.js';
@@ -13,7 +14,7 @@ import { drainNextTask } from './helpers/runner.js';
 // Replace the real model registry BEFORE any module under test imports it.
 vi.mock('../../src/llm/model-registry.js', () => llmMockModule());
 
-// Stub fetch so the shopify-blog-writer's publish_article tool doesn't actually call
+// Stub fetch so the article-writer's publish_article tool doesn't actually call
 // Shopify. Shared across the file; reset between tests.
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -41,7 +42,7 @@ beforeEach(async () => {
 });
 
 /**
- * Article fixture for shopify-blog-writer's withStructuredOutput call. Centralised so
+ * Article fixture for article-writer's withStructuredOutput call. Centralised so
  * each test can just `scriptStructured(article())`. Body is markdown — converted
  * to HTML at the publish boundary by the writer.
  */
@@ -53,9 +54,11 @@ function article(overrides: Partial<Record<string, unknown>> = {}): Record<strin
     summaryHtml: 'A short guide to summer dresses for hot, humid weather.',
     tags: ['summer', 'dresses', 'guide'],
     language: 'zh-TW',
-    report:
-      '## 切角\n\n從輕薄涼感切入，避開純穿搭潮流。E-E-A-T 部分引用了店家親穿經驗，特別是台灣濕熱通勤的真實感受。' +
-      '長度控制在 1200 字以內，把實穿經驗放在開頭做差異化。',
+    keyDecisions: [
+      '從輕薄涼感切入，避開純穿搭潮流',
+      '把實穿經驗放在開頭做差異化',
+      '長度控制在 1200 字以內',
+    ],
     progressNote: '草稿好了，這篇我著重在輕薄涼感面料，老闆看一下開頭那段',
     ...overrides,
   };
@@ -78,10 +81,12 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     await bindShopifyCredential(tenantId);
 
     // Script the supervisor + agent for one full graph turn:
-    //   1. Supervisor routes to shopify-blog-writer.
-    //   2. shopify-blog-writer returns a structured article via withStructuredOutput.
-    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
+    //   1. Supervisor routes to article-writer.
+    //   2. article-writer returns a structured article via withStructuredOutput.
+    scriptStructured({ nextAgent: 'article-writer', clarification: null, done: false });
     scriptToolCall('submit_article', article());
+    // article-writer no longer writes artifact.report; report-writer fills it.
+    scriptText('## 切角\n\n從輕薄涼感切入，避開純穿搭潮流。報告人是 report-writer。');
 
     // 1. Dispatch the brief.
     const create = await app.inject({
@@ -134,7 +139,7 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     expect(events).toContain('agent.draft.ready');
     // And every agent-emitted log carries the speaker tag.
     const draftLog = logs.find((l: { event: string }) => l.event === 'agent.draft.ready');
-    expect(draftLog?.speaker).toBe('shopify-blog-writer');
+    expect(draftLog?.speaker).toBe('article-writer');
 
     // 3. Approve as final → triggers publish_article. Stub blogs.json + articles.json.
     fetchMock
@@ -195,8 +200,9 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     const jwt = await mintJwt({ userId, email });
     await bindShopifyCredential(tenantId);
 
-    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'article-writer', clarification: null, done: false });
     scriptToolCall('submit_article', article({ title: 'First draft' }));
+    scriptText('## 切角\n\nReport-writer 的 prose. 報告人是 report-writer。');
 
     const create = await app.inject({
       method: 'POST',
@@ -230,8 +236,9 @@ describe('Task lifecycle — happy path through HITL gate', () => {
     const jwt = await mintJwt({ userId, email });
     await bindShopifyCredential(tenantId);
 
-    scriptStructured({ nextAgent: 'shopify-blog-writer', clarification: null, done: false });
+    scriptStructured({ nextAgent: 'article-writer', clarification: null, done: false });
     scriptToolCall('submit_article', article({ title: 'First draft' }));
+    scriptText('## 切角\n\nReport-writer 的 prose. 報告人是 report-writer。');
 
     const create = await app.inject({
       method: 'POST',
