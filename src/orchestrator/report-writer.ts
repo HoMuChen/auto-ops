@@ -1,4 +1,5 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { logger } from '../lib/logger.js';
 import { buildModel } from '../llm/model-registry.js';
 import type { ModelConfig } from '../llm/types.js';
 import type { GraphState } from './state.js';
@@ -68,22 +69,33 @@ export async function runReportWriter(state: GraphState): Promise<Partial<GraphS
       ? briefMessage.content
       : JSON.stringify(briefMessage?.content ?? '');
 
-  const model = buildModel(REPORT_MODEL);
-  const response = await model.invoke([
-    new SystemMessage(SYSTEM_PROMPT),
-    new HumanMessage(
-      buildUserPrompt({
-        brief,
-        agentId: sout.agentId,
-        schemaName: sout.schemaName,
-        data: sout.data,
-        ...(sout.keyDecisions ? { keyDecisions: sout.keyDecisions } : {}),
-      }),
-    ),
-  ]);
-
-  const reportMarkdown =
-    typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+  let reportMarkdown: string;
+  try {
+    const model = buildModel(REPORT_MODEL);
+    const response = await model.invoke([
+      new SystemMessage(SYSTEM_PROMPT),
+      new HumanMessage(
+        buildUserPrompt({
+          brief,
+          agentId: sout.agentId,
+          schemaName: sout.schemaName,
+          data: sout.data,
+          ...(sout.keyDecisions ? { keyDecisions: sout.keyDecisions } : {}),
+        }),
+      ),
+    ]);
+    reportMarkdown =
+      typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+  } catch (err) {
+    // Report-writer failures must never block task delivery. Log warn,
+    // write a short fallback so the boss isn't left staring at a missing
+    // section, and let the graph continue to END.
+    logger.warn(
+      { err, taskId: state.taskId, agentId: sout.agentId, schemaName: sout.schemaName },
+      'report-writer LLM call failed — using fallback prose',
+    );
+    reportMarkdown = '> ⚠️ 匯報生成失敗。請直接看下方 artifact 內容，或重新觸發 task。';
+  }
 
   // Preserve everything else on lastOutput; only fill in artifact.report.
   const prevArtifact = state.lastOutput?.artifact ?? {};

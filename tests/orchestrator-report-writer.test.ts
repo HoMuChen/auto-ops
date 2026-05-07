@@ -117,3 +117,39 @@ describe('runReportWriter — LLM rendering', () => {
     expect(result.lastOutput?.message).toBe('draft done');
   });
 });
+
+describe('runReportWriter — error handling', () => {
+  it('returns a fallback report and does not throw when the LLM rejects', async () => {
+    invokeMock.mockRejectedValueOnce(new Error('LLM provider 503'));
+
+    const state = {
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      taskId: '00000000-0000-0000-0000-000000000002',
+      messages: [new HumanMessage('幫我寫一篇文章')],
+      params: {},
+      nextAgent: null,
+      pinnedAgent: null,
+      lastOutput: {
+        agentId: 'article-writer',
+        message: 'draft done',
+        artifact: { body: '# article', refs: {} },
+      },
+      lastStructuredOutput: {
+        agentId: 'article-writer',
+        schemaName: 'article-draft',
+        data: { title: 'X' },
+      },
+      awaitingApproval: true,
+      currentTaskOutput: null,
+      taskImageIds: null,
+    };
+
+    // Must not throw.
+    const result = await runReportWriter(state);
+
+    expect(result.lastOutput?.artifact?.report).toBeTruthy();
+    expect(result.lastOutput?.artifact?.report).toContain('匯報生成失敗');
+    // Body must still be preserved.
+    expect(result.lastOutput?.artifact?.body).toBe('# article');
+  });
+});
