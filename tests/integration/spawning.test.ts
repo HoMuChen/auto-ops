@@ -126,7 +126,7 @@ describe('Strategy → Spawn → Execution flow', () => {
     expect(parent.status).toBe('waiting');
     // Runner should auto-promote kind because the agent emitted spawnTasks.
     expect(parent.kind).toBe('strategy');
-    // Post-PR5: strategist emits structuredOutput → report-writer renders prose.
+    // Strategist emits structuredOutput → report-writer renders prose.
     expect(parent.output).toMatchObject({
       artifact: {
         // CRITICAL: report is report-writer's prose, contains scripted-only

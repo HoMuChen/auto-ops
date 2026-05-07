@@ -2,19 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ProductContent } from '../src/agents/builtin/shopify-publisher/content.js';
 
 /**
- * shopify-publisher (post-PR7): execution agent that converts a ProductContent
+ * shopify-publisher: execution agent that converts a ProductContent
  * into a Shopify create_product pendingToolCall. Invoke is deterministic
  * (no LLM call) so keyDecisions are built from the listing fields in code.
  *
- * Post-PR7 contract:
+ * Contract:
  * - `artifact.body` = content.body + image markdown (boss-facing display).
  * - `artifact.report` is filled by report-writer, NOT by the agent.
  * - `pendingToolCall.args.bodyHtml` = markdownToHtml(content.body) — image-free,
  *   because Shopify takes images via the `images[]` field, not inline in HTML.
  * - `structuredOutput.schemaName='shopify-publish-intent'` — report-writer
  *   renders a tight "I'm about to ship" summary at the HITL boundary.
- * - `ProductContent` no longer has a `report` field; designer's mid-migration
- *   plumbing is gone.
+ * - `ProductContent` does not carry a `report` field — the publisher emits
+ *   its own structuredOutput so the designer needs no plumbing for it.
  */
 
 vi.mock('../src/integrations/shopify/tools.js', () => ({
@@ -87,7 +87,7 @@ describe('shopify-publisher', () => {
 
     const artifact = output.artifact;
     expect(artifact).toBeDefined();
-    // Post-PR7: agent no longer writes report — that's report-writer's job.
+    // Agent does not write report — that's report-writer's job.
     expect(artifact).not.toHaveProperty('report');
     expect(artifact).toMatchObject({
       // bodyWithImages: image markdown appended so the boss sees images

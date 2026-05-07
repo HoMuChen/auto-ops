@@ -155,7 +155,7 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     expect(plannerTask.status).toBe('waiting');
     expect(plannerTask.kind).toBe('strategy');
     expect((plannerTask.output as { spawnTasks?: unknown[] })?.spawnTasks).toHaveLength(1);
-    // Post-PR4: planner emits structuredOutput → report-writer renders prose.
+    // Planner emits structuredOutput → report-writer renders prose.
     expect(plannerTask.output).toMatchObject({
       artifact: {
         // CRITICAL: report comes from report-writer, contains the prose it
@@ -216,7 +216,7 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     expect(designerTask.status).toBe('waiting');
     expect(designerTask.kind).toBe('strategy');
     expect((designerTask.output as { spawnTasks?: unknown[] })?.spawnTasks).toHaveLength(1);
-    // Post-PR6: designer emits structuredOutput → report-writer renders prose.
+    // Designer emits structuredOutput → report-writer renders prose.
     expect(designerTask.output).toMatchObject({
       artifact: {
         // CRITICAL: report comes from report-writer — prose-unique substring
@@ -271,7 +271,7 @@ describe('product-planner → product-designer → shopify-publisher end-to-end'
     expect((pubTask.output as { pendingToolCall?: { id: string } })?.pendingToolCall?.id).toBe(
       'shopify.create_product',
     );
-    // Post-PR7: publisher emits structuredOutput → report-writer renders prose.
+    // Publisher emits structuredOutput → report-writer renders prose.
     expect(pubTask.output).toMatchObject({
       artifact: {
         // CRITICAL: report comes from report-writer — prose-unique substring

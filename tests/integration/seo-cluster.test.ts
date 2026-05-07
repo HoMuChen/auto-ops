@@ -165,7 +165,7 @@ describe('SEO cluster: Strategist → Writer draft → approve', () => {
     const parent = await getTask(tenantId, parentId);
     expect(parent.status).toBe('waiting');
     expect(parent.kind).toBe('strategy');
-    // Post-PR5: strategist emits structuredOutput → report-writer renders prose.
+    // Strategist emits structuredOutput → report-writer renders prose.
     expect(parent.output).toMatchObject({
       artifact: {
         // CRITICAL: report comes from report-writer, contains the prose it

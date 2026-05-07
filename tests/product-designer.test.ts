@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ProductContent } from '../src/agents/builtin/shopify-publisher/content.js';
 
 /**
- * product-designer (post-PR7): execution agent that receives a markdown
+ * product-designer: execution agent that receives a markdown
  * brief from product-planner, generates images via tool loop, writes
  * copy, then spawns publisher tasks.
  *
- * Post-PR7 contract:
+ * Contract:
  * - `artifact.body` = listing.body + image markdown (images stay user-visible
  *   pre-approval).
  * - `artifact.report` is filled by report-writer, NOT by the agent.
@@ -147,9 +147,8 @@ describe('product-designer', () => {
     expect(content.refs.title).toBe('Linen Oversized Shirt');
     expect(content.body).toContain('180g 亞麻');
     expect(content.refs.language).toBe('zh-TW');
-    // Post-PR7: ProductContent no longer carries `report`. The publisher
-    // emits its own structuredOutput so report-writer fills its
-    // artifact.report independently.
+    // ProductContent does not carry `report`. The publisher emits its own
+    // structuredOutput so report-writer fills its artifact.report independently.
     expect(content).not.toHaveProperty('report');
   });
 
@@ -199,8 +198,8 @@ describe('product-designer', () => {
 
     const content = output.spawnTasks![0]!.input.content as ProductContent;
     expect(content.refs.imageUrls).toEqual(['https://cdn.example.com/img-1.jpg']);
-    // Post-PR7: image markdown rides on artifact.body only. content carries
-    // raw fields; the publisher rebuilds bodyWithImages from refs.imageUrls.
+    // Image markdown rides on artifact.body only. content carries raw
+    // fields; the publisher rebuilds bodyWithImages from refs.imageUrls.
     const artifact = output.artifact as { body: string };
     expect(artifact.body).toContain('## 生成的圖片');
     expect(artifact.body).toContain('![圖 1](https://cdn.example.com/img-1.jpg)');

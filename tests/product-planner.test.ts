@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 /**
- * product-planner (post-PR4): strategy agent that researches via Serper and
+ * product-planner: strategy agent that researches via Serper and
  * spawns product-designer tasks. The synthesized markdown deliverable now
  * lives on `artifact.body` (was `artifact.report`); `artifact.report` is
  * filled by the shared report-writer node downstream from

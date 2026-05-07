@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 /**
- * Market Researcher (post-PR3): produces a structured market report. The
+ * Market Researcher: produces a structured market report. The
  * agent emits `artifact.body` + `artifact.refs` + `structuredOutput`
  * (schemaName='market-report'); the shared report-writer node renders
  * `artifact.report` from `lastStructuredOutput` at the HITL boundary, so
