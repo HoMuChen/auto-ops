@@ -86,6 +86,7 @@ describe('runReportWriter — LLM rendering', () => {
         agentId: 'article-writer',
         message: 'draft done',
         artifact: {
+          report: '',
           body: '# Article body markdown',
           refs: { title: 'Summer linen', slug: 'summer-linen' },
         },
@@ -132,7 +133,7 @@ describe('runReportWriter — error handling', () => {
       lastOutput: {
         agentId: 'article-writer',
         message: 'draft done',
-        artifact: { body: '# article', refs: {} },
+        artifact: { report: '', body: '# article', refs: {} },
       },
       lastStructuredOutput: {
         agentId: 'article-writer',
