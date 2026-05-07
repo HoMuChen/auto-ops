@@ -231,9 +231,10 @@ export const productDesignerAgent: IAgent = {
         imageUrls,
       };
 
-      // Image markdown is appended to `artifact.body` (not `body` itself) so
-      // images stay user-visible pre-approval. Boss-facing prose is rendered
-      // separately by the shared report-writer node.
+      // Image markdown is appended only to `artifact.body` (boss-facing
+      // display); `content.body` stays image-free so the publisher's
+      // markdown→HTML conversion doesn't double-include images — Shopify
+      // takes them via the `images[]` field, not inline in body_html.
       const imageMarkdown =
         imageUrls.length > 0
           ? `\n\n## 生成的圖片\n\n${imageUrls.map((url, i) => `![圖 ${i + 1}](${url})`).join('\n\n')}`
