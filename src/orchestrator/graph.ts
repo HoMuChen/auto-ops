@@ -5,6 +5,7 @@ import type { AgentBuildContext } from '../agents/types.js';
 import { getImagesByIds } from '../integrations/cloudflare/images-repository.js';
 import { getTenantProfile } from '../tenants/profile-repository.js';
 import { getCheckpointer } from './checkpointer.js';
+import { runReportWriter } from './report-writer.js';
 import { formatRuntimeContext } from './runtime-context.js';
 import { type GraphState, GraphStateAnnotation } from './state.js';
 import { runSupervisor } from './supervisor.js';
@@ -43,7 +44,9 @@ export interface BuildGraphOptions {
 export async function buildGraph(opts: BuildGraphOptions) {
   const agents = await agentRegistry.listForTenant(opts.tenantId);
 
-  const graph = new StateGraph(GraphStateAnnotation).addNode('supervisor', runSupervisor);
+  const graph = new StateGraph(GraphStateAnnotation)
+    .addNode('supervisor', runSupervisor)
+    .addNode('report-writer', runReportWriter);
 
   for (const agent of agents) {
     const manifest = agent.manifest;
@@ -145,10 +148,15 @@ export async function buildGraph(opts: BuildGraphOptions) {
   }
 
   graph.addEdge(START, 'supervisor').addConditionalEdges('supervisor', (state: GraphState) => {
-    if (state.awaitingApproval) return END;
-    if (!state.nextAgent) return END;
+    // Terminal paths route through report-writer so the boss-facing prose
+    // gets rendered before the graph ends. Mid-flow hops bypass it
+    // entirely — only HITL boundaries and natural completion pay the cost.
+    if (state.awaitingApproval) return 'report-writer';
+    if (!state.nextAgent) return 'report-writer';
     return state.nextAgent;
   });
+
+  graph.addEdge('report-writer' as never, END as never);
 
   for (const agent of agents) {
     graph.addEdge(agent.manifest.id as never, 'supervisor' as never);
