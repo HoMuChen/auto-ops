@@ -43,7 +43,7 @@ listicle 7 件 / fabric 比較 / wash care guide
 
 ### E-E-A-T 切入
 老闆親身在台灣夏天試穿、洗滌的經驗，必入文。`,
-      assignedAgent: 'shopify-blog-writer',
+      assignedAgent: 'article-writer',
     },
     {
       title: 'Sustainable summer fabrics buyer guide',
@@ -69,7 +69,7 @@ No first-hand washing-durability evidence.
 
 ### E-E-A-T hook
 Boss should mention sourcing relationships and certifications.`,
-      assignedAgent: 'shopify-blog-writer',
+      assignedAgent: 'article-writer',
       scheduledAt: '2026-06-01T09:00:00.000Z',
     },
   ],
@@ -104,7 +104,7 @@ const { seoStrategistAgent } = await import('../src/agents/builtin/seo-strategis
 
 const PEERS = [
   {
-    id: 'shopify-blog-writer',
+    id: 'article-writer',
     name: 'Shopify Blog Writer',
     description: 'Writes a single multilingual SEO article from a focused brief.',
   },
@@ -141,7 +141,7 @@ describe('seoStrategistAgent.build → invoke', () => {
     expect(result.awaitingApproval).toBe(true);
     expect(result.spawnTasks).toHaveLength(2);
     for (const spawn of result.spawnTasks ?? []) {
-      expect(spawn.assignedAgent).toBe('shopify-blog-writer');
+      expect(spawn.assignedAgent).toBe('article-writer');
       expect(spawn.input).toHaveProperty('brief');
       expect(spawn.input).toHaveProperty('refs');
       expect((spawn.input as { refs: Record<string, unknown> }).refs).toHaveProperty(

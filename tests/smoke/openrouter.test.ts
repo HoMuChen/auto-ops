@@ -48,7 +48,7 @@ d('OpenRouter smoke — production model slugs resolve', () => {
         'You route a brief to one of the listed employees. Output strictly the requested JSON.',
       ),
       new HumanMessage(
-        'Available employees:\n- shopify-blog-writer: writes one Shopify blog article\n\nUser brief:\nWrite one article about summer fabrics.',
+        'Available employees:\n- article-writer: writes one Shopify blog article\n\nUser brief:\nWrite one article about summer fabrics.',
       ),
     ]);
 
@@ -82,7 +82,7 @@ d('OpenRouter smoke — production model slugs resolve', () => {
 
     const plan = await model.invoke([
       new SystemMessage(
-        'You plan 1–3 SEO article topics. Pick assignedAgent="shopify-blog-writer" for every topic. Output strictly the requested JSON.',
+        'You plan 1–3 SEO article topics. Pick assignedAgent="article-writer" for every topic. Output strictly the requested JSON.',
       ),
       new HumanMessage('Brief: spring linen collection launch, language zh-TW.'),
     ]);
@@ -90,7 +90,7 @@ d('OpenRouter smoke — production model slugs resolve', () => {
     expect(PlanSchema.safeParse(plan).success).toBe(true);
   }, 60_000);
 
-  it('shopify-blog-writer: anthropic/claude-opus-4.7 returns parseable ArticleSchema', async () => {
+  it('article-writer: anthropic/claude-opus-4.7 returns parseable ArticleSchema', async () => {
     const { buildModel } = await loadModelRegistry();
     const ArticleSchema = z.object({
       title: z.string().min(1).max(140),

@@ -27,7 +27,7 @@ const { runIntakeTurn } = await import('../src/intakes/agent.js');
 
 const ROSTER = [
   {
-    id: 'shopify-blog-writer',
+    id: 'article-writer',
     name: 'Shopify Blog Writer',
     description: 'Writes a single multilingual SEO article from a focused brief.',
   },
@@ -49,7 +49,7 @@ describe('runIntakeTurn', () => {
     await runIntakeTurn([], 'do something', { availableAgents: ROSTER });
 
     const messages = invokeMock.mock.calls[0]?.[0] as unknown as { content: string }[];
-    expect(messages[0]?.content).toContain('shopify-blog-writer');
+    expect(messages[0]?.content).toContain('article-writer');
     expect(messages[0]?.content).toContain('shopify-ops');
   });
 

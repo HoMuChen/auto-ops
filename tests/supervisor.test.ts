@@ -72,7 +72,7 @@ describe('runSupervisor — pinned-agent shortcut (execution children)', () => {
       messages: [],
       params: {},
       nextAgent: null,
-      pinnedAgent: 'shopify-blog-writer',
+      pinnedAgent: 'article-writer',
       lastOutput: null,
       awaitingApproval: false,
       currentTaskOutput: null,
@@ -82,7 +82,7 @@ describe('runSupervisor — pinned-agent shortcut (execution children)', () => {
 
     const result = await runSupervisor(state);
 
-    expect(result).toEqual({ nextAgent: 'shopify-blog-writer' });
+    expect(result).toEqual({ nextAgent: 'article-writer' });
     // No registry lookup, no model call — pure deterministic routing.
     expect(buildModelMock).not.toHaveBeenCalled();
   });
@@ -104,7 +104,7 @@ describe('runSupervisor — clarification path persists through lastOutput', () 
     listForTenantMock.mockReset();
     buildModelMock.mockReset();
     listForTenantMock.mockResolvedValueOnce([
-      { manifest: { id: 'shopify-blog-writer', description: 'writes one Shopify blog article' } },
+      { manifest: { id: 'article-writer', description: 'writes one Shopify blog article' } },
     ] as never);
 
     const invokeMock = vi.fn(async () => ({
@@ -162,13 +162,13 @@ describe('runSupervisor — runtime context injected into system message', () =>
     listForTenantMock.mockReset();
     buildModelMock.mockReset();
     listForTenantMock.mockResolvedValueOnce([
-      { manifest: { id: 'shopify-blog-writer', description: 'fake' } },
+      { manifest: { id: 'article-writer', description: 'fake' } },
     ] as never);
 
     let capturedMessages: { content: string }[] | null = null;
     const invokeMock = vi.fn(async (msgs: { content: string }[]) => {
       capturedMessages = msgs;
-      return { nextAgent: 'shopify-blog-writer', clarification: null, done: false };
+      return { nextAgent: 'article-writer', clarification: null, done: false };
     });
     buildModelMock.mockImplementation(
       () =>
