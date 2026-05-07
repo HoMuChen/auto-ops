@@ -535,7 +535,7 @@ EOF
 - Report-writer is invoked (mocked text response) and writes `artifact.report`.
 - `task.output.lastStructuredOutput` is persisted with `schemaName='market-report'`.
 - `task.output.artifact.body` carries the raw markdown; `task.output.artifact.report` carries the **rendered prose** (NOT a verbatim copy of body).
-- Task ends in `done` (no pendingToolCall — research is plain-text deliverable).
+- Task ends in `waiting` (researcher gates on approval — no pendingToolCall, but the user must `/approve` to transition `waiting → done`; integration test stops at the HITL gate).
 
 **Step 1: Create the file**
 
@@ -588,27 +588,35 @@ describe('market-researcher atomic agent — direct routing + report-writer rend
     scriptStructured({ nextAgent: 'market-researcher', clarification: null, done: false });
 
     // Hop 2: agent invokes its tool loop and submits the report.
+    // Body must clear the agent's `ReportSchema body.min(300)` gate or the
+    // tool loop will reject submit_report and surface as "did not submit a
+    // report within the tool loop budget" instead of the assertions below.
     const reportBody = `## 市場概況
 
-寵物用品市場約 350 億，年成長 6%，線上滲透率 32%。
+寵物用品市場規模約新台幣 350 億，年成長 6%（2024 → 2026）。
+地理上以雙北、桃園消費密度最高，南部以台中、高雄為次集中區，
+線上滲透率 32%。整體呈現高端鮮食 + 中低價乾糧兩極分化。
 
 ## 主要競品
 
-- A 牌：中價位主食罐，成分透明但社群弱。
-- B 牌：低價乾糧，超市強網購弱。
-- C 牌：高價手作鮮食，物流痛點明顯。
+- **A 牌**：中價位主食罐，成分透明但社群弱。
+- **B 牌**：低價乾糧，超市強網購弱，主打價格戰。
+- **C 牌**：高價手作鮮食，物流痛點明顯，常被抱怨配送破損。
 
 ## 市場缺口
 
 中價位且具設計感的訂閱式鮮食方案目前明顯空白。
+中型犬齡 7+ 的關節保健食品線，本土品牌幾乎沒人做。
 
 ## 消費者趨勢
 
-養寵物高齡化，飼主開始重視關節保健配方。
+養寵物高齡化，飼主開始重視關節與心血管保健配方，
+社群上「人寵共食」標籤年增 180%。
 
 ## 切入建議
 
-中價位訂閱鮮食 + 機能配方為主打，避開低價乾糧紅海。`;
+中價位訂閱鮮食 + 機能配方為主打，避開低價乾糧紅海，
+SKU 聚焦 8-12 項先做深不做廣。`;
 
     scriptToolCall('submit_report', {
       body: reportBody,
@@ -621,11 +629,13 @@ describe('market-researcher atomic agent — direct routing + report-writer rend
       progressNote: '報告好了，最大缺口是中價位設計感商品，老闆看一下切入建議',
     });
 
-    // Hop 3: supervisor decides the work is done — done=true so we route
-    // through report-writer to END.
-    scriptStructured({ nextAgent: null, clarification: null, done: true });
-
-    // Hop 4: report-writer LLM call — renders boss prose for schemaName='market-report'.
+    // Hop 3: report-writer LLM call — renders boss prose for schemaName='market-report'.
+    // NOTE: NO scriptStructured here. The supervisor short-circuits without
+    // an LLM call when state.awaitingApproval=true (see
+    // src/orchestrator/supervisor.ts:69-72), so adding one here would leave
+    // an unconsumed entry in the queue that report-writer's plain `.invoke()`
+    // would receive instead of the scripted text → mock throws "expected
+    // text, got structured" and report-writer falls back silently.
     scriptText(
       '## 我看到的重點\n\n中價位設計感商品是這個品類最大的空白。\n\n## 為什麼這樣選\n\n低價乾糧已是紅海，高價手作有物流痛點。',
     );
@@ -680,7 +690,7 @@ Expected: 1 passing.
 
 Likely failure modes:
 - **`task.assignedAgent` is null** — happens when `scriptStructured` hop 1 didn't fire because the supervisor hit a different code path. Re-read `tests/integration/helpers/llm-mock.ts` to confirm `scriptStructured` is queued FIFO and consumed by `withStructuredOutput().invoke()`.
-- **`task.output.artifact.report` is undefined** — means report-writer didn't fire. Check that the `scriptStructured({ done: true })` hop is queued *before* the `scriptText(...)` hop; supervisor's terminal decision must precede the report-writer call.
+- **`task.output.artifact.report` is undefined** — means report-writer didn't fire, or fell back to its error string. Check that you queued exactly the three script entries above (one `scriptStructured` for hop 1, one `scriptToolCall` for hop 2, one `scriptText` for hop 3 — NO post-agent `scriptStructured`, since the supervisor short-circuits on `awaitingApproval=true`). If you accidentally queued a fourth structured entry, report-writer's `.invoke()` will consume it and the mock will throw "expected text, got structured", triggering the silent fallback.
 - **`task.output.lastStructuredOutput` is missing** — graph.ts isn't surfacing it; verify `src/orchestrator/graph.ts:132-143` still spreads `lastStructuredOutput` when `result.structuredOutput` is set, and that `src/tasks/runner.ts:187-188` persists the channel into `task.output`.
 
 **Step 3: Run the full integration suite to catch regressions**
